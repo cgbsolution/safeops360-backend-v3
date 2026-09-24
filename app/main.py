@@ -479,6 +479,38 @@ def create_app() -> FastAPI:
             deps.append(Depends(cams_fire_only_guard))
         app.include_router(module.router, dependencies=deps)
 
+    # Trailing-slash routes (e.g. `@router.get("/")` under prefix /api/epc/sites)
+    # are resolved IN PLACE rather than answered with a 307. Behind a proxy the
+    # redirect Location carries another origin, the client drops its
+    # Authorization header on the hop, and the retried request comes back 401 —
+    # every EPC list silently empty. Rewriting `/x` → `/x/` before routing, only
+    # when `/x/` is a registered route and `/x` is not, removes the redirect for
+    # every client, old or new; nothing else changes.
+    _slash_paths: set[str] = set()
+    _plain_paths: set[str] = set()
+
+    def _index_routes() -> None:
+        # Included routers are held as nested objects in this FastAPI version,
+        # so read the (already prefixed) paths from each router directly.
+        routes = list(app.routes) + [r for m in _ROUTERS.values() for r in m.router.routes]
+        for r in routes:
+            path = getattr(r, "path", "") or ""
+            if "{" in path:
+                continue
+            (_slash_paths if path.endswith("/") and len(path) > 1 else _plain_paths).add(path)
+
+    @app.middleware("http")
+    async def _resolve_trailing_slash(request, call_next):  # noqa: ANN001
+        if not _slash_paths and not _plain_paths:
+            _index_routes()
+        path = request.scope.get("path", "")
+        if path and not path.endswith("/") and path not in _plain_paths and f"{path}/" in _slash_paths:
+            request.scope["path"] = f"{path}/"
+            raw = request.scope.get("raw_path")
+            if raw is not None:
+                request.scope["raw_path"] = raw + b"/" if not raw.endswith(b"/") else raw
+        return await call_next(request)
+
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:
         return {"status": "ok", "env": settings.app_env}
