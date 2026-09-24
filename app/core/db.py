@@ -28,13 +28,23 @@ _disable_pstmt_cache = _is_transaction_pooler(_async_url)
 # RTT from India, we want enough connections to keep concurrent requests
 # from waiting on the pool. pool_recycle=1800 (30 min) avoids Supabase's
 # idle-connection reaper.
+# The session pooler (:5432) allows only 15 clients across every process
+# sharing the DB (prod + local dev + scripts) — exceeding it fails logins
+# with EMAXCONNSESSION — so each process takes at most 5 there.
+_pool_size = settings.db_pool_size or (10 if _disable_pstmt_cache else 3)
+_max_overflow = (
+    settings.db_max_overflow
+    if settings.db_max_overflow is not None
+    else (20 if _disable_pstmt_cache else 2)
+)
+
 engine = create_async_engine(
     _async_url,
     echo=False,
     pool_pre_ping=True,
     pool_recycle=1800,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=_pool_size,
+    max_overflow=_max_overflow,
     pool_timeout=30,
     connect_args=(
         {"statement_cache_size": 0, "prepared_statement_cache_size": 0}

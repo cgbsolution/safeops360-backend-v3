@@ -21,6 +21,10 @@ class Settings(BaseSettings):
 
     database_url: str
     database_url_sync: str | None = None
+    # Per-process pool. None = pick by pooler: Supabase's session pooler
+    # (:5432) caps ALL clients of the DB at 15, so stay small there.
+    db_pool_size: int | None = None
+    db_max_overflow: int | None = None
 
     jwt_secret: str = Field(..., min_length=16)
     jwt_algorithm: str = "HS256"
