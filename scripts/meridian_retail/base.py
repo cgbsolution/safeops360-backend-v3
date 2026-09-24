@@ -56,6 +56,20 @@ RETAIL_ROLES: dict[str, tuple[str, str, str | None]] = {
 # For the `extra` role only these modules are borrowed.
 EXTRA_MODULES = {"RETAIL_DC_MAINTENANCE": {"PTW", "LOTO"}, "RETAIL_PROJECTS": {"EPC"}}
 
+# Grants the cloned source roles don't carry but the Retail job needs — every
+# role reads its Daily Brief; store managers see the contractors working in
+# their store; DC maintenance reports incidents and near misses; the scorecard
+# (gated on INCIDENT.READ) is visible to every role. All own-plant.
+EXTRA_GRANTS: dict[str, list[str]] = {
+    "RETAIL_OPS_ADMIN": ["ALERT.READ"],
+    "RETAIL_STORE_MANAGER": ["ALERT.READ", "EPC.READ"],
+    "RETAIL_FIRE_TECHNICIAN": ["ALERT.READ", "INCIDENT.READ", "NEAR_MISS.READ", "NEAR_MISS.CREATE"],
+    "RETAIL_FLOOR_STAFF": ["ALERT.READ"],
+    "RETAIL_FIRE_AUDITOR": ["ALERT.READ", "INCIDENT.READ"],
+    "RETAIL_DC_MAINTENANCE": ["ALERT.READ", "INCIDENT.READ", "INCIDENT.CREATE", "NEAR_MISS.READ", "NEAR_MISS.CREATE"],
+    "RETAIL_PROJECTS": ["ALERT.READ", "INCIDENT.READ", "EPC.READ"],
+}
+
 # Modules switched OFF on every Retail site. Licensed codes + ungated codes.
 DISABLED_MODULES = [
     # spec: disabled
@@ -153,6 +167,11 @@ def seed_roles(cur) -> dict[str, str]:
                 if pcode.split(".")[0] not in mods:
                     continue
                 grants[pid] = "OWN_PLANT" if scope == "ALL_PLANTS" else scope
+        for pcode in EXTRA_GRANTS.get(code, []):
+            cur.execute('select id from "Permission" where code=%s', (pcode,))
+            row = cur.fetchone()
+            assert row, f"permission {pcode} does not exist"
+            grants.setdefault(row[0], "OWN_PLANT")
         cur.execute('select "permissionId" from "RolePermission" where "roleId"=%s', (rid,))
         held = {r[0] for r in cur.fetchall()}
         for pid, scope in grants.items():
