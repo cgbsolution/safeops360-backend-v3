@@ -229,15 +229,15 @@ def plan_assets(plants: dict[str, str]) -> list[dict]:
             fe(pc, 3, FE_SPOTS); panel(pc, "LOOP"); hydrant(pc)
         elif fmt == "Supermarket":
             fe(pc, 2, FE_SPOTS); panel(pc, "ZONE")
-            if i % 3 == 0:
+            if i % 4 == 0:
                 hydrant(pc)
         else:  # Express
-            fe(pc, 1 if i % 2 else 2, FE_SPOTS)
+            fe(pc, 1, FE_SPOTS)
             if i % 3 == 0:
                 panel(pc, "ZONE")
     for d in range(1, len(DCS) + 1):
         pc = dc_code(d)
-        fe(pc, 3, DC_FE_SPOTS); panel(pc, "LOOP"); hydrant(pc)
+        fe(pc, 2, DC_FE_SPOTS); panel(pc, "LOOP"); hydrant(pc)
     return assets
 
 
@@ -356,7 +356,7 @@ def seed_register_and_history(cur, reset: bool) -> dict[str, str]:
                 r = RNG.random()
                 if current:
                     # The period that is still open: most not yet done, some started.
-                    status = "REPORT_ISSUED" if r < p_done * 0.45 else ("IN_PROGRESS" if r < p_done * 0.45 + 0.25 else None)
+                    status = "REPORT_ISSUED" if r < p_done * 0.85 else ("IN_PROGRESS" if r < p_done * 0.85 + 0.08 else None)
                 else:
                     status = "REPORT_ISSUED" if r < p_done else ("FIELDWORK_COMPLETE" if r < p_done + p_prog else None)
                 if status is None:
@@ -561,8 +561,19 @@ async def seed_audits(commit: bool) -> None:
             await db.rollback()
 
 
+async def _phase(coro) -> None:
+    """Run one async phase, then drop the pooled connections: each phase gets
+    its own event loop, and asyncpg connections cannot cross loops."""
+    from app.core.db import engine
+
+    try:
+        await coro
+    finally:
+        await engine.dispose()
+
+
 def main(commit: bool, reset: bool) -> None:
-    asyncio.run(seed_documents(commit))
+    asyncio.run(_phase(seed_documents(commit)))
     c = conn()
     cur = c.cursor()
     seed_register_and_history(cur, reset)
@@ -571,7 +582,7 @@ def main(commit: bool, reset: bool) -> None:
     else:
         c.rollback()
     if commit:
-        asyncio.run(seed_audits(commit))
+        asyncio.run(_phase(seed_audits(commit)))
     print("committed" if commit else "dry run — rolled back (pass --commit)")
 
 

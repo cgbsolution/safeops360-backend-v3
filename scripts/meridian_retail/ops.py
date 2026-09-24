@@ -143,7 +143,7 @@ def seed(cur) -> None:
                 number = f"INC-{at.year}-{code}-{n['INC']:04d}"
                 _, itype, isev, status, lost = conv
                 incs.append((eid, number, _naive(at), itype, pid, area.get((pid, area_name)), area_name, reporter, desc,
-                             isev, status, lost or None, _naive(at), _naive(at + timedelta(minutes=35)), "Store associate",
+                             isev, status, lost or 0, _naive(at), _naive(at + timedelta(minutes=35)), "Store associate",
                              "First aid given; area cordoned and store manager informed.",
                              _naive(at + timedelta(days=20)) if status == "CLOSED" else None, _naive(at)))
                 converted = ("Incident", eid)
@@ -153,7 +153,7 @@ def seed(cur) -> None:
             json.dumps({"l1": {"code": l1, "labels": labels, "iconKey": icon}, "l2": None}),
             RNG.random() < 0.6, round(RNG.uniform(0.62, 0.93), 2) if RNG.random() < 0.6 else None, sev, desc,
             "hi" if voice else None, "(voice note, Hindi)" if voice else None, desc if voice else None,
-            "done" if voice else None,
+            "done" if voice else "none",
             "converted" if converted else ("triaged" if idx % 3 == 0 else "submitted"),
             (manager.get(sno) or admin) if (converted or idx % 3 == 0) else None,
             _naive(at + timedelta(hours=3)) if (converted or idx % 3 == 0) else None,
@@ -182,7 +182,7 @@ def seed(cur) -> None:
         n = per_plant.setdefault(code, {"FLD": 0, "INC": 0, "NM": 0})
         n["INC"] += 1
         incs.append((new_id(), f"INC-{at.year}-{code}-{n['INC']:04d}", _naive(at), itype, pid, area.get((pid, area_name)),
-                     area_name, users[f"dc.maint.dc{dno:02d}@{EMAIL_DOMAIN}"], desc, isev, status, lost or None,
+                     area_name, users[f"dc.maint.dc{dno:02d}@{EMAIL_DOMAIN}"], desc, isev, status, lost or 0,
                      _naive(at), _naive(at + timedelta(minutes=20)), "DC maintenance lead",
                      "Area isolated; DC manager informed.", _naive(at + timedelta(days=15)) if status == "CLOSED" else None,
                      _naive(at)))
@@ -309,7 +309,9 @@ def main(commit: bool) -> None:
     seed(cur)
     if commit:
         c.commit()
-        asyncio.run(rollup())
+        from scripts.meridian_retail.fire import _phase
+
+        asyncio.run(_phase(rollup()))
         print("committed")
     else:
         c.rollback()

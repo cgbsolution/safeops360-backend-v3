@@ -76,8 +76,24 @@ LAST = ["Sharma", "Iyer", "Patel", "Reddy", "Nair", "Singh", "Menon", "Gupta", "
         "Das", "Joshi", "Khan", "Pillai", "Chatterjee", "Bhat", "Verma", "Shetty", "Malhotra", "Mishra"]
 
 
+_NAMES: dict[int, str] = {}
+
+
 def _name(i: int) -> str:
-    return f"{FIRST[(i * 7) % len(FIRST)]} {LAST[(i * 11) % len(LAST)]}"
+    """A stable, unique person name per seed slot. Unique matters: an auditor
+    sharing a name with the store manager they audit would muddy the
+    independence story on screen."""
+    if i not in _NAMES:
+        used = set(_NAMES.values())
+        k = 0
+        while True:
+            # k walks all FIRST×LAST combinations, so a free one is always found.
+            cand = f"{FIRST[(i * 7 + k) % len(FIRST)]} {LAST[(i * 11 + k // len(FIRST)) % len(LAST)]}"
+            if cand not in used and cand not in ("Kavya Menon", "Imran Qureshi"):
+                _NAMES[i] = cand
+                break
+            k += 1
+    return _NAMES[i]
 
 
 def seed_plants(cur) -> dict[str, str]:
