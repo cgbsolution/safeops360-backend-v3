@@ -274,6 +274,10 @@ async def add_annexure(
             "already attached to this permit.",
         )
 
+    from app.services.ptw_type_config import assert_type_allowed
+
+    await assert_type_allowed(db, permit.plantId, permit.type, [payload.hazardType])
+
     proposed = [*current, payload.hazardType]
     cap = validity_cap_hours(permit.type, proposed)
     granted_h = (permit.validTo - permit.validFrom).total_seconds() / 3600.0

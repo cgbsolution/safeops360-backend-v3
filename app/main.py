@@ -89,6 +89,7 @@ from app.routers import (
     ptw,
     ptw_active,
     ptw_annexures,
+    ptw_type_config,
     ptw_lifecycle,
     ptw_reports,
     rca,
@@ -147,6 +148,9 @@ _ROUTERS = {
     # Hazard annexures + precaution checklists. Same PTW licence module as the
     # rest of the permit routers.
     "ptw_annexures": ptw_annexures,
+    # Per-plant permit-type curation (wizard card list + default). Ungated core
+    # config like display_labels; the PTW routes enforce it server-side.
+    "ptw_type_config": ptw_type_config,
     "flra": flra, "incidents": incidents,
     "training": training, "inspections": inspections, "inspection_findings": inspection_findings, "manhours": manhours,
     "workflow": workflow, "workflow_definitions": workflow_definitions, "anomalies": anomalies,

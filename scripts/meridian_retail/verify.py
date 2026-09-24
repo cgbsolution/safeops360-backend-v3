@@ -113,6 +113,36 @@ def main() -> int:
     check(mu.get("/api/display-labels", params={"plantId": nw}).json()["labels"] == {},
           "Manufacturing sites have no overrides (fall back to defaults)")
 
+    # ── PTW permit-type curation (Step 6) ──
+    curated = ["HOT_WORK", "WORK_AT_HEIGHT", "ELECTRICAL_LOTO", "LIFTING", "GENERAL_COLD"]
+    cfgs = ra.get("/api/ptw-type-config").json()["configs"]
+    check(set(cfgs) == retail_ids and all(c["enabledTypes"] == curated for c in cfgs.values()),
+          "every Retail site offers exactly the 5 curated permit types (no Confined Space / Excavation)",
+          f"{len(cfgs)} sites configured")
+    check(all(c["defaultType"] == "ELECTRICAL_LOTO" for c in cfgs.values()),
+          "PTW wizard opens on Electrical / LOTO at Retail sites, not Hot Work")
+    check(all(set(c["blockedHazards"]) == {"CONFINED_SPACE", "EXCAVATION"} for c in cfgs.values()),
+          "Confined Space / Excavation annexures also hidden at Retail sites")
+    cur.execute('select count(*) from "PlantPermitTypeConfig" where "plantId" <> all(%s)', (list(retail_ids),))
+    check(cur.fetchone()[0] == 0, "no non-Retail site has curation (full type set, Hot Work default)")
+    plants_seen = {p["id"] for p in ra.get("/api/plants").json()}
+    check(plants_seen and plants_seen <= retail_ids, "PTW wizard plant picker offers Retail sites only",
+          f"{len(plants_seen)} plants")
+    cur.execute('select id from "User" where email like %s and email <> %s order by email limit 2',
+                (f"%@{EMAIL_DOMAIN}", RETAIL_ADMIN))
+    iss, rec = (r[0] for r in cur.fetchall())
+    for bad in ("CONFINED_SPACE", "EXCAVATION"):
+        r = ra.post("/api/ptw", json={"type": bad, "plantId": store, "location": "Stockroom",
+                                      "scopeOfWork": "Verification probe - must be refused",
+                                      "validFrom": "2026-10-01T08:00:00Z", "validTo": "2026-10-01T12:00:00Z",
+                                      "issuerId": iss, "receiverId": rec})
+        check(r.status_code == 400 and "not used at this site" in r.text, f"{bad} permit refused server-side at a Retail site",
+              f"HTTP {r.status_code}")
+    cur.execute('select type, count(*) from "Permit" where "plantId" = any(%s) group by type', (list(retail_ids),))
+    ptypes = dict(cur.fetchall())
+    check(10 <= sum(ptypes.values()) <= 12 and set(ptypes) <= set(curated), "10–12 Retail PTW records, curated types only",
+          str(ptypes))
+
     # ── Module switches ──
     mods = ra.get("/api/licensing/modules", params={"plantId": store}).json()
     enabled, disabled = set(mods["enabledModules"]), set(mods.get("disabledModules", []))

@@ -195,6 +195,11 @@ async def create_permit(
     # permit, not just the base type. Checking only `payload.type` would let an
     # uncertified holder take the hot-work half of a height + hot-work job.
     attached_hazards = [h.hazardType for h in payload.hazards]
+    # Per-plant curation (e.g. no Confined Space / Excavation at retail sites).
+    # No config row → every type allowed, as before.
+    from app.services.ptw_type_config import assert_type_allowed
+
+    await assert_type_allowed(db, payload.plantId, payload.type, attached_hazards)
     for _type_code in competency_types_for(payload.type, attached_hazards):
         comp = await check_competency_for_permit_type(db, payload.receiverId, _type_code)
         if not comp.ok:
