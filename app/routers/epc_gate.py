@@ -12,7 +12,7 @@ new GatePass with the overrideApplied flag set on the original check record.
 from __future__ import annotations
 
 import json
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -531,14 +531,42 @@ async def gate_check(
 
 @router.get("/log")
 async def gate_log(
-    siteId: str = Query(...),
+    siteId: str | None = Query(None),
+    workerId: str | None = Query(None, description="A worker's own gate history (last 30 days) instead of a site's day"),
     date: str | None = Query(None, description="YYYY-MM-DD, defaults to today"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Gate log for a site on a given date."""
+    """Gate log for a site on a given date — or, with `workerId`, that worker's
+    checks across every site over the last 30 days (the worker profile's gate
+    history, which previously called this endpoint without the required siteId
+    and so always rendered empty)."""
     await _require(db, user, "EPC.READ")
     part = await partition_for(db, user)
+    if workerId and not siteId:
+        if await is_foreign(db, ContractorWorker, workerId, part):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Worker not found")
+        since = datetime.now(timezone.utc) - timedelta(days=30)
+        checks = (
+            await db.execute(
+                select(GateClearanceCheck)
+                .where(
+                    GateClearanceCheck.tenantId == part,
+                    GateClearanceCheck.contractorWorkerId == workerId,
+                    GateClearanceCheck.createdAt >= since,
+                )
+                .order_by(GateClearanceCheck.createdAt.desc())
+            )
+        ).scalars().all()
+        return {
+            "workerId": workerId,
+            "totalChecks": len(checks),
+            "cleared": sum(1 for c in checks if c.overallResult in ("cleared", "cleared_with_warnings")),
+            "notCleared": sum(1 for c in checks if c.overallResult == "not_cleared"),
+            "entries": [_check_result_dict(c) for c in checks],
+        }
+    if not siteId:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "siteId or workerId is required")
     if await is_foreign(db, ConstructionSite, siteId, part):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 

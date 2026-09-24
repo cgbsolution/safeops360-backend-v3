@@ -218,6 +218,7 @@ async def list_mobilizations(
     siteId: str | None = Query(None),
     contractorCompanyId: str | None = Query(None),
     status_filter: str | None = Query(None, alias="status"),
+    workerId: str | None = Query(None, description="One worker's mobilisation history"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -228,6 +229,8 @@ async def list_mobilizations(
         stmt = stmt.where(MobilizationRecord.siteId == siteId)
     if contractorCompanyId:
         stmt = stmt.where(MobilizationRecord.contractorCompanyId == contractorCompanyId)
+    if workerId:
+        stmt = stmt.where(MobilizationRecord.contractorWorkerId == workerId)
     if status_filter:
         stmt = stmt.where(MobilizationRecord.status == status_filter)
     mobs = (

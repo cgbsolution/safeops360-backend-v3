@@ -124,11 +124,13 @@ def _induction_dict(ind: SiteInduction) -> dict:
 async def list_inductions(
     siteId: str | None = Query(None),
     contractorWorkerId: str | None = Query(None),
+    workerId: str | None = Query(None, description="Alias of contractorWorkerId (worker profile page)"),
     mobilizationRecordId: str | None = Query(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """List inductions. Filter by siteId, contractorWorkerId, or mobilizationRecordId."""
+    contractorWorkerId = contractorWorkerId or workerId
     await _require(db, user, "EPC.READ")
     part = await partition_for(db, user)
 
