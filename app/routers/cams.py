@@ -429,6 +429,7 @@ async def list_engagements(
     fromDate: datetime | None = Query(None),
     toDate: datetime | None = Query(None),
     q: str | None = Query(None),
+    includeRoutine: bool = Query(False, description="Include routine checklist runs (periodLabel set)"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -439,6 +440,12 @@ async def list_engagements(
 
     scope = await build_query_scope(db, user.id, "CAMS.READ")
     stmt = scope.apply(select(CamsEngagement).where(CamsEngagement.isDeleted.is_(False)), CamsEngagement)
+    # Routine fire/chemical checklist runs are CamsEngagement rows too (one per
+    # asset × sheet × period — thousands at a real site). They are the
+    # Operations side's records, read through the checklist screens; the audit
+    # register lists audits and inspections, not every daily round.
+    if not includeRoutine:
+        stmt = stmt.where(CamsEngagement.periodLabel.is_(None))
     if estatus:
         stmt = stmt.where(CamsEngagement.status == estatus)
     if engagementType:
@@ -496,6 +503,8 @@ async def unified_engagements(
         await db.execute(
             select(CamsEngagement)
             .where(CamsEngagement.isDeleted.is_(False))
+            # Routine checklist runs are not audits — see list_engagements.
+            .where(CamsEngagement.periodLabel.is_(None))
             # Newest-created first — platform-wide register convention.
             .order_by(CamsEngagement.createdAt.desc(), CamsEngagement.id.desc())
         )

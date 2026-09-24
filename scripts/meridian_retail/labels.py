@@ -63,6 +63,10 @@ EXPLICIT: dict[str, str] = {
     # EPC "site" is a fit-out location at a store.
     "term.construction_site": "Fit-out Site",
     "term.construction_sites": "Fit-out Sites",
+    # EPC form examples written for power projects — Retail examples instead.
+    "epc.site_name_example": "e.g. Store 012 HSR Layout — checkout renovation",
+    "epc.district_example": "e.g. Bengaluru Urban",
+    "epc.client_example": "e.g. Meridian Retail",
 }
 
 # Ordered whole-word replacements applied to every other fallback.
