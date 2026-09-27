@@ -45,6 +45,14 @@ EXPLICIT: dict[str, str] = {
     "nav.section.operational": "Store Safety Operations",
     "nav./field-reports": "Field Reports (Store Floor)",
     "nav./capture": "Report from the Floor",
+    # Fire & Life Safety — the controlled-document band and document numbers
+    # (defaults are Page Industries' PIL/EHS… numbers).
+    "fire.org_name": "Meridian Retail",
+    "fire.org_short": "Meridian Retail Store Safety",
+    "fire.doc.fe_register": "MR/FLS/REG/FE-01",
+    "fire.doc.fe_inspection": "MR/FLS/CL/03-R1",
+    "fire.doc.fire_alarm": "MR/FLS/CL/01-R1",
+    "fire.doc.fire_hydrant": "MR/FLS/CL/02-R1",
     # Vocabulary cores.
     "term.plant": "Store",
     "term.plants": "Stores",

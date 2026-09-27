@@ -168,6 +168,8 @@ def register_row(
         "remarks": e.registerRemarks,
         # ── platform additions ──────────────────────────────────────────────
         "plantId": e.plantId,
+        # The sticker value the register's QR dialog encodes into the scan URL.
+        "qrTokenValue": e.qrToken,
         "status": e.status,
         "nextInspectionDueDate": (
             _aware(e.nextInspectionDueDate).isoformat() if e.nextInspectionDueDate else None

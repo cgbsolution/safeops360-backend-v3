@@ -224,6 +224,13 @@ def seed_users(cur, plants: dict[str, str], roles: dict[str, str]) -> None:
     uid = _user(cur, users, f"store-ops.admin@{EMAIL_DOMAIN}", "Kavya Menon", "RETAIL_OPS_ADMIN",
                 plants[dc_code(1)], "Head — Store Operations & Safety", "Operations")
     _grant(cur, uid, roles["RETAIL_OPS_ADMIN"], everything)
+    # A second template approver. Fire checklist publishing enforces segregation
+    # of duties (the author cannot publish their own sheet), and with a single
+    # RETAIL_OPS_ADMIN a sheet written in the Checklist Library could never be
+    # published.
+    uid = _user(cur, users, f"fire-safety.head@{EMAIL_DOMAIN}", "Rohan Iyer", "RETAIL_OPS_ADMIN",
+                plants[dc_code(1)], "Head — Fire & Life Safety", "Operations")
+    _grant(cur, uid, roles["RETAIL_OPS_ADMIN"], everything)
 
     for i in range(1, len(STORES) + 1):
         pid = plants[store_code(i)]

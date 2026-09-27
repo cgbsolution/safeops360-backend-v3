@@ -174,7 +174,21 @@ class EquipmentCreate(BaseModel):
 
 async def _next_code(db: AsyncSession, plant_id: str) -> str:
     n = (await db.execute(select(func.count()).select_from(FireEquipment).where(FireEquipment.plantId == plant_id))).scalar() or 0
-    return f"FE-{plant_id[:4].upper()}-{n + 1:04d}"
+    # The count excludes soft-deleted rows, but their codes still hold the unique
+    # index — so after a delete, count+1 can be a taken code (500 on insert).
+    # Step past any code already in the table, deleted or not (raw SQL: the ORM
+    # soft-delete filter would hide exactly the rows we need to see).
+    prefix = f"FE-{plant_id[:4].upper()}-"
+    taken = set(
+        (await db.execute(
+            text('select "equipmentCode" from "FireEquipment" where "equipmentCode" like :p'),
+            {"p": prefix + "%"},
+        )).scalars().all()
+    )
+    k = n + 1
+    while f"{prefix}{k:04d}" in taken:
+        k += 1
+    return f"{prefix}{k:04d}"
 
 
 @router.post("/equipment", status_code=201)

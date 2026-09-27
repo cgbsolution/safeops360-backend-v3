@@ -706,6 +706,7 @@ async def admin_reset(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     permit.status = PermitStatus(payload.status)
     await db.flush()
+    await db.refresh(permit)  # reload onupdate columns before sync serialisation
     return PermitOut.model_validate(permit)
 
 

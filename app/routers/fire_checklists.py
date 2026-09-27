@@ -398,6 +398,12 @@ def _variant_matches(site_variant: str, subtype: str) -> bool:
     """
     v = site_variant.upper()
     s = (subtype or "").upper()
+    # Tenants that name the variant by addressing (Retail: ZONE_PANEL /
+    # LOOP_PANEL) rather than by unit.
+    if "ZONE" in v:
+        return s in ("", "ZONE")
+    if "LOOP" in v:
+        return s in ("", "LOOP")
     if "21_A" in v or "21A" in v:
         return s in ("", "ZONE")
     if "21_B" in v or "21B" in v:
@@ -455,9 +461,23 @@ async def list_templates(
         if frequency and meta.get("frequency") != frequency:
             continue
         items.append(admin.out(t))
-    if not items and not (assetType or frequency):
-        raise HTTPException(404, "No fire checklist templates found. Run seed_fire_checklists.py, "
-                                 "or add one from the Checklist Library screen.")
+    # runCount per sheet, in one query: the library marks a sheet with recorded
+    # inspections as frozen (Revise, not Edit) and words its Delete confirm by it.
+    # Without it every card offered Edit and the save bounced with a 409.
+    from sqlalchemy import func as _func
+
+    ids = [i["id"] for i in items if i.get("id")]
+    if ids:
+        counts = dict((await db.execute(
+            select(CamsEngagement.templateId, _func.count())
+            .where(CamsEngagement.templateId.in_(ids))
+            .group_by(CamsEngagement.templateId)
+        )).all())
+        for i in items:
+            i["runCount"] = counts.get(i.get("id"), 0)
+            i["frozen"] = i["runCount"] > 0
+    # An empty library is a valid state (a new tenant before its first sheet),
+    # not a 404 — the 404 hid the library's own "Add checklist" button.
     return {"items": items, "total": len(items)}
 
 
@@ -763,12 +783,21 @@ async def get_or_create_run(
         tpl = await svc.load_template(db, template_code=templateCode)
         meta = svc.template_meta(tpl)
         asset = await svc.resolve_asset(db, tpl, assetId)
-        await _require(db, user, perm.READ if not create else perm.EXECUTE, plant_id=asset.plantId)
+        # READ opens an existing run. EXECUTE is needed only to CREATE one — a
+        # reviewer or approver (VERIFY / APPROVE, no EXECUTE) must still be able to
+        # open the sheet they are signing; requiring EXECUTE up front locked every
+        # Store Manager / HOD out of FORM sheets with a 403.
+        await _require(db, user, perm.READ, plant_id=asset.plantId)
         period = period or svc.period_label(meta.get("frequency", "DAILY"), _now().date())
         svc.validate_period(meta.get("frequency", "DAILY"), period)
 
         run = await svc.find_run(db, tpl, asset.id, period)
         created = False
+        if run is None and create:
+            try:
+                await _require(db, user, perm.EXECUTE, plant_id=asset.plantId)
+            except HTTPException:
+                create = False  # read-only caller: report "nothing recorded yet"
         if run is None:
             if not create:
                 return {
@@ -1310,7 +1339,6 @@ async def read_register(
     if feType:
         rows = [e for e in rows if (e.assetSubtype or "").upper() == feType.strip().upper()]
 
-    payload = await regsvc.build_register(db, rows)
     # RETROFIT: the document-control block now comes from the seeded
     # `FireRegisterViewConfig` row rather than the hardcoded FE_REGISTER_DOC
     # constant, so this register is config-driven like the other two and its
@@ -1320,13 +1348,16 @@ async def read_register(
     # deployment must still be able to open its statutory register, and a
     # register that 500s because a config table is empty is a worse failure than
     # one rendering from the shipped default.
+    #
+    # With a config, rows are built by the config builder so they carry the same
+    # projections as the branded registers (siteName for a multi-store "Store"
+    # column, overdue-checklist flags) — building them here left those blank.
     cfg = await regcfg.config_for_type(db, regsvc.EXTINGUISHER,
                                        tenant_id=await _config_tenant(db, user))
     if cfg is not None:
-        payload["document"] = regcfg.document_from_config(cfg)
-        payload["unmappedColumns"] = (
-            regcfg.unmapped_columns(cfg, payload["rows"][0]) if payload["rows"] else []
-        )
+        payload = await regcfg.build_register(db, cfg, rows)
+    else:
+        payload = await regsvc.build_register(db, rows)
     if badge:
         wanted = badge.strip().upper()
         payload["rows"] = [r for r in payload["rows"] if r["worstBadge"] == wanted]
@@ -1371,6 +1402,23 @@ def _apply_register_fields(e: FireEquipment, body: RegisterUpsert, fields: set[s
             setattr(e, dest, getattr(body, src))
 
 
+async def _assert_allotted_free(db: AsyncSession, plant_id: str, allotted: str | None, exclude_id: str | None = None) -> None:
+    """uq_FireEquipment_allotted: an Alloted Serial No. is unique among the LIVE
+    cylinders of a plant. Check first so a duplicate is a clear 409, not a 500."""
+    if not allotted:
+        return
+    q = select(FireEquipment.equipmentCode).where(
+        FireEquipment.plantId == plant_id,
+        FireEquipment.allottedSerialNo == allotted,
+        FireEquipment.isDeleted.is_(False),
+    )
+    if exclude_id:
+        q = q.where(FireEquipment.id != exclude_id)
+    holder = (await db.execute(q)).scalars().first()
+    if holder:
+        raise HTTPException(409, f"Alloted Serial No. '{allotted}' is already on this site's register ({holder}).")
+
+
 @router.post("/register/extinguishers", status_code=201)
 async def create_register_row(
     body: RegisterUpsert, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
@@ -1380,6 +1428,7 @@ async def create_register_row(
     if not body.location:
         raise HTTPException(400, "Location is required — the register is read by location.")
     await _require(db, user, perm.CREATE, plant_id=body.plantId)
+    await _assert_allotted_free(db, body.plantId, body.allottedSerialNo)
 
     code = body.equipmentCode
     if not code:
@@ -1387,15 +1436,42 @@ async def create_register_row(
         # platform code and the number stencilled on the cylinder agree.
         suffix = body.allottedSerialNo or body.serialNo or _now().strftime("%y%m%d%H%M%S")
         code = f"FIRE-FE-{suffix}"
-    if (await db.execute(select(FireEquipment).where(FireEquipment.equipmentCode == code))).scalars().first():
-        raise HTTPException(409, f"Equipment code '{code}' already exists.")
+    # include_deleted: a removed cylinder's code still holds the unique index, so
+    # the soft-delete filter would pass this check and the insert would 500.
+    async def _holder(c: str) -> FireEquipment | None:
+        return (await db.execute(
+            select(FireEquipment).where(FireEquipment.equipmentCode == c).execution_options(include_deleted=True)
+        )).scalars().first()
+
+    clash = await _holder(code)
+    if clash and not clash.isDeleted:
+        raise HTTPException(409, f"Equipment code '{code}' is already on the register.")
+    if clash:
+        # Only a REMOVED cylinder holds it — re-adding that tag is legitimate
+        # (removed by mistake, or a replacement cylinder stencilled the same).
+        # Keep the user's Alloted Serial No. as entered; give the platform code
+        # the next free suffix so the old row's history stays intact.
+        base, n = code, 2
+        while await _holder(f"{base}-{n}"):
+            n += 1
+        code = f"{base}-{n}"
 
     e = FireEquipment(
         equipmentCode=code, plantId=body.plantId, type=regsvc.EXTINGUISHER,
         location=body.location, inspectionFrequencyDays=30, isActive=True,
         createdBy=user.id, updatedBy=user.id,
+        # Minted at creation, as POST /api/fire/equipment does — otherwise a
+        # cylinder added from the register cannot print its QR sticker until a
+        # backfill script is run.
+        qrCode=f"SAFEOPS-FIRE-{code}",
+        qrToken=qrsvc.new_token(),
+        qrTokenGeneratedAt=datetime.now(timezone.utc),
     )
     _apply_register_fields(e, body, set(body.model_fields_set))
+    # Never inspected → DUE_INSPECTION, not the column default ACTIVE (same rule
+    # as POST /api/fire/equipment).
+    from app.services import fire_safety as fsvc
+    e.status = fsvc.compute_status(e)
     db.add(e)
     await db.flush()
 
@@ -1424,6 +1500,8 @@ async def update_register_row(
     await _require(db, user, perm.UPDATE, plant_id=e.plantId)
 
     sent = set(body.model_fields_set)
+    if "allottedSerialNo" in sent and body.allottedSerialNo != e.allottedSerialNo:
+        await _assert_allotted_free(db, e.plantId, body.allottedSerialNo, exclude_id=e.id)
     _apply_register_fields(e, body, sent)
     e.updatedBy = user.id
 
@@ -1450,7 +1528,7 @@ async def export_register_pdf(
     pdf = pdfsvc.render_register(payload)
     return Response(
         content=pdf, media_type="application/pdf",
-        headers={"Content-Disposition": 'inline; filename="PIL-EHSD-CL-028-R1-register.pdf"'},
+        headers={"Content-Disposition": f'inline; filename="{_export_filename(payload["document"], "pdf")}"'},
     )
 
 
@@ -1470,7 +1548,7 @@ async def export_register_xlsx(
     payload = await read_register(location=location, feType=None, badge=None, user=user, db=db)
     return Response(
         content=xlsxsvc.render_register(payload), media_type=xlsxsvc.MEDIA_TYPE,
-        headers={"Content-Disposition": 'attachment; filename="PIL-EHSD-CL-028-R1-register.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename(payload["document"], "xlsx")}"'},
     )
 
 

@@ -174,7 +174,10 @@ async def recompute_all_statuses(db: AsyncSession, plant_id: str | None = None) 
         await db.execute(
             select(CamsEngagement)
             .where(CamsEngagement.sourceModule == "FIRE")
-            .where(CamsEngagement.status.in_(("completed", "closed", "COMPLETED", "CLOSED")))
+            # REPORT_ISSUED = an APPROVED routine checklist (services/fire_checklists
+            # lands approval there, not CLOSED). Without it approved sheets never
+            # advanced lastInspectionDate and assets drifted to OVERDUE.
+            .where(CamsEngagement.status.in_(("completed", "closed", "COMPLETED", "CLOSED", "REPORT_ISSUED")))
         )
     ).scalars().all()
     latest_by_eq: dict[str, datetime] = {}

@@ -602,6 +602,29 @@ def signature_enforced(tpl: CamsTemplate) -> bool:
     return meta.get("frequency") != "DAILY"
 
 
+async def _mark_asset_inspected(db, run: CamsEngagement, now: datetime) -> None:
+    """An approved routine sheet is the asset's inspection: move its last / next
+    inspection dates and recompute its status at approval, rather than leaving the
+    asset OVERDUE until (and unless) the nightly recompute picks the run up."""
+    if not run.sourceEntityId:
+        return
+    asset = await db.get(FireEquipment, run.sourceEntityId)
+    if asset is None:
+        return
+    from app.services import fire_defects, fire_frequency
+    from app.services import fire_safety as fire_svc
+
+    done = fire_svc._aware(run.conductedDate) or now
+    last = fire_svc._aware(asset.lastInspectionDate)
+    if last is None or done > last:
+        freq = await fire_frequency.resolve_for_equipment(db, asset)
+        asset.lastInspectionDate = done
+        asset.nextInspectionDueDate = done + timedelta(days=freq.days)
+        asset.frequencyMasterId = freq.masterId
+    critical = await fire_defects.open_critical_defect_asset_ids(db, asset.plantId)
+    asset.status = fire_svc.compute_status(asset, has_open_critical_defect=asset.id in critical)
+
+
 async def advance(
     db, tpl: CamsTemplate, run: CamsEngagement, to_stage: str, *, actor_id: str,
     # (userId, display name), resolved by the caller from a LIVE user row. Plain
@@ -704,6 +727,7 @@ async def advance(
         run.reviewedBy, run.reviewedAt = actor_id, now
     else:
         run.approvedBy, run.approvedAt = actor_id, now
+        await _mark_asset_inspected(db, run, now)
 
     if sig_entry is not None:
         fire_signoff.record(run, sig_entry)

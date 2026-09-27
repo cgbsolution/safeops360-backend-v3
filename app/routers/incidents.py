@@ -574,6 +574,10 @@ async def update_incident(
             db.add(IncidentInvestigationMember(incidentId=incident.id, userId=uid, role="LEAD" if i == 0 else "MEMBER"))
 
     await db.flush()
+    # The flush expires server-set columns (updatedAt's onupdate). Reload them
+    # here — otherwise IncidentOut reads them via a sync lazy-load, which the
+    # async session refuses (MissingGreenlet → 500 after the save succeeded).
+    await db.refresh(incident)
     return IncidentOut.model_validate(incident)
 
 
