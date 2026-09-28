@@ -66,6 +66,7 @@ from app.schemas.permit import (
 )
 from app.services import workflow_engine
 from app.services.permissions import PermissionContext, can, get_user_role_codes
+from app.services.tenant_roles import with_stock_equivalents
 from app.services.ptw_closure_gate import (
     closure_gate,
     unexecuted_withdrawal_blocker,
@@ -298,7 +299,7 @@ async def declare_work_completed(
     permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
 
     if permit.receiverId is not None and permit.receiverId != user.id:
-        role_codes = await get_user_role_codes(db, user.id)
+        role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
         if not any(r in _PRIV_ROLES for r in role_codes):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -424,7 +425,7 @@ async def withdraw_unexecuted_permit(
 
     # Same population that may pull a pre-active permit through /cancel, plus
     # the named receiver — they are the party who did not start the work.
-    role_codes = await get_user_role_codes(db, user.id)
+    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
     is_priv = any(r in _HANDBACK_ROLES for r in role_codes)
     if not (
         is_priv
@@ -552,7 +553,7 @@ async def handback_inspection(
     Work Completed declaration and records the inspection checklist +
     photos + GPS + signature. Closure approval cannot proceed without it."""
     permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
-    role_codes = await get_user_role_codes(db, user.id)
+    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
     if not any(r in _HANDBACK_ROLES for r in role_codes):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -633,7 +634,7 @@ async def cancel_permit(
             f"A {permit.status.value} permit cannot be cancelled.",
         )
 
-    role_codes = await get_user_role_codes(db, user.id)
+    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
     is_priv = any(r in _PRIV_ROLES for r in role_codes)
     if mid_flow and not is_priv:
         raise HTTPException(
@@ -741,7 +742,7 @@ async def verify_isolation(
     NOTHING wrote isolationVerifiedAt, so permits with isolations could
     never activate through the API)."""
     permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
-    role_codes = await get_user_role_codes(db, user.id)
+    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
     if user.id != permit.receiverId and not any(
         r in _HANDBACK_ROLES for r in role_codes
     ):

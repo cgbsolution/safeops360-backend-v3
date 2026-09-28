@@ -31,6 +31,20 @@ def expand_step_roles(role_codes: Iterable[str]) -> set[str]:
     return wanted | {r for r, stock in STANDS_IN_FOR.items() if stock & wanted}
 
 
+def with_stock_equivalents(user_role_codes: Iterable[str]) -> set[str]:
+    """The user's roles plus the stock roles their tenant roles stand in for.
+
+    For per-record action gates that name stock roles (PTW handback / closure /
+    extension decisions) on a record the caller has ALREADY been scope-checked
+    against. Never use it to widen a list query — that is what the clones'
+    own-plant-only grants exist to prevent.
+    """
+    held = set(user_role_codes)
+    for r in list(held):
+        held |= STANDS_IN_FOR.get(r, frozenset())
+    return held
+
+
 def satisfies(user_role_codes: Iterable[str], required: str) -> bool:
     """True if the user holds `required` or a tenant role standing in for it."""
     held = set(user_role_codes)

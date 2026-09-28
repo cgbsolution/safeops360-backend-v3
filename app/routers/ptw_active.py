@@ -46,6 +46,7 @@ from app.models.user import User
 from app.schemas.permit import PtwEvidenceInput
 from app.services.gas_test import get_refresh_status, record_gas_reading
 from app.services.permissions import PermissionContext, can, get_user_role_codes
+from app.services.tenant_roles import with_stock_equivalents
 from app.services.ptw_evidence import EvidenceError, record_action_evidence
 
 router = APIRouter(prefix="/api/ptw", tags=["ptw-active"])
@@ -425,7 +426,8 @@ async def decide_extension(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
-    role_codes = await get_user_role_codes(db, user.id)
+    # Tenant clones count as the stock role (RETAIL_STORE_MANAGER → PLANT_HEAD).
+    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
     if not any(
         r in {"PERMIT_ISSUER", "SAFETY_OFFICER", "HSE_MANAGER", "ADMIN", "SYSTEM_ADMIN", "PLANT_HEAD"}
         for r in role_codes
