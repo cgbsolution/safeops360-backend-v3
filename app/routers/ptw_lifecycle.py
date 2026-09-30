@@ -296,7 +296,24 @@ async def declare_work_completed(
     """Receiver declares work done: structured outcome + restoration
     confirmations + narrative + evidence. Replaces the legacy Return step
     (returnedAt/returnedById stay stamped in lockstep for old read-sites)."""
-    permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
+    # The named receiver declares with their receiver grant (PTW.EXECUTE), the
+    # same rule as /accept — a worker or contractor-coordinator receiver holds
+    # EXECUTE but not UPDATE, and was refused with a 403 at the last step of
+    # the work they had just done. Everyone else still needs PTW.UPDATE.
+    _pre = await db.get(Permit, permit_id)
+    if _pre is not None and _pre.receiverId == user.id:
+        _ctx = PermissionContext(
+            record_id=_pre.id,
+            plant_id=_pre.plantId,
+            record={"originatorId": _pre.originatorId, "issuerId": _pre.issuerId, "receiverId": _pre.receiverId},
+        )
+        if not (await can(db, user.id, "PTW.UPDATE", _ctx)).allowed:
+            exe = await can(db, user.id, "PTW.EXECUTE", _ctx)
+            if not exe.allowed:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, exe.reason or "Access denied")
+        permit = _pre
+    else:
+        permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
 
     if permit.receiverId is not None and permit.receiverId != user.id:
         role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
@@ -883,7 +900,14 @@ async def upload_attachment(
     upd = await can(db, user.id, "PTW.UPDATE", _ctx)
     if not upd.allowed:
         appr = await can(db, user.id, "PTW.APPROVE", _ctx)
-        if not appr.allowed:
+        # The named receiver must attach the onsite photo for Accept and Work
+        # Completed; a worker / contractor-coordinator receiver holds only
+        # PTW.EXECUTE, so without this the mandatory photo could never upload.
+        rcv = (
+            permit.receiverId == user.id
+            and (await can(db, user.id, "PTW.EXECUTE", _ctx)).allowed
+        )
+        if not appr.allowed and not rcv:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, upd.reason or "Access denied"
             )

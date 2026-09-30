@@ -44,7 +44,7 @@ from app.models.permit import (
 )
 from app.models.user import User
 from app.schemas.permit import PtwEvidenceInput
-from app.services.gas_test import get_refresh_status, record_gas_reading
+from app.services.gas_test import _iso_utc as gas_iso_utc, get_refresh_status, record_gas_reading
 from app.services.permissions import PermissionContext, can, get_user_role_codes
 from app.services.tenant_roles import with_stock_equivalents
 from app.services.ptw_evidence import EvidenceError, record_action_evidence
@@ -186,7 +186,7 @@ async def post_gas_reading(
         "id": result.reading_id,
         "isExceedance": result.is_exceedance,
         "failedParameters": result.failed_parameters,
-        "refreshDueBy": result.refresh_due_by.isoformat(),
+        "refreshDueBy": gas_iso_utc(result.refresh_due_by),
         "autoSuspended": result.auto_suspended,
     }
 
@@ -220,13 +220,13 @@ async def list_gas_readings(
         "items": [
             {
                 "id": r.id,
-                "recordedAt": r.recordedAt.isoformat(),
+                "recordedAt": gas_iso_utc(r.recordedAt),
                 "recordedById": r.recordedById,
                 "readings": r.readings or [],
                 "isExceedance": r.isExceedance,
                 "isPreEntry": r.isPreEntry,
                 "instrumentSerial": r.instrumentSerial,
-                "refreshDueBy": r.refreshDueBy.isoformat() if r.refreshDueBy else None,
+                "refreshDueBy": gas_iso_utc(r.refreshDueBy) if r.refreshDueBy else None,
             }
             for r in rows
         ],
@@ -460,7 +460,15 @@ async def decide_extension(
     ext.status = payload.decision
 
     if payload.decision == "APPROVED":
-        permit.validTo = ext.newValidTo
+        # newValidTo is read back from a `timestamp without time zone` column
+        # holding UTC, i.e. a NAIVE datetime. Bound into Permit.validTo (a
+        # timestamptz-typed parameter) asyncpg would treat it as the SERVER's
+        # local time — on an IST machine an extension to 23:30 cut the permit
+        # back to 18:00. Mark it UTC explicitly before it is written.
+        new_to = ext.newValidTo
+        if new_to.tzinfo is None:
+            new_to = new_to.replace(tzinfo=timezone.utc)
+        permit.validTo = new_to
         # Daily Brief outbox: an approved extension is a permit modification
         from app.services import events as domain_events
         domain_events.emit(

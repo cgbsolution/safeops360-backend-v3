@@ -345,6 +345,9 @@ class RunnerQuestion(QuestionOut):
     value: Any = None
     conformance: str | None = None
     note: str = ""
+    # The NC severity the auditor picked. Returned so a reloaded runner shows it
+    # (and re-saves it) instead of silently resetting every NC to MINOR_NC.
+    ncSeverity: str | None = None
     evidenceAttachmentIds: list[str] = []
     findingId: str | None = None
 

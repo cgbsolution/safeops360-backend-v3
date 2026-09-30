@@ -1186,6 +1186,18 @@ async def _advance(
     if current_step is None:
         raise WorkflowError("Step missing")
 
+    # A permit's next approver belongs to the PERMIT's site. Callers pass the
+    # acting user's home plant (the approval panel sends none), which routed a
+    # DC02 / store permit's "Plant Head Approval" to the approver's own site.
+    if task.module == "PTW":
+        from app.models.permit import Permit as _PermitForPlant
+
+        permit_plant = (
+            await db.execute(select(_PermitForPlant.plantId).where(_PermitForPlant.id == task.recordId))
+        ).scalar_one_or_none()
+        if permit_plant:
+            plant_id = permit_plant
+
     # Enrich record_data from the actual record BEFORE evaluating step
     # conditions — the caller may have passed nothing (mobile inbox), and
     # conditional steps (e.g. PTW's FLRA sub-task keyed on `flraRequired`)

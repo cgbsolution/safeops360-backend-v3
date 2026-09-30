@@ -682,6 +682,7 @@ async def _build_runner(db: AsyncSession, e: CamsEngagement) -> S.ChecklistRunne
                 "weight": q.weight, "ncTriggersFinding": q.ncTriggersFinding, "evidenceRequiredOnNc": q.evidenceRequiredOnNc,
                 "options": q.options, "sectionId": s.id, "sectionTitle": s.title,
                 "value": ans.get("value"), "conformance": ans.get("conformance"), "note": ans.get("note", ""),
+                "ncSeverity": ans.get("ncSeverity"),
                 "evidenceAttachmentIds": ans.get("evidenceAttachmentIds", []), "findingId": ans.get("findingId"),
             })
         sections_out.append({"id": s.id, "title": s.title, "weightPct": s.weightPct, "questions": qs})

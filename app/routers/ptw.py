@@ -173,6 +173,16 @@ async def create_permit(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid issuer")
     if receiver is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid receiver")
+    # The Issuer named here is who the "Issuer Review" step is assigned to, so
+    # they must be able to approve permits at this site. Catch it now rather
+    # than leave the permit parked on a task its assignee can never action.
+    issuer_check = await can(db, issuer.id, "PTW.APPROVE", PermissionContext(plant_id=payload.plantId))
+    if not issuer_check.allowed:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{issuer.name} cannot approve permits at {plant.name} — pick an Issuer who holds "
+            "permit-approval rights at this site (e.g. the Store / DC Manager or a Permit Issuer).",
+        )
 
     # Training competency check on receiver — uses the canonical
     # competency service which reads TrainingProgram.isMandatoryForPermitTypes
@@ -531,10 +541,18 @@ async def create_permit(
                 plant_id=permit.plantId,
             )
     except Exception as e:  # noqa: BLE001
+        # Used to be swallowed: the permit stayed DRAFT with no approval chain
+        # while the UI reported "Permit submitted". Fail the request instead so
+        # nothing half-created is left behind and the user sees why.
         import sys
         import traceback
         print(f"PTW workflow init failed: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"The approval workflow for this permit type could not be started ({e}). "
+            "Nothing was saved — contact the administrator.",
+        ) from e
 
     # Refresh once more: workflow_engine.initiate flips Permit.status to
     # SUBMITTED via _sync_record_status, and the resulting UPDATE expires

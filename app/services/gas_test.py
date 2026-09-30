@@ -146,6 +146,14 @@ async def record_gas_reading(
     )
 
 
+def _iso_utc(dt: datetime) -> str:
+    """ISO string with an explicit UTC offset. The reading columns are
+    `timestamp without time zone` holding UTC, so a bare isoformat() had no
+    offset and browsers read it as LOCAL time — in IST the next-due time showed
+    5h30 early and the countdown read "Overdue" straight after a reading."""
+    return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).isoformat()
+
+
 async def get_refresh_status(
     db: AsyncSession, permit_id: str
 ) -> dict[str, Any]:
@@ -173,9 +181,9 @@ async def get_refresh_status(
         "refreshFrequencyMinutes": plan.refreshFrequencyMinutes,
         "instrumentSerial": plan.instrumentSerial,
         "parametersToTest": plan.parametersToTest,
-        "lastReadingAt": last.recordedAt.isoformat() if last else None,
+        "lastReadingAt": _iso_utc(last.recordedAt) if last else None,
         "lastIsExceedance": bool(last.isExceedance) if last else False,
-        "refreshDueBy": last.refreshDueBy.isoformat()
+        "refreshDueBy": _iso_utc(last.refreshDueBy)
         if last and last.refreshDueBy
         else None,
         "lastReadingId": last.id if last else None,

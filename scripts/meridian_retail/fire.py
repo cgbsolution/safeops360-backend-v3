@@ -451,7 +451,7 @@ AUDITS = [
     # (store, lead, team, status, days ago conducted, result, score, findings[(severity, status, question idx)])
     ("MR-S001", "fire.auditor1", ["fire.auditor2"], "CLOSED", 58, "MINOR_NC", 91.0, [("MINOR_NC", "CLOSED", 1)]),
     ("MR-S020", "fire.auditor2", ["fire.auditor3"], "REPORT_ISSUED", 24, "MAJOR_NC", 74.5,
-     [("MAJOR_NC", "OPEN", 9), ("MINOR_NC", "IN_PROGRESS", 12), ("OBSERVATION", "OPEN", 14)]),
+     [("MAJOR_NC", "OPEN", 9), ("MINOR_NC", "IN_REMEDIATION", 12), ("OBSERVATION", "OPEN", 14)]),
     ("MR-S034", "fire.auditor3", ["fire.auditor1"], "REPORT_ISSUED", 9, "MINOR_NC", 86.0,
      [("MINOR_NC", "OPEN", 2), ("MINOR_NC", "OPEN", 5)]),
 ]
