@@ -1719,6 +1719,27 @@ async def verify(
         await db.flush()
         return {"ok": True, "status": InstanceStatus.REJECTED.value}
 
+    # Near miss: the verifier step is "HSE Manager Verifies CAPAs" — each CAPA
+    # carries its own Verify / Reject decision. Accepting the step while a CAPA
+    # is still unverified closed records with CAPAs stuck at COMPLETED and no
+    # verifier on file (NM-2026-MR-DC01-0002).
+    if task.module == "NEAR_MISS":
+        from app.models.near_miss_children import NearMissCapa
+
+        unverified = (
+            await db.execute(
+                select(func.count()).select_from(NearMissCapa).where(
+                    NearMissCapa.nearMissId == task.recordId,
+                    NearMissCapa.status != "VERIFIED",
+                )
+            )
+        ).scalar_one()
+        if unverified:
+            raise WorkflowError(
+                f"{unverified} CAPA(s) not yet verified. Verify or reject each CAPA "
+                "in the CAPA Plan section before completing verification."
+            )
+
     return await _advance(
         db,
         task=task,

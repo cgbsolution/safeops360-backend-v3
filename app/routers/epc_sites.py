@@ -62,7 +62,9 @@ class SiteCreate(BaseModel):
     awardDate: datetime | None = None
     plannedStartDate: datetime | None = None
     plannedCompletionDate: datetime | None = None
-    peakWorkforcePlanned: int = 0
+    # Optional on the Register form: a blank field arrives as null. `int = 0`
+    # rejected that with a 422, which the form rendered as "[object Object]".
+    peakWorkforcePlanned: int | None = 0
     siteManagerUserId: str | None = None
     siteHseManagerUserId: str | None = None
     siteQualityManagerUserId: str | None = None
@@ -235,7 +237,7 @@ async def create_site(
         awardDate=body.awardDate,
         plannedStartDate=body.plannedStartDate,
         plannedCompletionDate=body.plannedCompletionDate,
-        peakWorkforcePlanned=body.peakWorkforcePlanned,
+        peakWorkforcePlanned=body.peakWorkforcePlanned or 0,
         siteManagerUserId=body.siteManagerUserId,
         siteHseManagerUserId=body.siteHseManagerUserId,
         siteQualityManagerUserId=body.siteQualityManagerUserId,

@@ -19,10 +19,21 @@ hole:
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Literal
+from datetime import datetime, timezone
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+def _as_utc(v: datetime) -> datetime:
+    """The LOTO tables were created with `timestamp without time zone` columns
+    holding UTC, so asyncpg hands back naive datetimes. Serialised as-is they
+    carry no offset and the browser reads them as LOCAL time — an IST viewer saw
+    a 12:58 sign-off as 07:28 (LOTO-EQ-0003). Tag naive values as UTC."""
+    return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v.astimezone(timezone.utc)
+
+
+UtcDateTime = Annotated[datetime, AfterValidator(_as_utc)]
 
 # ─────────────────────────────────────────────────────────────────────
 # Vocabularies — mirrored from app.models.loto so the two cannot drift.
@@ -222,15 +233,15 @@ class ProcedureVersionOut(BaseModel):
     id: str
     version: int
     isPublished: bool
-    publishedAt: datetime | None = None
+    publishedAt: UtcDateTime | None = None
     publishedById: str | None = None
     publishedByName: str | None = None
-    supersededAt: datetime | None = None
+    supersededAt: UtcDateTime | None = None
     changeType: str
     changeSummary: str | None = None
     createdById: str | None = None
     createdByName: str | None = None
-    createdAt: datetime
+    createdAt: UtcDateTime
 
 
 class ReviewStatus(BaseModel):
@@ -241,8 +252,8 @@ class ReviewStatus(BaseModel):
     disagree about whether a procedure has lapsed.
     """
 
-    nextReviewDueAt: datetime | None = None
-    lastReviewedAt: datetime | None = None
+    nextReviewDueAt: UtcDateTime | None = None
+    lastReviewedAt: UtcDateTime | None = None
     lastReviewedById: str | None = None
     lastReviewedByName: str | None = None
     isOverdue: bool = False
@@ -280,8 +291,8 @@ class ProcedureListItem(BaseModel):
 
     createdById: str | None = None
     createdByName: str | None = None
-    createdAt: datetime
-    updatedAt: datetime
+    createdAt: UtcDateTime
+    updatedAt: UtcDateTime
 
 
 class ProcedureListResponse(BaseModel):
@@ -357,7 +368,7 @@ class QrProcedureView(BaseModel):
     #: The PUBLISHED version — not necessarily the latest. If a material edit is
     #: awaiting re-approval, the field keeps seeing the last approved sequence.
     version: int
-    publishedAt: datetime | None = None
+    publishedAt: UtcDateTime | None = None
 
     #: draft/under_review procedures with a prior publication still resolve, and
     #: this flag tells the page to say so honestly.
@@ -400,9 +411,9 @@ class ParticipantOut(BaseModel):
     assignedIsolationPointIds: list[str] = Field(default_factory=list)
     lockTagNumber: str | None = None
 
-    lockAppliedAt: datetime | None = None
+    lockAppliedAt: UtcDateTime | None = None
     lockAppliedConfirmed: bool = False
-    lockRemovedAt: datetime | None = None
+    lockRemovedAt: UtcDateTime | None = None
     lockRemovedConfirmed: bool = False
     notes: str | None = None
 
@@ -476,7 +487,7 @@ class VerificationRecordOut(BaseModel):
     stepText: str | None = None
     completedById: str
     completedByName: str | None = None
-    completedAt: datetime
+    completedAt: UtcDateTime
     photoUrl: str | None = None
     signoff: bool
     notes: str | None = None
@@ -539,7 +550,7 @@ class ExecutionListItem(BaseModel):
 
     initiatedById: str
     initiatedByName: str | None = None
-    initiatedAt: datetime
+    initiatedAt: UtcDateTime
 
     isGroupLockout: bool
     participantCount: int = 0
@@ -547,8 +558,8 @@ class ExecutionListItem(BaseModel):
     locksRemovedCount: int = 0
     lockHolderCount: int = 0
 
-    closedAt: datetime | None = None
-    createdAt: datetime
+    closedAt: UtcDateTime | None = None
+    createdAt: UtcDateTime
 
 
 class ExecutionListResponse(BaseModel):
@@ -565,13 +576,13 @@ class ExecutionOut(ExecutionListItem):
     participants: list[ParticipantOut] = Field(default_factory=list)
     verificationRecords: list[VerificationRecordOut] = Field(default_factory=list)
 
-    workStartedAt: datetime | None = None
-    locksRemovedAt: datetime | None = None
+    workStartedAt: UtcDateTime | None = None
+    locksRemovedAt: UtcDateTime | None = None
     closedById: str | None = None
     closedByName: str | None = None
     closureNotes: str | None = None
     abortedById: str | None = None
-    abortedAt: datetime | None = None
+    abortedAt: UtcDateTime | None = None
     abortReason: str | None = None
 
     gate: ExecutionGate = Field(default_factory=ExecutionGate)

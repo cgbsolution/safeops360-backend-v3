@@ -81,11 +81,15 @@ async def complete_json(
     try:
         # Run the sync SDK call off the event loop so it never blocks other
         # requests (e.g. the frontend status-poll) while the model thinks.
+        #
+        # `temperature` is accepted for caller compatibility but NOT sent: the
+        # anthropic 1.x SDK removed it from messages.create() (passing it is a
+        # TypeError, which made every AI draft silently return None), and
+        # Opus 4.7+ models reject it at the API anyway.
         msg = await asyncio.to_thread(
             client.messages.create,
             model=used_model,
             max_tokens=max_tokens,
-            temperature=temperature,
             system=system,
             messages=[{"role": "user", "content": user}],
         )
@@ -217,8 +221,9 @@ async def complete_with_tools(
         messages.create() call. Most real agents finish in 2-5
         iterations; 8 is generous. Hitting the cap surfaces as
         hit_iteration_cap=True on the result.
-      temperature: Forwarded to the API. Default 0.2 favours determinism
-        for the structured output the platform expects.
+      temperature: Accepted for compatibility, not forwarded — the
+        anthropic 1.x SDK no longer takes sampling parameters (see
+        complete_json).
 
     Returns:
       ToolLoopResult with the final assistant text, aggregated token
@@ -249,7 +254,6 @@ async def complete_with_tools(
         create_kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "system": system,
             "messages": messages,
         }

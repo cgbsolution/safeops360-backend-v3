@@ -141,7 +141,7 @@ class AnthropicVisionProvider:
                 client.messages.create,
                 model=get_settings().anthropic_model,
                 max_tokens=400,
-                temperature=0.1,
+                # No `temperature`: the anthropic 1.x SDK rejects it (TypeError).
                 system=_VISION_SYSTEM,
                 messages=[{"role": "user", "content": user_content}],
             )
