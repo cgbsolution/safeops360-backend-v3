@@ -2,7 +2,7 @@
 the other modules will follow:
 
   • authorize() at the top of every handler
-  • plant-scope filter on list queries (via get_accessible_plants)
+  • record-scope filter on list queries (via access_scope.build_record_scope)
   • workflow engine kicked off on create
   • permission service consulted for both module action AND scope
 
@@ -24,8 +24,8 @@ from app.core.deps import get_current_user, require_permission_with_context
 from app.models.observation import (
     Observation,
     ObservationAttachment,
-    ObservationCategory,
     ObservationStatus,
+    storable_category,
 )
 from app.models.observation_severity import OVERRIDE_SOURCE_EDIT
 from app.models.plant import Plant
@@ -38,10 +38,16 @@ from app.schemas.observation import (
     ObservationUpdate,
 )
 from app.services import workflow_engine
+from app.services.numbering import next_number
+from app.services.access_scope import build_record_scope
+from app.services.observation_access import (
+    observation_access_record,
+    observation_department_clause,
+    observation_owner_clause,
+)
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
 )
 from app.services.storage import (
     build_storage_path,
@@ -93,24 +99,15 @@ async def list_observations(
     if not read_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, read_check.reason or "Access denied")
 
-    accessible_plants = await get_accessible_plants(db, user.id)
-
-    stmt = select(Observation)
-    # Apply plant scope. None ⇒ ALL_PLANTS (no filter). Empty list ⇒ no rows.
-    if accessible_plants is None:
-        pass
-    elif len(accessible_plants) == 0:
-        return ObservationListResponse(items=[], total=0)
-    else:
-        stmt = stmt.where(Observation.plantId.in_(accessible_plants))
-
-    # OWN_RECORDS users (e.g. Workers) only see records they're attached to.
-    # We detect this by absence of OWN_PLANT/OWN_DEPARTMENT/ALL_PLANTS scopes.
-    # The check is rough — refine later when needed.
-    if accessible_plants is not None and read_check.matched_scope == "OWN_RECORDS":
-        stmt = stmt.where(
-            (Observation.observerId == user.id) | (Observation.responsiblePersonId == user.id)
-        )
+    # Same rules as GET /{id}: the OBSERVATION.READ scope — plant, department
+    # (via the observer's department) or own records — never the any-module
+    # plant set.
+    scope = await build_record_scope(db, user.id, "OBSERVATION.READ")
+    stmt = scope.apply(
+        select(Observation), Observation.plantId,
+        owner=observation_owner_clause(user.id),
+        department_clause=observation_department_clause,
+    )
 
     if status_filter:
         try:
@@ -171,7 +168,7 @@ async def create_observation(
     # Coerce explicitly: legacy_category_for hands back a plain string, and
     # relying on SQLAlchemy's name-vs-value lookup to accept it would break the
     # day a STOP code's name and value stop being identical.
-    _category = ObservationCategory(_legacy)
+    _category = storable_category(_legacy)
 
     # Compare on date only — sidesteps the offset-naive vs offset-aware
     # datetime mismatch you get when the form sends a bare YYYY-MM-DD that
@@ -222,10 +219,8 @@ async def create_observation(
     except sev_svc.SeverityOverrideError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
 
-    # Number generation — same pattern as Node side: count existing rows + 1
-    count_stmt = select(func.count()).select_from(Observation).where(Observation.plantId == payload.plantId)
-    last = (await db.execute(count_stmt)).scalar_one()
-    number = f"SO-{payload.date.year}-{plant.code}-{last + 1:04d}"
+    # Number generation — highest issued + 1, never count + 1 (see services/numbering)
+    number = await next_number(db, column=Observation.number, stem=f"SO-{payload.date.year}-{plant.code}-")
 
     obs = Observation(
         number=number,
@@ -331,40 +326,14 @@ async def create_observation(
         print(f"Observation workflow init failed: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
 
-    # TriageAgent — run on submission. Best-effort, never blocks creation.
-    # Output is appended to closureTriggers with ruleId="rule_triage_on_submit".
-    # Same SAVEPOINT pattern: a write failure here (e.g. column missing,
-    # transient DB error) rolls back only this block.
-    try:
-        async with db.begin_nested():
-            from app.services.ai.agents.triage import run_triage
+    # TriageAgent — runs outside the request (see ai/agents/triage.py for why
+    # it must not run inside it). Its result is prepended to closureTriggers
+    # with ruleId="rule_triage_on_submit". A plain asyncio task, NOT FastAPI
+    # BackgroundTasks: those run before get_db's commit, so the task could
+    # never see the observation it was meant to triage.
+    from app.services.ai.agents.triage import schedule_triage
 
-            triage = await run_triage(
-                observation={
-                    "type": obs.type.value,
-                    "category": obs.category.value,
-                    "severity": obs.severity.value,
-                    "description": obs.description,
-                    "immediateAction": obs.immediateAction,
-                }
-            )
-            if triage is not None:
-                entry = {
-                    "ruleId": "rule_triage_on_submit",
-                    "ruleName": "Triage (AI)",
-                    "fired": not triage.get("skipped", False),
-                    "reason": triage.get("rationale") or triage.get("reason") or "",
-                    "spawnedRecordType": "AI_TRIAGE",
-                    "data": triage,
-                }
-                existing = obs.closureTriggers or []
-                if not isinstance(existing, list):
-                    existing = []
-                obs.closureTriggers = [entry, *existing]
-                await db.flush()
-    except Exception as e:  # noqa: BLE001
-        print(f"TriageAgent failed: {e}", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
+    schedule_triage(obs.id)
 
     # Training & Competency Engine — stage a trigger event (dedicated outbox) so
     # the background resolver can evaluate the severity + threshold rules against
@@ -379,7 +348,7 @@ async def create_observation(
         print(f"Training trigger emit failed: {e}", file=sys.stderr)
 
     # Final refresh before serialising. The savepoint flushes above
-    # (workflow init, TriageAgent's UPDATE on closureTriggers) leave
+    # (workflow init, training trigger) leave
     # `obs` with expired attributes — even with expire_on_commit=False
     # SQLAlchemy can mark fields stale after a write. Reading any of
     # those (e.g. updatedAt) inside Pydantic's sync validator triggers
@@ -407,10 +376,7 @@ async def get_observation(
     if obs is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Observation not found")
 
-    record_dict = {
-        "observerId": obs.observerId,
-        "responsiblePersonId": obs.responsiblePersonId,
-    }
+    record_dict = await observation_access_record(db, obs)
     result = await can(
         db,
         user.id,
@@ -496,14 +462,14 @@ async def update_observation(
         obs.taxonomyAxis = axis
         legacy = tax.legacy_category_for(cat_code)
         if legacy is not None:
-            obs.category = ObservationCategory(legacy)
+            obs.category = storable_category(legacy)
 
     if payload.type is not None:
         obs.type = payload.type
     if payload.category is not None and tax.legacy_category_for(obs.categoryCode) is None:
         # An at-risk record's `category` is owned by the STOP code (dual-write);
         # only a safe observation lets the client set it directly.
-        obs.category = payload.category
+        obs.category = storable_category(payload.category)
     if payload.severity is not None:
         obs.severity = payload.severity
     if payload.description is not None:
@@ -683,7 +649,7 @@ async def list_attachments(
     obs = await db.get(Observation, observation_id)
     if obs is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Observation not found")
-    record = {"observerId": obs.observerId, "responsiblePersonId": obs.responsiblePersonId}
+    record = await observation_access_record(db, obs)
     result = await can(
         db, user.id, "OBSERVATION.READ",
         PermissionContext(record_id=obs.id, plant_id=obs.plantId, record=record),
@@ -721,7 +687,7 @@ async def upload_attachment(
     obs = await db.get(Observation, observation_id)
     if obs is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Observation not found")
-    record = {"observerId": obs.observerId, "responsiblePersonId": obs.responsiblePersonId}
+    record = await observation_access_record(db, obs)
     result = await can(
         db, user.id, "OBSERVATION.UPDATE",
         PermissionContext(record_id=obs.id, plant_id=obs.plantId, record=record),
@@ -820,11 +786,10 @@ async def delete_attachment(
     # through to the standard RBAC check otherwise.
     is_uploader = att.uploadedById == user.id
     if not is_uploader:
-        record = {
-            "observerId": obs.observerId if obs else None,
-            "responsiblePersonId": obs.responsiblePersonId if obs else None,
-            "uploadedById": att.uploadedById,
-        }
+        record = (
+            await observation_access_record(db, obs, uploadedById=att.uploadedById)
+            if obs else {"uploadedById": att.uploadedById}
+        )
         result = await can(
             db, user.id, "OBSERVATION.UPDATE",
             PermissionContext(record_id=att.id, plant_id=obs.plantId if obs else None, record=record),
@@ -852,11 +817,10 @@ async def download_attachment(
     # is_uploader bypass so the person who uploaded a photo can preview it even
     # without an OBSERVATION.READ grant.
     is_uploader = att.uploadedById == user.id
-    record = {
-        "observerId": obs.observerId if obs else None,
-        "responsiblePersonId": obs.responsiblePersonId if obs else None,
-        "uploadedById": att.uploadedById,
-    }
+    record = (
+        await observation_access_record(db, obs, uploadedById=att.uploadedById)
+        if obs else {"uploadedById": att.uploadedById}
+    )
     result = await can(
         db, user.id, "OBSERVATION.READ",
         PermissionContext(record_id=obs.id if obs else None, plant_id=obs.plantId if obs else None, record=record),

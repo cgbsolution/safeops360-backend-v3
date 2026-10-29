@@ -23,10 +23,7 @@ slide-for-slide needs the source file.
 from __future__ import annotations
 
 import io
-from collections.abc import Mapping
 from typing import Any
-
-from app.services.display_labels import label
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
@@ -161,10 +158,9 @@ def _table(slide, x, y, w, headers, rows, *, col_widths=None, row_h=Inches(0.32)
     return tbl
 
 
-def render_scorecard_pptx(payload: dict[str, Any], labels: Mapping[str, str] | None = None) -> bytes:
-    # `labels`: display-label overrides; each lookup falls through to the literal.
+def render_scorecard_pptx(payload: dict[str, Any]) -> bytes:
     grain_label = "Monthly" if payload.get("grain") == "month" else "Quarterly"
-    site_label = payload.get("siteName") or label(labels, "term.all_sites", "All sites")
+    site_label = payload.get("siteName") or "All sites"
     periods = payload.get("periods") or []
     current_label = periods[-1] if periods else "—"
 
@@ -220,7 +216,7 @@ def render_scorecard_pptx(payload: dict[str, Any], labels: Mapping[str, str] | N
               f"{txt} vs prior period", size=10, color=colour)
     cov = payload.get("sourceCoverage") or {}
     _text(s, Inches(0.6), Inches(3.7), Inches(12.1), Inches(1.2),
-          f"Computed from {cov.get('plantMonths', 0)} frozen {label(labels, 'scorecard.plant_months', 'plant-months')} "
+          f"Computed from {cov.get('plantMonths', 0)} frozen plant-months "
           f"({cov.get('firstPeriod') or '—'} to {cov.get('lastPeriod') or '—'}). "
           f"Frequency rates are read from the Manhours module's own submitted figures, not "
           f"recomputed here, so this deck and the manhours return cannot disagree.",
@@ -271,7 +267,7 @@ def render_scorecard_pptx(payload: dict[str, Any], labels: Mapping[str, str] | N
     by_site = payload.get("bySite") or []
     if len(by_site) > 1:
         s = _blank(prs)
-        _slide_header(s, label(labels, "scorecard.by_site", "By site"), current_label)
+        _slide_header(s, "By site", current_label)
         body = [[
             (x.get("siteName") or "")[:44],
             _fmt(x.get("observationsLogged"), "count"),
@@ -281,7 +277,7 @@ def render_scorecard_pptx(payload: dict[str, Any], labels: Mapping[str, str] | N
             _fmt(x.get("ltifr"), "rate"),
         ] for x in by_site[:14]]
         _table(s, Inches(0.6), Inches(1.35), Inches(12.1),
-               [label(labels, "term.site", "Site"), "Observations", "Near miss", "Incidents", "LTI", "LTIFR"], body,
+               ["Site", "Observations", "Near miss", "Incidents", "LTI", "LTIFR"], body,
                col_widths=[Inches(4.9), Inches(1.6), Inches(1.5), Inches(1.5),
                            Inches(1.3), Inches(1.3)])
 

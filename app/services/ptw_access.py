@@ -30,7 +30,7 @@ Scope of the exemption, deliberately narrow:
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.permit import Permit, PermitCrewMember
@@ -63,6 +63,17 @@ async def is_permit_party(db: AsyncSession, permit: Permit, user_id: str) -> boo
     return user_id in set(crew)
 
 
+def permit_party_clause(user_id: str):
+    """SQL counterpart of is_permit_party(), for register queries."""
+    crew = select(PermitCrewMember.permitId).where(PermitCrewMember.userId == user_id)
+    return or_(
+        Permit.originatorId == user_id,
+        Permit.issuerId == user_id,
+        Permit.receiverId == user_id,
+        Permit.id.in_(crew),
+    )
+
+
 async def check_permit_access(
     db: AsyncSession, permit: Permit, user: User, op: str
 ) -> tuple[bool, str | None]:
@@ -74,6 +85,7 @@ async def check_permit_access(
         PermissionContext(
             record_id=permit.id,
             plant_id=permit.plantId,
+            department_id=getattr(permit, "departmentId", None),
             record=permit_party_ids(permit),
         ),
     )
@@ -101,5 +113,6 @@ __all__ = [
     "check_permit_access",
     "is_permit_party",
     "load_permit_or_403",
+    "permit_party_clause",
     "permit_party_ids",
 ]

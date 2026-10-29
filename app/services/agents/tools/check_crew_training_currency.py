@@ -10,6 +10,8 @@ certificate currency relative to the permit's validity window:
     today", not "is it valid for the whole window")
   • expiredBeforePermit — at least one cert is already expired at permit.validFrom
   • noActiveCertificates — crew member has no active certs at all
+  • outsideScope — crew member is based at a plant the invoking user cannot
+    read; their certificates are not disclosed
 
 Used to surface the prompt's `crew_competency` pattern with category
 `high` (training expiry crosses the work window).
@@ -26,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.permit import Permit
 from app.models.training import TrainingCertificate, TrainingProgram
 from app.models.user import User
+from app.services.agents.tools._scope import plant_is_readable
 
 
 DEFINITION: dict[str, Any] = {
@@ -71,7 +74,8 @@ async def handle(
         )
 
     permit = await db.get(Permit, source_record_id)
-    if permit is None:
+    if permit is None or not await plant_is_readable(db, "PTW.READ", permit.plantId):
+        # Same answer for "missing" and "outside the invoking user's scope".
         return {"crew": [], "note": "Source permit not found"}
 
     valid_from = _ensure_aware(permit.validFrom)
@@ -119,6 +123,19 @@ async def handle(
 
     results: list[dict[str, Any]] = []
     for member in crew_rows:
+        crew_user = users_by_id.get(member.userId)
+        # A crew member based at a plant the invoking user cannot read keeps
+        # their training history private (mirrors get_training_records).
+        if crew_user is not None and not await plant_is_readable(db, "PTW.READ", crew_user.plantId):
+            results.append({
+                "userId": member.userId,
+                "role": member.role,
+                "trainingValidAtIssuance": member.trainingValidAtIssuance,
+                "classification": "outsideScope",
+                "expiringCertificates": [],
+                "activeCertificateCount": None,
+            })
+            continue
         cert_stmt = select(TrainingCertificate).where(
             TrainingCertificate.userId == member.userId
         )
@@ -156,11 +173,11 @@ async def handle(
         ]
 
         classification, expiring_certs = _classify(active_certs, valid_from, valid_to)
-        user = users_by_id.get(member.userId)
         results.append(
             {
+                # No name: personal names stay on the platform (userId + role
+                # carry the signal, as in the permit context builder).
                 "userId": member.userId,
-                "name": user.name if user else None,
                 "role": member.role,
                 "trainingValidAtIssuance": member.trainingValidAtIssuance,
                 "classification": classification,

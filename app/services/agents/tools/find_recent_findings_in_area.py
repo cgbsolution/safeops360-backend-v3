@@ -20,7 +20,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import readable_plants, restrict_to_plants
+
+from app.services.agents.tools._enums import coerce_enum
+
 from app.models.observation import (
+    DB_OBSERVATION_CATEGORIES,
+    OBSERVATION_CATEGORY_ALIASES,
     Observation,
     ObservationCategory,
     Severity,
@@ -54,7 +60,8 @@ DEFINITION: dict[str, Any] = {
                     "Optional Observation.category filter. One of: PPE, "
                     "HOUSEKEEPING, WORK_AT_HEIGHT, HOT_WORK, MOBILE_EQUIPMENT, "
                     "ELECTRICAL, MATERIAL_HANDLING, CONFINED_SPACE, "
-                    "CHEMICAL_HANDLING, EMERGENCY, OTHER."
+                    "CHEMICAL_HANDLING, EMERGENCY_PREP, TOOLS_EQUIPMENT, "
+                    "PROCEDURES, REACTIONS_OF_PEOPLE, POSITIONS_OF_PEOPLE, OTHERS."
                 ),
             },
             "scope": {
@@ -103,12 +110,7 @@ async def handle(
     if permit is None:
         return {"findings": [], "note": "Source permit not found"}
 
-    min_sev_raw = (input.get("minSeverity") or "HIGH").upper()
-    if min_sev_raw not in _SEVERITY_RANK:
-        raise ValueError(
-            f"Unknown minSeverity {min_sev_raw!r}. Valid: "
-            f"{sorted(_SEVERITY_RANK.keys())}"
-        )
+    min_sev_raw = coerce_enum(input.get("minSeverity") or "HIGH", Severity, "minSeverity").value
     allowed_severities = [
         Severity(s)
         for s, rank in _SEVERITY_RANK.items()
@@ -131,15 +133,16 @@ async def handle(
     )
     if scope == "area":
         stmt = stmt.where(Observation.areaId == permit.areaId)
+    stmt = restrict_to_plants(stmt, Observation.plantId, await readable_plants(db, "OBSERVATION.READ"))
 
     if category_raw := input.get("category"):
-        try:
-            category = ObservationCategory(category_raw)
-        except ValueError as e:
-            raise ValueError(
-                f"Unknown category {category_raw!r}. Valid: "
-                f"{sorted(c.value for c in ObservationCategory)}"
-            ) from e
+        category = coerce_enum(
+            category_raw,
+            ObservationCategory,
+            "category",
+            aliases=OBSERVATION_CATEGORY_ALIASES,
+            allowed=DB_OBSERVATION_CATEGORIES,
+        )
         stmt = stmt.where(Observation.category == category)
 
     stmt = stmt.order_by(Observation.date.desc()).limit(limit)

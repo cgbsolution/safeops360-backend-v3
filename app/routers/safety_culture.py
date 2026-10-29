@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.numbering import next_number
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.plant import Plant
@@ -36,7 +37,7 @@ from app.schemas.safety_culture import (
     WalkRaiseObservation,
 )
 from app.services import safety_culture as svc
-from app.services.permissions import PermissionContext, can, get_accessible_plants
+from app.services.permissions import PermissionContext, can, get_accessible_plants_for
 
 router = APIRouter(prefix="/api/culture", tags=["safety-culture"])
 
@@ -52,7 +53,7 @@ async def _require(db: AsyncSession, user: User, code: str, plant_id: str | None
 
 
 async def _accessible_or_403(db: AsyncSession, user: User, plant_id: str) -> None:
-    plants = await get_accessible_plants(db, user.id)
+    plants = await get_accessible_plants_for(db, user.id, "SAFETY_CULTURE.READ")
     if plants is not None and plant_id not in plants:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Plant not in your scope")
 
@@ -60,7 +61,7 @@ async def _accessible_or_403(db: AsyncSession, user: User, plant_id: str) -> Non
 async def _scoped_plants(db: AsyncSession, user: User) -> list[tuple[str, str, str, str | None]]:
     """Every plant in the caller's scope as (id, name, code, state) — the shared
     basis for the §Fix 7 multi-site rollup views. Mirrors maturity_enterprise."""
-    scope = await get_accessible_plants(db, user.id)
+    scope = await get_accessible_plants_for(db, user.id, "SAFETY_CULTURE.READ")
     rows = (await db.execute(select(Plant.id, Plant.name, Plant.code, Plant.state))).all()
     out: list[tuple[str, str, str, str | None]] = []
     for pid, pname, pcode, pstate in rows:
@@ -81,7 +82,7 @@ async def _current_quarter() -> str:
 @router.get("/maturity/enterprise")
 async def maturity_enterprise(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
     await _require(db, user, "SAFETY_CULTURE.READ")
-    plants_scope = await get_accessible_plants(db, user.id)
+    plants_scope = await get_accessible_plants_for(db, user.id, "SAFETY_CULTURE.READ")
     plants = (await db.execute(select(Plant.id, Plant.name, Plant.code, Plant.state))).all()
     sites = []
     stage_counts: dict[str, int] = {"Reactive": 0, "Dependent": 0, "Independent": 0, "Interdependent": 0}
@@ -281,7 +282,7 @@ async def obs_verify_closure(obs_id: str, body: ObservationVerifyClosure, user: 
 @router.get("/leadership-walks")
 async def list_walks(plant_id: str | None = None, leader_id: str | None = None, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
     await _require(db, user, "SAFETY_CULTURE.READ", plant_id)
-    scope = await get_accessible_plants(db, user.id)
+    scope = await get_accessible_plants_for(db, user.id, "SAFETY_CULTURE.READ")
     stmt = select(LeadershipWalk)
     if plant_id:
         stmt = stmt.where(LeadershipWalk.plantId == plant_id)
@@ -362,7 +363,6 @@ async def walk_raise_observation(
     from app.models.observation import (
         Observation, ObservationCategory, ObservationStatus, ObservationType, Severity,
     )
-    from sqlalchemy import func as _func
 
     walk = await db.get(LeadershipWalk, walk_id)
     if walk is None:
@@ -379,8 +379,7 @@ async def walk_raise_observation(
         except Exception:
             return default
 
-    count = (await db.execute(select(_func.count()).select_from(Observation))).scalar_one()
-    number = f"OBS-{code}-{count + 1:05d}"
+    number = await next_number(db, column=Observation.number, stem=f"OBS-{code}-", width=5)
 
     # A walk hazard is raised as UNSAFE_CONDITION, which now carries the STOP
     # taxonomy. This path bypasses the observations router (it writes the ORM

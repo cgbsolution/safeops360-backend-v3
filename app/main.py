@@ -15,7 +15,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.db import engine, warmup
 from app.licensing.enforcement import require_module
-from app.licensing.plant_modules import ROUTER_PLANT_MODULE, cams_fire_only_guard, require_plant_module
 from app.licensing.router_map import ROUTER_MODULE
 from app.licensing.state import refresh_state
 from app.routers import (
@@ -35,6 +34,7 @@ from app.routers import (
     cams_completion,
     capa,
     capture,
+    copilot,
     supplier_portal,
     competency,
     training_engine,
@@ -55,13 +55,10 @@ from app.routers import (
     epc_workers,
     factory,
     factory_ext,
-    fire_audits,
-    fire_checklists,
     fire_safety,
     flow_analytics,
     scorecard,
     form_engine,
-    display_labels,
     plants,
     programme,
     flra,
@@ -89,7 +86,6 @@ from app.routers import (
     ptw,
     ptw_active,
     ptw_annexures,
-    ptw_type_config,
     ptw_lifecycle,
     ptw_reports,
     rca,
@@ -148,13 +144,14 @@ _ROUTERS = {
     # Hazard annexures + precaution checklists. Same PTW licence module as the
     # rest of the permit routers.
     "ptw_annexures": ptw_annexures,
-    # Per-plant permit-type curation (wizard card list + default). Ungated core
-    # config like display_labels; the PTW routes enforce it server-side.
-    "ptw_type_config": ptw_type_config,
     "flra": flra, "incidents": incidents,
     "training": training, "inspections": inspections, "inspection_findings": inspection_findings, "manhours": manhours,
     "workflow": workflow, "workflow_definitions": workflow_definitions, "anomalies": anomalies,
-    "agents": agents, "agents_config": agents_config, "hira": hira, "capa": capa, "eai": eai,
+    "agents": agents, "agents_config": agents_config,
+    # SafeOps Copilot — the conversational front door to the agents above.
+    # Same AI_ASSIST licence module as the agent routers.
+    "copilot": copilot,
+    "hira": hira, "capa": capa, "eai": eai,
     "erm": erm, "erm_attachments": erm_attachments, "erm_p2": erm_p2, "erm_p3": erm_p3, "erm_t3": erm_t3, "competency": competency,
     # Training & Competency Engine (Trigger + Assignment + Content Adapter +
     # Correlation). Mounted ungated (insights/capture precedent) — per-endpoint
@@ -231,16 +228,7 @@ _ROUTERS = {
     # predates the FIRE code, so gating it via ROUTER_MODULE would 403 it. The FIRE
     # module IS registered in the licensing model (registry/editions) — add
     # "fire_safety": "FIRE" to ROUTER_MODULE once a FIRE-inclusive licence is issued.
-    # Fire Safety AUDIT scheduling (independence-checked) and asset scope —
-    # "Include in audit". Mounted before fire_safety so /api/fire/audits is not
-    # shadowed by any /api/fire/{...} route.
-    "fire_audits": fire_audits,
     "fire_safety": fire_safety,
-    # Fire & Life Safety checklists, branded registers, QR and compliance read
-    # model (ported from the Page Industries build). Same /api/fire prefix and
-    # the same ungated-in-dev reasoning as fire_safety: the dev licence carries
-    # no FIRE code. Every endpoint checks FIRE.* (fallback INCIDENT.*) itself.
-    "fire_checklists": fire_checklists,
     # Guided Field Capture (CAPTURE module) — same dev-licence situation as
     # fire_safety: registered in the licensing model, mounted ungated until a
     # CAPTURE-inclusive licence is issued ("capture": "CAPTURE" in ROUTER_MODULE).
@@ -269,9 +257,6 @@ _ROUTERS = {
     # is per-form rather than per-router, so a licence code here would be the
     # wrong granularity anyway.
     "form_engine": form_engine,
-    # Per-plant display-label overrides (UI vocabulary only). Core, ungated:
-    # every page needs its labels regardless of which modules are licensed.
-    "display_labels": display_labels,
 }
 
 
@@ -364,15 +349,7 @@ def create_app() -> FastAPI:
         PermitIsolation,
         PermitSuspension,
     )
-    from app.models.fire_safety import (
-        FireAmcContract,
-        FireAssetCertificate,
-        FireDrill,
-        FireEmergencyPlan,
-        FireEquipment,
-        FireZone,
-        InspectionFrequencyMaster,
-    )
+    from app.models.fire_safety import FireDrill, FireEmergencyPlan, FireEquipment
     from app.models.loto import (
         LotoExecution,
         LotoExecutionParticipant,
@@ -400,11 +377,6 @@ def create_app() -> FastAPI:
         PermitActionEvidence, PermitAttachment, PermitIsolation, PermitGasTestReading,
         PermitSuspension, PermitExtension, PermitCrewMember,
         FireEquipment, FireEmergencyPlan, FireDrill,
-        # Fire & Life Safety: the frequency master is the reason a due date is
-        # what it is, and the AMC/certificate rows are what a regulator asks to
-        # see. FireZone joins because moving an asset between zones changes which
-        # hot-work permits it guards.
-        FireZone, InspectionFrequencyMaster, FireAmcContract, FireAssetCertificate,
         RootCauseAnalysis, RcaIdentifiedCause, RcaRiskLink,
         CaptureSubmission, RcaFieldRequest, Alert,
         # Incident Intelligence Slice 2 — golden-thread links, generated statutory
@@ -475,45 +447,7 @@ def create_app() -> FastAPI:
     for name, module in _ROUTERS.items():
         module_code = ROUTER_MODULE.get(name)
         deps = [Depends(require_module(module_code))] if module_code else []
-        # Ungated routers still honour an explicit per-plant OFF row (no row → on).
-        if name in ROUTER_PLANT_MODULE:
-            deps.append(Depends(require_plant_module(ROUTER_PLANT_MODULE[name])))
-        # A CAMS fire-only plant may use /api/cams for FIRE engagements only.
-        if name == "cams":
-            deps.append(Depends(cams_fire_only_guard))
         app.include_router(module.router, dependencies=deps)
-
-    # Trailing-slash routes (e.g. `@router.get("/")` under prefix /api/epc/sites)
-    # are resolved IN PLACE rather than answered with a 307. Behind a proxy the
-    # redirect Location carries another origin, the client drops its
-    # Authorization header on the hop, and the retried request comes back 401 —
-    # every EPC list silently empty. Rewriting `/x` → `/x/` before routing, only
-    # when `/x/` is a registered route and `/x` is not, removes the redirect for
-    # every client, old or new; nothing else changes.
-    _slash_paths: set[str] = set()
-    _plain_paths: set[str] = set()
-
-    def _index_routes() -> None:
-        # Included routers are held as nested objects in this FastAPI version,
-        # so read the (already prefixed) paths from each router directly.
-        routes = list(app.routes) + [r for m in _ROUTERS.values() for r in m.router.routes]
-        for r in routes:
-            path = getattr(r, "path", "") or ""
-            if "{" in path:
-                continue
-            (_slash_paths if path.endswith("/") and len(path) > 1 else _plain_paths).add(path)
-
-    @app.middleware("http")
-    async def _resolve_trailing_slash(request, call_next):  # noqa: ANN001
-        if not _slash_paths and not _plain_paths:
-            _index_routes()
-        path = request.scope.get("path", "")
-        if path and not path.endswith("/") and path not in _plain_paths and f"{path}/" in _slash_paths:
-            request.scope["path"] = f"{path}/"
-            raw = request.scope.get("raw_path")
-            if raw is not None:
-                request.scope["raw_path"] = raw + b"/" if not raw.endswith(b"/") else raw
-        return await call_next(request)
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:

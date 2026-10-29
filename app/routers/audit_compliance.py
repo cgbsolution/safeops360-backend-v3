@@ -26,7 +26,6 @@ from app.services import audit_compliance as svc
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
     get_accessible_plants_for,
     permission_scopes,
 )
@@ -407,7 +406,7 @@ async def my_checkpoints(
 ) -> dict[str, Any]:
     """Auditee transparency (A-06) — every checkpoint assigned to me, all states."""
     await _require(db, user, "AUDIT_COMPLIANCE.READ")
-    plants = await get_accessible_plants(db, user.id)
+    plants = await get_accessible_plants_for(db, user.id, "AUDIT_COMPLIANCE.READ")
     return await svc.my_assigned_checkpoints(db, user=user, accessible_plants=plants)
 
 
@@ -982,13 +981,9 @@ async def audit_report_pdf(report_id: str, user: User = Depends(get_current_user
         rows = (await db.execute(select(User.id, User.name).where(User.id.in_(uids)))).all()
         user_names = {r[0]: r[1] for r in rows}
 
-    from app.services.display_labels import labels_for_plant
-
-    rep_dict = svc._report_to_dict(rep)
     pdf_bytes = render_audit_report_pdf(
-        rep_dict, by_name,
+        svc._report_to_dict(rep), by_name,
         register=register, user_names=user_names, register_truncated=truncated,
-        labels=await labels_for_plant(db, (rep_dict.get("snapshot") or {}).get("siteId")),
     )
     if not rep.pdfAttachmentId:
         rep.pdfAttachmentId = f"generated:{report_id}"

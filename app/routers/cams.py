@@ -54,6 +54,21 @@ async def _require(db: AsyncSession, user: User, code: str, *, plant_id=None, re
         raise HTTPException(status.HTTP_403_FORBIDDEN, res.reason or f"Missing permission {code}")
 
 
+async def _read_scope(db: AsyncSession, user: User):
+    """CAMS.READ plant scope (fail-closed). Findings and engagements are
+    plant-level records (siteId); the register, the detail views and the
+    unified feeds all filter through this."""
+    from app.services.access_scope import build_query_scope
+
+    return await build_query_scope(db, user.id, "CAMS.READ")
+
+
+async def _require_site_read(db: AsyncSession, user: User, site_id: str | None) -> None:
+    scope = await _read_scope(db, user)
+    if not scope.allows_plant(site_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Permission 'CAMS.READ' present but scope does not include this record")
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -429,7 +444,6 @@ async def list_engagements(
     fromDate: datetime | None = Query(None),
     toDate: datetime | None = Query(None),
     q: str | None = Query(None),
-    includeRoutine: bool = Query(False, description="Include routine checklist runs (periodLabel set)"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -440,12 +454,6 @@ async def list_engagements(
 
     scope = await build_query_scope(db, user.id, "CAMS.READ")
     stmt = scope.apply(select(CamsEngagement).where(CamsEngagement.isDeleted.is_(False)), CamsEngagement)
-    # Routine fire/chemical checklist runs are CamsEngagement rows too (one per
-    # asset × sheet × period — thousands at a real site). They are the
-    # Operations side's records, read through the checklist screens; the audit
-    # register lists audits and inspections, not every daily round.
-    if not includeRoutine:
-        stmt = stmt.where(CamsEngagement.periodLabel.is_(None))
     if estatus:
         stmt = stmt.where(CamsEngagement.status == estatus)
     if engagementType:
@@ -499,12 +507,11 @@ async def unified_engagements(
     the CAMS command centre + calendar. Each item carries `href` so audit rows
     route to /cams/audits and inspection rows to /cams/engagements."""
     await _require(db, user, "CAMS.READ")
+    scope = await _read_scope(db, user)
     rows = (
         await db.execute(
-            select(CamsEngagement)
+            scope.apply(select(CamsEngagement), CamsEngagement)
             .where(CamsEngagement.isDeleted.is_(False))
-            # Routine checklist runs are not audits — see list_engagements.
-            .where(CamsEngagement.periodLabel.is_(None))
             # Newest-created first — platform-wide register convention.
             .order_by(CamsEngagement.createdAt.desc(), CamsEngagement.id.desc())
         )
@@ -522,13 +529,8 @@ async def unified_engagements(
         d = _serialise_engagement(e, names, plants, types, templates, roll.get(e.id, {})).model_dump()
         d["href"] = f"/cams/engagements/{e.id}"
         cams_items.append(d)
-    items = (await svc.audit_engagements(db)) + cams_items
-    # Plant scope (fail-closed) over BOTH sources — the feed previously showed
-    # every plant's engagements and audits to any CAMS.READ holder.
-    from app.services.access_scope import build_query_scope
-
-    scope = await build_query_scope(db, user.id, "CAMS.READ")
-    items = [it for it in items if scope.allows_plant(it.get("siteId"))]
+    audit_items = [a for a in await svc.audit_engagements(db) if scope.allows_plant(a.get("siteId"))]
+    items = audit_items + cams_items
     # The two sources type `plannedDate` differently — audit_engagements emits an
     # ISO string (`.isoformat()`), while the Cams `model_dump()` keeps a datetime.
     # Normalise to an ISO string in the key so a mixed list sorts without a
@@ -588,6 +590,7 @@ async def get_engagement(engagement_id: str, user: User = Depends(get_current_us
     e = await db.get(CamsEngagement, engagement_id)
     if not e or e.isDeleted:
         raise HTTPException(404, "Engagement not found")
+    await _require_site_read(db, user, e.siteId)
     return await _engagement_out(db, e)
 
 
@@ -682,7 +685,6 @@ async def _build_runner(db: AsyncSession, e: CamsEngagement) -> S.ChecklistRunne
                 "weight": q.weight, "ncTriggersFinding": q.ncTriggersFinding, "evidenceRequiredOnNc": q.evidenceRequiredOnNc,
                 "options": q.options, "sectionId": s.id, "sectionTitle": s.title,
                 "value": ans.get("value"), "conformance": ans.get("conformance"), "note": ans.get("note", ""),
-                "ncSeverity": ans.get("ncSeverity"),
                 "evidenceAttachmentIds": ans.get("evidenceAttachmentIds", []), "findingId": ans.get("findingId"),
             })
         sections_out.append({"id": s.id, "title": s.title, "weightPct": s.weightPct, "questions": qs})
@@ -702,6 +704,7 @@ async def get_checklist(engagement_id: str, user: User = Depends(get_current_use
     e = await db.get(CamsEngagement, engagement_id)
     if not e or e.isDeleted:
         raise HTTPException(404, "Engagement not found")
+    await _require_site_read(db, user, e.siteId)
     return await _build_runner(db, e)
 
 
@@ -791,12 +794,8 @@ async def list_findings(
     db: AsyncSession = Depends(get_db),
 ):
     await _require(db, user, "CAMS.READ")
-    # Scope to the actor's plants (fail-closed), as list_engagements does.
-    # Without it any CAMS.READ holder read every plant's findings.
-    from app.services.access_scope import build_query_scope
-
-    scope = await build_query_scope(db, user.id, "CAMS.READ")
-    stmt = scope.apply(select(CamsFinding).where(CamsFinding.isDeleted.is_(False)), CamsFinding)
+    scope = await _read_scope(db, user)
+    stmt = scope.apply(select(CamsFinding), CamsFinding).where(CamsFinding.isDeleted.is_(False))
     if severity:
         stmt = stmt.where(CamsFinding.severity == severity)
     if fstatus:
@@ -845,9 +844,11 @@ async def unified_findings(
     ComplianceAudit fail/partial checkpoints (projected to the finding shape).
     Filters apply to both sources; audit findings are never repeats."""
     await _require(db, user, "CAMS.READ")
+    scope = await _read_scope(db, user)
     rows = (
         await db.execute(
-            select(CamsFinding).where(CamsFinding.isDeleted.is_(False)).order_by(CamsFinding.createdAt.desc())
+            scope.apply(select(CamsFinding), CamsFinding)
+            .where(CamsFinding.isDeleted.is_(False)).order_by(CamsFinding.createdAt.desc())
         )
     ).scalars().all()
     eng_ids = {f.engagementId for f in rows}
@@ -859,12 +860,8 @@ async def unified_findings(
         d = (await _serialise_finding(db, f, names, plants, engagements)).model_dump()
         d["href"] = f"/cams/findings/{f.id}"
         cams_items.append(d)
-    items = (await svc.audit_findings(db)) + cams_items
-    # Plant scope (fail-closed) over both sources, as the engagement feed.
-    from app.services.access_scope import build_query_scope
-
-    scope = await build_query_scope(db, user.id, "CAMS.READ")
-    items = [it for it in items if scope.allows_plant(it.get("siteId"))]
+    audit_items = [a for a in await svc.audit_findings(db) if scope.allows_plant(a.get("siteId"))]
+    items = audit_items + cams_items
 
     def _keep(it: dict[str, Any]) -> bool:
         if severity and it["severity"] != severity:
@@ -899,6 +896,7 @@ async def create_finding(body: S.FindingCreate, user: User = Depends(get_current
     e = await db.get(CamsEngagement, body.engagementId)
     if not e or e.isDeleted:
         raise HTTPException(404, "Engagement not found")
+    await _require(db, user, "CAMS.FINDING_MANAGE", plant_id=e.siteId)
     f = CamsFinding(
         findingCode=await svc.next_finding_code(db),
         engagementId=e.id, sourceQuestionId=body.sourceQuestionId, title=body.title, description=body.description,
@@ -918,6 +916,7 @@ async def get_finding(finding_id: str, user: User = Depends(get_current_user), d
     f = await db.get(CamsFinding, finding_id)
     if not f or f.isDeleted:
         raise HTTPException(404, "Finding not found")
+    await _require_site_read(db, user, f.siteId)
     e = await db.get(CamsEngagement, f.engagementId)
     return await _serialise_finding(db, f, await svc.user_name_map(db, [f.ownerId]), await svc.plant_name_map(db, [f.siteId]), {e.id: e} if e else {})
 
@@ -928,6 +927,7 @@ async def update_finding(finding_id: str, body: S.FindingUpdate, user: User = De
     f = await db.get(CamsFinding, finding_id)
     if not f or f.isDeleted:
         raise HTTPException(404, "Finding not found")
+    await _require(db, user, "CAMS.FINDING_MANAGE", plant_id=f.siteId, record_id=f.id, record={"ownerId": f.ownerId})
     data = body.model_dump(exclude_unset=True)
     target_status = data.get("status")
     if target_status in ("CLOSED", "ACCEPTED_RISK"):
@@ -950,6 +950,7 @@ async def raise_capa(finding_id: str, user: User = Depends(get_current_user), db
     f = await db.get(CamsFinding, finding_id)
     if not f or f.isDeleted:
         raise HTTPException(404, "Finding not found")
+    await _require(db, user, "CAMS.FINDING_MANAGE", plant_id=f.siteId, record_id=f.id, record={"ownerId": f.ownerId})
     if f.capaId:
         raise HTTPException(409, "A CAPA has already been raised for this finding.")
     e = await db.get(CamsEngagement, f.engagementId)
@@ -1019,7 +1020,10 @@ async def run_recurrences(user: User = Depends(get_current_user), db: AsyncSessi
 @router.get("/analytics", response_model=S.AnalyticsOut)
 async def analytics(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _require(db, user, "CAMS.ANALYTICS")
-    return S.AnalyticsOut(**await svc.compute_analytics(db))
+    from app.services.permissions import get_accessible_plants_for
+
+    plants = await get_accessible_plants_for(db, user.id, "CAMS.ANALYTICS")
+    return S.AnalyticsOut(**await svc.compute_analytics(db, plant_ids=plants))
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1028,7 +1032,21 @@ async def analytics(user: User = Depends(get_current_user), db: AsyncSession = D
 @router.get("/compliance", response_model=S.ComplianceTrackerOut)
 async def compliance_tracker(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _require(db, user, "CAMS.READ")
-    return S.ComplianceTrackerOut(**await svc.compute_compliance(db))
+    scope = await _read_scope(db, user)
+    plants = None if scope.all_plants else scope.plant_ids
+    return S.ComplianceTrackerOut(**await svc.compute_compliance(db, plant_ids=plants))
+
+
+async def _require_link_targets(db: AsyncSession, user: User, engagement_id: str | None, finding_id: str | None) -> None:
+    """A compliance link may only touch engagements/findings at plants where
+    the caller manages findings."""
+    for model, rid in ((CamsEngagement, engagement_id), (CamsFinding, finding_id)):
+        if not rid:
+            continue
+        row = await db.get(model, rid)
+        if row is None or row.isDeleted:
+            raise HTTPException(404, f"{model.__name__.replace('Cams', '')} not found")
+        await _require(db, user, "CAMS.FINDING_MANAGE", plant_id=row.siteId)
 
 
 @router.post("/compliance/links", response_model=S.ComplianceLinkOut, status_code=201)
@@ -1036,6 +1054,7 @@ async def create_compliance_link(body: S.ComplianceLinkCreate, user: User = Depe
     await _require(db, user, "CAMS.FINDING_MANAGE")
     if not body.engagementId and not body.findingId:
         raise HTTPException(400, "A compliance link needs an engagement or a finding.")
+    await _require_link_targets(db, user, body.engagementId, body.findingId)
     link = CamsComplianceLink(
         engagementId=body.engagementId, findingId=body.findingId, obligationId=body.obligationId,
         linkType=body.linkType, notes=body.notes, createdBy=user.id,
@@ -1057,6 +1076,7 @@ async def delete_compliance_link(link_id: str, user: User = Depends(get_current_
     link = await db.get(CamsComplianceLink, link_id)
     if not link or link.isDeleted:
         raise HTTPException(404, "Link not found")
+    await _require_link_targets(db, user, link.engagementId, link.findingId)
     link.isDeleted = True
     await db.commit()
 
@@ -1073,7 +1093,8 @@ async def audit_capas(
 ):
     await _require(db, user, "CAMS.READ")
     audit_codes = ("AUDIT_INTERNAL", "AUDIT_EXTERNAL", "AUDIT_REGULATORY")
-    rows = (await db.execute(select(Capa).where(Capa.sourceTypeCode.in_(audit_codes)))).scalars().all()
+    scope = await _read_scope(db, user)
+    rows = (await db.execute(scope.apply(select(Capa), Capa).where(Capa.sourceTypeCode.in_(audit_codes)))).scalars().all()
     names = await svc.user_name_map(db, [c.primaryOwnerUserId for c in rows])
     fids = [c.sourceReferenceId for c in rows if c.sourceReferenceId]
     finds = {f.id: f for f in (await db.execute(select(CamsFinding).where(CamsFinding.id.in_(fids)))).scalars().all()} if fids else {}

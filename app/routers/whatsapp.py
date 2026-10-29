@@ -76,11 +76,37 @@ def _parse_inbound(body: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _signature_ok(raw: bytes, header: str | None) -> bool:
+    """Meta signs every webhook POST with X-Hub-Signature-256 (HMAC-SHA256 of
+    the raw body with the app secret). When a secret is configured, anything
+    unsigned is rejected — otherwise anyone who knows a registered phone
+    number could post an incident in that employee's name."""
+    import hashlib
+    import hmac
+    import os
+
+    secret = getattr(get_settings(), "whatsapp_app_secret", None) or os.getenv("WHATSAPP_APP_SECRET")
+    if not secret:
+        return True  # no provider configured yet (dev / stubbed transport)
+    if not header or not header.startswith("sha256="):
+        return False
+    expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header.split("=", 1)[1])
+
+
 @router.post("/webhook/inbound")
 async def inbound(request: Request, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     """Inbound WhatsApp message. Unverified numbers get OTP registration; never
     a silent incident. Verified voice/text becomes a classified incident."""
-    body = await request.json()
+    raw = await request.body()
+    if not _signature_ok(raw, request.headers.get("x-hub-signature-256")):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid webhook signature")
+    try:
+        import json
+
+        body = json.loads(raw or b"{}")
+    except ValueError:
+        return {"action": "ignored", "reason": "body is not JSON"}
     parsed = _parse_inbound(body if isinstance(body, dict) else {})
     if not parsed or not parsed.get("phone"):
         return {"action": "ignored", "reason": "no message payload"}
@@ -101,7 +127,10 @@ class OtpVerify(BaseModel):
     model_config = ConfigDict(extra="ignore")
     phone: str
     code: str
-    employeeId: str
+    # Optional and only honoured when it is the caller's own id: the OTP proves
+    # the caller owns the phone, not who they are. Binding someone else's
+    # number is the HR-admin route (/senders/register).
+    employeeId: str | None = None
 
 
 class AdminRegister(BaseModel):
@@ -118,8 +147,20 @@ async def otp_request(payload: OtpRequest, db: AsyncSession = Depends(get_db)) -
 
 
 @router.post("/senders/otp/verify")
-async def otp_verify(payload: OtpVerify, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
-    res = await whatsapp.verify_otp(db, payload.phone, payload.code, employee_id=payload.employeeId)
+async def otp_verify(
+    payload: OtpVerify,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    # Self-service binding is for the signed-in employee only. Previously this
+    # was unauthenticated and bound the phone to any employeeId supplied, so
+    # anyone could file WhatsApp incident reports in another person's name.
+    if payload.employeeId and payload.employeeId != user.id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "You can only verify a number for yourself; ask an admin to register it for someone else.",
+        )
+    res = await whatsapp.verify_otp(db, payload.phone, payload.code, employee_id=user.id)
     if not res.get("ok"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, res.get("reason", "Verification failed"))
     return res

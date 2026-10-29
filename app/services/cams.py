@@ -462,14 +462,16 @@ def _as_aware(dt: datetime | None) -> datetime | None:
 
 
 # ── Analytics & Benchmarking (C-13) ───────────────────────────────────────────
-async def compute_analytics(db: AsyncSession) -> dict[str, Any]:
+async def compute_analytics(db: AsyncSession, plant_ids: list[str] | None = None) -> dict[str, Any]:
+    """`plant_ids` limits the analytics to those sites (None == every site)."""
     today = now()
-    engagements = (
-        await db.execute(select(CamsEngagement).where(CamsEngagement.isDeleted.is_(False)))
-    ).scalars().all()
-    findings = (
-        await db.execute(select(CamsFinding).where(CamsFinding.isDeleted.is_(False)))
-    ).scalars().all()
+    eng_q = select(CamsEngagement).where(CamsEngagement.isDeleted.is_(False))
+    find_q = select(CamsFinding).where(CamsFinding.isDeleted.is_(False))
+    if plant_ids is not None:
+        eng_q = eng_q.where(CamsEngagement.siteId.in_(plant_ids))
+        find_q = find_q.where(CamsFinding.siteId.in_(plant_ids))
+    engagements = (await db.execute(eng_q)).scalars().all()
+    findings = (await db.execute(find_q)).scalars().all()
 
     # Template → set of clause refs (for clause-conformance assessments).
     tpl_ids = {e.templateId for e in engagements if e.templateId}
@@ -678,7 +680,7 @@ async def compute_analytics(db: AsyncSession) -> dict[str, Any]:
 
 
 # ── Compliance Tracker (C-12) ──────────────────────────────────────────────────
-async def compute_compliance(db: AsyncSession) -> dict[str, Any]:
+async def compute_compliance(db: AsyncSession, plant_ids: list[str] | None = None) -> dict[str, Any]:
     """Statutory obligations + audit coverage.
 
     When the obligations register cannot be read the response says so
@@ -690,6 +692,10 @@ async def compute_compliance(db: AsyncSession) -> dict[str, Any]:
         obligations = await obligations_svc.list_obligations(db)
     except obligations_svc.ObligationsUnavailable as e:
         return obligations_svc.unavailable_payload(e.reason)
+    if plant_ids is not None:
+        # Site obligations outside the caller's plants are not theirs to see;
+        # estate-wide obligations (no site) stay visible.
+        obligations = [o for o in obligations if not o.siteId or o.siteId in plant_ids]
     links = (
         await db.execute(select(CamsComplianceLink).where(CamsComplianceLink.isDeleted.is_(False)))
     ).scalars().all()
@@ -698,6 +704,9 @@ async def compute_compliance(db: AsyncSession) -> dict[str, Any]:
     find_ids = {l.findingId for l in links if l.findingId}
     engs = {e.id: e for e in (await db.execute(select(CamsEngagement).where(CamsEngagement.id.in_(eng_ids)))).scalars().all()} if eng_ids else {}
     finds = {f.id: f for f in (await db.execute(select(CamsFinding).where(CamsFinding.id.in_(find_ids)))).scalars().all()} if find_ids else {}
+    if plant_ids is not None:
+        engs = {k: e for k, e in engs.items() if e.siteId in plant_ids}
+        finds = {k: f for k, f in finds.items() if f.siteId in plant_ids}
     plants = await plant_name_map(db, [o.siteId for o in obligations])
 
     links_by_obl: dict[str, list] = {}

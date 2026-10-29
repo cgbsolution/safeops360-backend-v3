@@ -86,3 +86,82 @@ def system_scope(plant_ids: list[str], *, all_plants: bool = False, job_name: st
         plant_ids=list(plant_ids),
         is_system=True,
     )
+
+
+# ─── Record-register scope (plant + department + own records) ──────────────
+#
+# QueryScope above narrows on the plant axis only, which is right for modules
+# whose read grants are plant-wide. The operational registers (PTW, incident,
+# near miss, observation, FLRA, HIRA) also hand out OWN_DEPARTMENT and
+# OWN_RECORDS grants, and their detail endpoints enforce those through can().
+# A register built from the plant set alone showed a department head every
+# department and, before that, `get_accessible_plants()` showed every plant to
+# anyone holding ALL_PLANTS on any module. RecordScope mirrors can()'s rules so
+# a list never shows a row its own detail endpoint would refuse.
+
+
+@dataclass
+class RecordScope:
+    user_id: str
+    scopes: set[str]                 # scopes held on the read permission (empty = none)
+    plant_ids: list[str]             # the user's plants (unused when unrestricted)
+    department: str | None           # the user's department name
+
+    @property
+    def unrestricted(self) -> bool:
+        return "ALL_PLANTS" in self.scopes
+
+    def filter(self, plant_col, *, owner=None, department_col=None, department_clause=None, owner_always=False):
+        """WHERE clause for a register query; None == no restriction.
+
+        plant_col          the row's plant column
+        owner              clause matching rows the user is party to (OWN_RECORDS)
+        department_col     the row's Department.id column, if it has one
+        department_clause  alternative: callable(dept_name, plant_ids) -> clause
+        owner_always       party rows are visible whatever the scope (PTW rule)
+        """
+        from sqlalchemy import and_, func, or_, select
+
+        from app.models.masters import Department
+
+        if self.unrestricted:
+            return None
+        clauses = []
+        if "OWN_PLANT" in self.scopes and self.plant_ids:
+            clauses.append(plant_col.in_(self.plant_ids))
+        if "OWN_DEPARTMENT" in self.scopes and self.department and self.plant_ids:
+            if department_col is not None:
+                dept_ids = select(Department.id).where(
+                    func.lower(Department.name) == self.department.strip().lower(),
+                    Department.plantId.in_(self.plant_ids),
+                )
+                clauses.append(and_(plant_col.in_(self.plant_ids), department_col.in_(dept_ids)))
+            elif department_clause is not None:
+                clauses.append(and_(plant_col.in_(self.plant_ids), department_clause(self.department, self.plant_ids)))
+        if owner is not None and (owner_always or self.scopes & {"OWN_DEPARTMENT", "OWN_RECORDS"}):
+            clauses.append(owner)
+        return or_(*clauses) if clauses else false()
+
+    def apply(self, stmt, plant_col, **kw):
+        clause = self.filter(plant_col, **kw)
+        return stmt if clause is None else stmt.where(clause)
+
+    def allows_plant(self, plant_id: str | None) -> bool:
+        """Plant-level visibility (aggregates, plant-keyed lookups): ALL_PLANTS,
+        or a plant-wide/department grant at one of the user's plants."""
+        if self.unrestricted:
+            return True
+        return bool(plant_id) and plant_id in self.plant_ids and bool(self.scopes & {"OWN_PLANT", "OWN_DEPARTMENT", "OWN_RECORDS"})
+
+
+async def build_record_scope(db: AsyncSession, actor_id: str, read_permission: str) -> RecordScope:
+    from app.services.permissions import _load_user_profile, permission_scopes
+
+    scopes = set(await permission_scopes(db, actor_id, read_permission))
+    profile = await _load_user_profile(db, actor_id)
+    return RecordScope(
+        user_id=actor_id,
+        scopes=scopes,
+        plant_ids=sorted(profile.plantIds) if profile and profile.plantIds else [],
+        department=profile.department if profile else None,
+    )

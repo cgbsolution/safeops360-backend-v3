@@ -17,7 +17,7 @@ from app.services import frequency_rates
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
+    get_accessible_plants_for,
 )
 
 router = APIRouter(prefix="/api/manhours", tags=["manhours"])
@@ -63,7 +63,7 @@ async def list_manhours(
     read_check = await can(db, user.id, "MANHOURS.READ", PermissionContext())
     if not read_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, read_check.reason or "Access denied")
-    plants = await get_accessible_plants(db, user.id)
+    plants = await get_accessible_plants_for(db, user.id, "MANHOURS.READ")
     stmt = select(Manhours)
     if plants is None:
         pass

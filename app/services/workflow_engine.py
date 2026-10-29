@@ -102,10 +102,6 @@ async def _find_user_by_roles(
     users are visible regardless of which role they hold as primary."""
     if not role_codes:
         return None
-    from app.services import tenant_roles
-
-    # Tenant clones of stock roles may take the step (services/tenant_roles.py).
-    role_codes = list(tenant_roles.expand_step_roles(role_codes))
     now = datetime.now(timezone.utc)
     stmt = (
         select(UserRole, User)
@@ -119,28 +115,7 @@ async def _find_user_by_roles(
     if not rows:
         return None
 
-    # Tenant guard: a record at a tenant's site (a plant with a display profile,
-    # e.g. Meridian Retail) is only ever assigned inside that tenant, and a
-    # tenant's users are never picked for anyone else's record — which leaves
-    # pre-existing sites with exactly the candidate set they had before.
-    from app.services.fire_tenancy import plant_profiles
-
-    profiles = await plant_profiles(db, [plant_id, *{u.plantId for _, u in rows}])
-    tenant = profiles.get(plant_id) if plant_id else None
-    if not tenant:
-        rows = [(ur, u) for ur, u in rows if not profiles.get(u.plantId)]
-        if not rows:
-            return None
-
     if plant_id:
-        if tenant:
-            rows = [(ur, u) for ur, u in rows if profiles.get(u.plantId) == tenant]
-            if not rows:
-                return None
-            for ur, u in rows:
-                if u.plantId == plant_id or (ur.scopeType == "PLANT" and ur.scopeValue == plant_id):
-                    return u.id
-            return rows[0][1].id
         # Prefer users at the requested plant
         for ur, u in rows:
             same_plant = u.plantId == plant_id
@@ -483,10 +458,8 @@ async def _rbac_gate(
 
     # 2. Role — the step's required role must be one the user holds
     if step.approverRole:
-        from app.services import tenant_roles
-
         user_roles = await get_user_role_codes(db, user_id)
-        if not tenant_roles.satisfies(user_roles, step.approverRole):
+        if step.approverRole not in user_roles:
             raise WorkflowError(f"This step requires the '{step.approverRole}' role.")
 
     # 3. Permission — verify the user holds the module action grant at ALL
@@ -1186,18 +1159,6 @@ async def _advance(
     if current_step is None:
         raise WorkflowError("Step missing")
 
-    # A permit's next approver belongs to the PERMIT's site. Callers pass the
-    # acting user's home plant (the approval panel sends none), which routed a
-    # DC02 / store permit's "Plant Head Approval" to the approver's own site.
-    if task.module == "PTW":
-        from app.models.permit import Permit as _PermitForPlant
-
-        permit_plant = (
-            await db.execute(select(_PermitForPlant.plantId).where(_PermitForPlant.id == task.recordId))
-        ).scalar_one_or_none()
-        if permit_plant:
-            plant_id = permit_plant
-
     # Enrich record_data from the actual record BEFORE evaluating step
     # conditions — the caller may have passed nothing (mobile inbox), and
     # conditional steps (e.g. PTW's FLRA sub-task keyed on `flraRequired`)
@@ -1718,27 +1679,6 @@ async def verify(
         instance.currentStepName = "Verification rejected — rework required"
         await db.flush()
         return {"ok": True, "status": InstanceStatus.REJECTED.value}
-
-    # Near miss: the verifier step is "HSE Manager Verifies CAPAs" — each CAPA
-    # carries its own Verify / Reject decision. Accepting the step while a CAPA
-    # is still unverified closed records with CAPAs stuck at COMPLETED and no
-    # verifier on file (NM-2026-MR-DC01-0002).
-    if task.module == "NEAR_MISS":
-        from app.models.near_miss_children import NearMissCapa
-
-        unverified = (
-            await db.execute(
-                select(func.count()).select_from(NearMissCapa).where(
-                    NearMissCapa.nearMissId == task.recordId,
-                    NearMissCapa.status != "VERIFIED",
-                )
-            )
-        ).scalar_one()
-        if unverified:
-            raise WorkflowError(
-                f"{unverified} CAPA(s) not yet verified. Verify or reject each CAPA "
-                "in the CAPA Plan section before completing verification."
-            )
 
     return await _advance(
         db,

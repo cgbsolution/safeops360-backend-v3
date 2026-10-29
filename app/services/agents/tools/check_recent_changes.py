@@ -23,6 +23,8 @@ from typing import Any
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import readable_plants, restrict_to_plants
+
 from app.models.equipment import Equipment, Inspection
 from app.models.incident import Incident
 from app.models.permit import Permit, PermitStatus
@@ -105,6 +107,7 @@ async def handle(
         .order_by(Permit.closedAt.desc())
         .limit(10)
     )
+    permit_stmt = restrict_to_plants(permit_stmt, Permit.plantId, await readable_plants(db, "PTW.READ"))
     closed_permits = (await db.execute(permit_stmt)).scalars().all()
 
     # ── Inspections with non-PASS results in window, same plant ──

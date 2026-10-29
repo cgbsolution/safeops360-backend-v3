@@ -22,6 +22,7 @@ applicable_hazard_library.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -44,6 +45,18 @@ from app.services.agents.hira_layer_a import evaluate_layer_a
 _HAZARD_LIBRARY_CAP = 100
 _SIMILAR_ENTRY_CAP = 6
 _AREA_INCIDENT_CAP = 10
+
+
+_STOPWORDS = {
+    "the", "and", "for", "with", "from", "into", "onto", "over", "under", "work",
+    "working", "area", "use", "using", "used", "of", "to", "in", "on", "at", "by",
+    "or", "a", "an", "is", "are", "be", "during", "per",
+}
+
+
+def _words(text: str) -> set[str]:
+    """Lower-cased content words (3+ letters) for the relevance overlap."""
+    return {w for w in re.findall(r"[a-z]{3,}", text.lower()) if w not in _STOPWORDS}
 
 
 def _as_str_list(value: Any) -> list[str]:
@@ -150,15 +163,30 @@ async def build_context(db: AsyncSession, record_id: str) -> dict[str, Any]:
         area_incidents = list((await db.execute(inc_stmt)).scalars().all())
 
     # ── CONTEXT: applicable hazard library ──────────────────────────────
-    # Provide the active library so suggested hazard_master_id values are
-    # always grounded. Ranking by category keeps related hazards adjacent.
-    hazard_stmt = (
-        select(HiraHazard)
-        .where(HiraHazard.isActive.is_(True))
-        .order_by(HiraHazard.category, HiraHazard.name)
-        .limit(_HAZARD_LIBRARY_CAP)
+    # Provide the library so suggested hazard_master_id values are always
+    # grounded. The cap used to take the first N rows by category name, so
+    # whole categories late in the alphabet (pressure, radiation, thermal,
+    # transportation, ...) were never offered whatever the activity. Rank by
+    # relevance to this entry instead: hazards already on it or on similar
+    # entries first, then word overlap with the activity, equipment,
+    # materials and energy sources.
+    all_hazards = (
+        (await db.execute(select(HiraHazard).where(HiraHazard.isActive.is_(True))))
+        .scalars()
+        .all()
     )
-    hazard_library = (await db.execute(hazard_stmt)).scalars().all()
+    pinned = {h.hazardId for h in entry.hazards} | {
+        h.hazardId for e in similar_entries for h in e.hazards
+    }
+    entry_words = _words(
+        " ".join([entry.activityDescription or "", entry.subLocation or "", *equipment, *materials, *energy_sources])
+    )
+
+    def _relevance(h: HiraHazard) -> tuple[int, int, str, str]:
+        overlap = len(entry_words & _words(f"{h.name} {h.description or ''} {h.category} {h.energyForm or ''}"))
+        return (0 if h.id in pinned else 1, -overlap, h.category or "", h.name or "")
+
+    hazard_library = sorted(all_hazards, key=_relevance)[:_HAZARD_LIBRARY_CAP]
 
     # ── CONTEXT: applicable regulations ─────────────────────────────────
     applicable_regulations: list[dict[str, Any]] = []

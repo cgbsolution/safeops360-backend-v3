@@ -32,11 +32,11 @@ from app.schemas.permit import (
     SuspendRequest,
 )
 from app.services import workflow_engine
-from app.services.ptw_access import load_permit_or_403
+from app.services.access_scope import build_record_scope
+from app.services.ptw_access import load_permit_or_403, permit_party_clause
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
     get_accessible_plants_for,
     get_user_role_codes,
 )
@@ -72,29 +72,18 @@ async def list_permits(
     read_check = await can(db, user.id, "PTW.READ", PermissionContext())
     if not read_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, read_check.reason or "Access denied")
-    plants = await get_accessible_plants(db, user.id)
     stmt = select(Permit)
     # Archived permits (retention flag on CLOSED) are hidden from the
     # default register; ?include_archived=true surfaces them.
     if not include_archived:
         stmt = stmt.where(Permit.isArchived.is_(False))
-    if plants is None:
-        pass
-    elif not plants:
-        return {"items": [], "total": 0}
-    else:
-        stmt = stmt.where(Permit.plantId.in_(plants))
-    if read_check.matched_scope == "OWN_RECORDS":
-        # Workers see permits they originated, issued, received, or are crew on.
-        # Crew membership requires a join — handled via subquery below.
-        from app.models.permit import PermitCrewMember
-        crew_subq = select(PermitCrewMember.permitId).where(PermitCrewMember.userId == user.id)
-        stmt = stmt.where(
-            (Permit.originatorId == user.id)
-            | (Permit.issuerId == user.id)
-            | (Permit.receiverId == user.id)
-            | (Permit.id.in_(crew_subq))
-        )
+    # Same rules as the detail endpoint: the PTW.READ scope (plant, department
+    # or own records) plus the named-party read (ptw_access).
+    scope = await build_record_scope(db, user.id, "PTW.READ")
+    stmt = scope.apply(
+        stmt, Permit.plantId, owner=permit_party_clause(user.id),
+        department_col=Permit.departmentId, owner_always=True,
+    )
     rows = (await db.execute(stmt.order_by(Permit.createdAt.desc()).limit(100))).scalars().all()
     return {"items": [PermitOut.model_validate(r) for r in rows], "total": len(rows)}
 
@@ -173,16 +162,6 @@ async def create_permit(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid issuer")
     if receiver is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid receiver")
-    # The Issuer named here is who the "Issuer Review" step is assigned to, so
-    # they must be able to approve permits at this site. Catch it now rather
-    # than leave the permit parked on a task its assignee can never action.
-    issuer_check = await can(db, issuer.id, "PTW.APPROVE", PermissionContext(plant_id=payload.plantId))
-    if not issuer_check.allowed:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"{issuer.name} cannot approve permits at {plant.name} — pick an Issuer who holds "
-            "permit-approval rights at this site (e.g. the Store / DC Manager or a Permit Issuer).",
-        )
 
     # Training competency check on receiver — uses the canonical
     # competency service which reads TrainingProgram.isMandatoryForPermitTypes
@@ -205,11 +184,6 @@ async def create_permit(
     # permit, not just the base type. Checking only `payload.type` would let an
     # uncertified holder take the hot-work half of a height + hot-work job.
     attached_hazards = [h.hazardType for h in payload.hazards]
-    # Per-plant curation (e.g. no Confined Space / Excavation at retail sites).
-    # No config row → every type allowed, as before.
-    from app.services.ptw_type_config import assert_type_allowed
-
-    await assert_type_allowed(db, payload.plantId, payload.type, attached_hazards)
     for _type_code in competency_types_for(payload.type, attached_hazards):
         comp = await check_competency_for_permit_type(db, payload.receiverId, _type_code)
         if not comp.ok:
@@ -541,18 +515,10 @@ async def create_permit(
                 plant_id=permit.plantId,
             )
     except Exception as e:  # noqa: BLE001
-        # Used to be swallowed: the permit stayed DRAFT with no approval chain
-        # while the UI reported "Permit submitted". Fail the request instead so
-        # nothing half-created is left behind and the user sees why.
         import sys
         import traceback
         print(f"PTW workflow init failed: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"The approval workflow for this permit type could not be started ({e}). "
-            "Nothing was saved — contact the administrator.",
-        ) from e
 
     # Refresh once more: workflow_engine.initiate flips Permit.status to
     # SUBMITTED via _sync_record_status, and the resulting UPDATE expires
@@ -724,7 +690,6 @@ async def admin_reset(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     permit.status = PermitStatus(payload.status)
     await db.flush()
-    await db.refresh(permit)  # reload onupdate columns before sync serialisation
     return PermitOut.model_validate(permit)
 
 

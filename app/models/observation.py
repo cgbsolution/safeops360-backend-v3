@@ -24,8 +24,13 @@ class ObservationCategory(str, enum.Enum):
     enum didn't list (OTHERS, EMERGENCY_PREP, …). Reads via the ORM
     eagerly enum-coerce the value, so any DB string that isn't in this
     enum throws LookupError and 500s the endpoint. We accept the drift
-    here (additive, non-breaking) and document the canonical name. New
-    writes should still use OTHER / EMERGENCY.
+    here (additive, non-breaking).
+
+    The reverse is NOT true: the native Postgres "ObservationCategory" type
+    has only the labels in DB_OBSERVATION_CATEGORIES. OTHER, EMERGENCY,
+    ENVIRONMENT, ERGONOMICS, BEHAVIOUR, PROCESS_SAFETY and LIFTING exist here
+    only; writing or filtering on them raises InvalidTextRepresentation. Any
+    value headed for the column goes through storable_category().
 
     The last block is the DuPont STOP taxonomy (see ObservationTaxonomy).
     At-risk observations write their STOP `categoryCode` straight into this
@@ -57,6 +62,40 @@ class ObservationCategory(str, enum.Enum):
     POSITIONS_OF_PEOPLE = "POSITIONS_OF_PEOPLE"  # STOP-2, ACT only
     TOOLS_EQUIPMENT = "TOOLS_EQUIPMENT"          # STOP-4
     PROCEDURES = "PROCEDURES"                    # STOP-5
+
+
+# Labels the native Postgres "ObservationCategory" type actually has (mirrors
+# prisma/schema.prisma). Only these can be written to, or compared against,
+# Observation.category.
+DB_OBSERVATION_CATEGORIES: frozenset[str] = frozenset({
+    "PPE", "HOUSEKEEPING", "WORK_AT_HEIGHT", "HOT_WORK", "MOBILE_EQUIPMENT",
+    "ELECTRICAL", "MATERIAL_HANDLING", "CONFINED_SPACE", "CHEMICAL_HANDLING",
+    "EMERGENCY_PREP", "OTHERS",
+    "REACTIONS_OF_PEOPLE", "POSITIONS_OF_PEOPLE", "TOOLS_EQUIPMENT", "PROCEDURES",
+})
+
+# Python-only labels → the stored label with the same meaning. The last four
+# have no DB equivalent and land in OTHERS.
+OBSERVATION_CATEGORY_ALIASES: dict[str, str] = {
+    "OTHER": "OTHERS",
+    "EMERGENCY": "EMERGENCY_PREP",
+    "LIFTING": "MATERIAL_HANDLING",
+    "BEHAVIOUR": "OTHERS",
+    "ENVIRONMENT": "OTHERS",
+    "ERGONOMICS": "OTHERS",
+    "PROCESS_SAFETY": "OTHERS",
+}
+
+
+def storable_category(value: ObservationCategory | str) -> ObservationCategory:
+    """The member to write for `value`: itself if Postgres has the label,
+    otherwise its alias. Raises ValueError for anything unknown."""
+    raw = getattr(value, "value", value)
+    label = str(raw).strip().upper().replace(" ", "_").replace("-", "_")
+    label = OBSERVATION_CATEGORY_ALIASES.get(label, label)
+    if label not in DB_OBSERVATION_CATEGORIES:
+        raise ValueError(f"Unknown observation category {raw!r}")
+    return ObservationCategory(label)
 
 
 class TaxonomyAxis(str, enum.Enum):
@@ -126,6 +165,12 @@ class Observation(Base, IdMixin):
     # P3-1 BBS — quality score (0..3 specificity) + optional ABC (antecedent→
     # behaviour→consequence) fields + auto-prompted CAPA link.
     qualityScore: Mapped[int | None] = mapped_column(Integer)
+    # Likelihood x consequence risk rating. The columns already exist in the
+    # Prisma schema/DB; mapped here so the agent tools can read them.
+    riskLikelihood: Mapped[int | None] = mapped_column(Integer)
+    riskConsequence: Mapped[int | None] = mapped_column(Integer)
+    riskScore: Mapped[int | None] = mapped_column(Integer)
+    riskLevel: Mapped[str | None] = mapped_column(String)
     antecedent: Mapped[str | None] = mapped_column(Text)
     behaviourObserved: Mapped[str | None] = mapped_column(Text)
     consequence: Mapped[str | None] = mapped_column(Text)

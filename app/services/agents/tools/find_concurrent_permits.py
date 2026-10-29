@@ -20,6 +20,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._enums import PERMIT_TYPE_ALIASES, coerce_enum
+
 from app.models.permit import Permit, PermitStatus, PermitType
 
 
@@ -106,13 +108,7 @@ async def handle(
     )
 
     if permit_type_raw := input.get("permitType"):
-        try:
-            permit_type = PermitType(permit_type_raw)
-        except ValueError as e:
-            raise ValueError(
-                f"Unknown permitType {permit_type_raw!r}. Valid: "
-                f"{sorted(t.value for t in PermitType)}"
-            ) from e
+        permit_type = coerce_enum(permit_type_raw, PermitType, "permitType", PERMIT_TYPE_ALIASES)
         stmt = stmt.where(Permit.type == permit_type)
 
     if same_area and permit.areaId:

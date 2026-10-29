@@ -70,6 +70,7 @@ from app.services.permissions import (
     get_accessible_plants,
     get_accessible_plants_for,
     get_permissions,
+    permission_scopes,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -259,11 +260,19 @@ async def my_scope(
       allowed     — whether the permission is granted at all
     """
     result = await can(db, user.id, permission, PermissionContext())
-    plant_ids = await get_accessible_plants(db, user.id)
+    # The broadest scope held (grants are additive), and the plants for THIS
+    # permission. The any-module helper answered "every plant" for anyone with
+    # an ALL_PLANTS grant on some other module, and can()'s matched_scope is
+    # simply the first grant it met — so web registers built from this were
+    # wider than the API's own list and detail checks.
+    held = await permission_scopes(db, user.id, permission)
+    scope = next((s for s in ("ALL_PLANTS", "OWN_PLANT", "OWN_DEPARTMENT", "OWN_RECORDS") if s in held), None)
+    plant_ids = await get_accessible_plants_for(db, user.id, permission)
     return {
         "permission": permission,
         "allowed": bool(result.allowed),
-        "scope": result.matched_scope,
+        "scope": scope,
+        "scopes": sorted(held),
         # None = unrestricted (SYSTEM_ADMIN / ALL_PLANTS). Callers must treat
         # null and [] differently: null is "no filter", [] is "match nothing".
         "plantIds": list(plant_ids) if plant_ids is not None else None,

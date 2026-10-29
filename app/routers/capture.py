@@ -148,8 +148,22 @@ def _features() -> dict[str, bool]:
     (DECISIONS.md D13). Defaults off; everything fails soft."""
     import os
 
+    # Settings reads .env itself and doesn't export it to os.environ, so a flag
+    # set only in .env (the documented way to enable these) was ignored here.
+    try:
+        from dotenv import dotenv_values
+
+        from app.core.config import Settings
+
+        dotenv = dotenv_values(Settings.model_config.get("env_file") or ".env")
+    except Exception:  # noqa: BLE001 — no .env readable → process env only
+        dotenv = {}
+
     def env_flag(name: str) -> bool:
-        return (os.getenv(name) or "").strip().lower() in ("1", "true", "yes", "on")
+        raw = os.getenv(name)
+        if raw is None:
+            raw = dotenv.get(name)
+        return (raw or "").strip().lower() in ("1", "true", "yes", "on")
 
     flags = {
         "aiCaptureAssist": env_flag("AI_CAPTURE_ASSIST"),
@@ -218,6 +232,8 @@ async def vision_suggest(
     # resolve suggested codes → ids so the client can confirm with one tap
     l1 = await svc.resolve_code(db, "HAZARD", suggestion["l1Code"]) if suggestion.get("l1Code") else None
     l2 = await svc.resolve_code(db, "HAZARD", suggestion["l2Code"]) if suggestion.get("l2Code") else None
+    if l1 is None or (l2 is not None and l2.parentId != l1.id):
+        l2 = None  # a sub-category is only meaningful under its own parent
 
     if l1 is None or suggestion["confidence"] < 0.35:
         return {"ok": False, "reason": "low_confidence", "provider": provider.name}
@@ -335,6 +351,8 @@ async def suggest_category_endpoint(
 
     l1 = await svc.resolve_code(db, "HAZARD", suggestion["l1Code"]) if suggestion.get("l1Code") else None
     l2 = await svc.resolve_code(db, "HAZARD", suggestion["l2Code"]) if suggestion.get("l2Code") else None
+    if l1 is None or (l2 is not None and l2.parentId != l1.id):
+        l2 = None  # a sub-category is only meaningful under its own parent
     if l1 is None or suggestion["confidence"] < 0.35:
         return {"ok": False, "reason": "low_confidence"}
 

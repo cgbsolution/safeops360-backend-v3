@@ -21,10 +21,6 @@ class Settings(BaseSettings):
 
     database_url: str
     database_url_sync: str | None = None
-    # Per-process pool. None = pick by pooler: Supabase's session pooler
-    # (:5432) caps ALL clients of the DB at 15, so stay small there.
-    db_pool_size: int | None = None
-    db_max_overflow: int | None = None
 
     jwt_secret: str = Field(..., min_length=16)
     jwt_algorithm: str = "HS256"
@@ -55,6 +51,11 @@ class Settings(BaseSettings):
     # P2-1 background scheduler. Default off (opt-in) so a shared dev DB isn't
     # mutated by interval jobs; on-prem deployments set SCHEDULER_ENABLED=true.
     scheduler_enabled: bool = False
+    # Comma-separated job ids to run (see scheduler.JOBS); empty runs every job.
+    # Lets an instance run only the analytics recomputes — e.g.
+    # "signal_engine_scan,observation_weekly_insights,scorecard_rollup" — without
+    # the reminder / escalation / digest jobs that message users.
+    scheduler_jobs: str = ""
 
     # ─── PTW closed-loop: FLRA policy ────────────────────────────────────
     # FLRA is an optional sub-flow per permit (closed-loop rebuild). Instance-
@@ -118,7 +119,26 @@ class Settings(BaseSettings):
     # agents. Surface here so the operations dashboard can tune them
     # without code edits.
     agent_max_tool_iterations: int = 8
-    agent_max_tokens_per_turn: int = 4096
+    agent_max_tokens_per_turn: int = 16000
+    # Industry the agents' benchmark tool assumes when the model doesn't name
+    # one: STEEL, CEMENT, CHEMICALS, REFINERY or GENERAL. Set per deployment.
+    agent_industry_context: str = "STEEL"
+
+    # ── SafeOps Copilot (conversational assistant, /api/copilot/chat) ──
+    # The model here only seeds the SAFEOPS_COPILOT Agent row on first use;
+    # after that Configuration → Agents (Agent.primaryModelId) is the source
+    # of truth, so admins can switch model without a redeploy.
+    copilot_enabled: bool = True
+    copilot_model: str = "claude-opus-5-5"
+    # output_config.effort for models that support it (low|medium|high|xhigh|max).
+    copilot_effort: str = "medium"
+    copilot_max_tokens: int = 16000
+    # Model round-trips per user message (each tool batch is one).
+    copilot_max_iterations: int = 10
+    # Messages per user per hour; seeds Agent.rateLimit on first use.
+    copilot_rate_limit_per_hour: int = 60
+    # Server-side refusal fallback (fallbacks: "default") on models that offer it.
+    copilot_refusal_fallback: bool = True
 
     @property
     def cors_origins_list(self) -> list[str]:

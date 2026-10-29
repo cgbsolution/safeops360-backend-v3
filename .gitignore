@@ -22,6 +22,3 @@ licence_registry.json
 clients/*.lic
 # The active deployment licence is environment state (issue one per install).
 /licence.lic
-.env.*
-!.env.example
-/home.html

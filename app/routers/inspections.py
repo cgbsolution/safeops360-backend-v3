@@ -4,9 +4,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.numbering import next_number
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_permission_with_context
 from app.models.equipment import Equipment, Inspection, InspectionStatus
@@ -16,7 +17,7 @@ from app.services import workflow_engine
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
+    get_accessible_plants_for,
 )
 
 router = APIRouter(prefix="/api/inspections", tags=["inspections"])
@@ -39,7 +40,7 @@ async def list_inspection_equipment(
     create_check = await can(db, user.id, "INSPECTION.CREATE", PermissionContext())
     if not create_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, create_check.reason or "Access denied")
-    plants = await get_accessible_plants(db, user.id)
+    plants = await get_accessible_plants_for(db, user.id, "INSPECTION.CREATE")
     stmt = select(Equipment).where(Equipment.active == True)
     if plants is not None:
         if not plants:
@@ -69,7 +70,7 @@ async def list_inspections(
     read_check = await can(db, user.id, "INSPECTION.READ", PermissionContext())
     if not read_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, read_check.reason or "Access denied")
-    plants = await get_accessible_plants(db, user.id)
+    plants = await get_accessible_plants_for(db, user.id, "INSPECTION.READ")
     stmt = select(Inspection)
     if plants is None:
         pass
@@ -116,8 +117,7 @@ async def create_inspection(
         if inspector is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid inspector")
 
-    last = (await db.execute(select(func.count()).select_from(Inspection))).scalar_one()
-    number = f"INSP-{eq.code}-{last + 1:04d}"
+    number = await next_number(db, column=Inspection.number, stem=f"INSP-{eq.code}-")
 
     insp = Inspection(
         number=number,

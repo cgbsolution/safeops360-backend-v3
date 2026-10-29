@@ -32,7 +32,6 @@ from app.models.epc import (
 )
 from app.models.user import User
 from app.services.permissions import PermissionContext, can
-from app.services.tenant_partition import get_scoped, is_foreign, partition_for
 
 router = APIRouter(prefix="/api/epc/dashboard", tags=["epc-dashboard"])
 
@@ -56,7 +55,6 @@ async def _health_indicator(
     db: AsyncSession,
     site: ConstructionSite,
     now: datetime,
-    part: str,
 ) -> tuple[str, str]:
     """Return (indicator: 'red'|'amber'|'green', reason: str)."""
 
@@ -67,7 +65,6 @@ async def _health_indicator(
     # Red: any workers with expired inductions at this site
     expired_induction_count_result = await db.execute(
         select(func.count(SiteInduction.id)).where(
-            SiteInduction.tenantId == part,
             SiteInduction.siteId == site.id,
             SiteInduction.validUntil < now,
             SiteInduction.isExpired.is_(False),  # not yet marked expired
@@ -84,7 +81,6 @@ async def _health_indicator(
     # Amber: pending mobilizations > 10
     pending_count_result = await db.execute(
         select(func.count(MobilizationRecord.id)).where(
-            MobilizationRecord.tenantId == part,
             MobilizationRecord.siteId == site.id,
             MobilizationRecord.status.in_([
                 "pending_checks",
@@ -109,32 +105,25 @@ async def corporate_dashboard(
 ) -> dict:
     """Corporate multi-site dashboard."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
     now = datetime.now(timezone.utc)
 
-    sites = (
-        await db.execute(select(ConstructionSite).where(ConstructionSite.tenantId == part))
-    ).scalars().all()
+    sites = (await db.execute(select(ConstructionSite))).scalars().all()
 
     # Summary counts
     active_sites = sum(1 for s in sites if s.status in ("mobilising", "active", "peak_construction"))
 
     total_active_workers_result = await db.execute(
         select(func.count(MobilizationRecord.id)).where(
-            MobilizationRecord.tenantId == part,
-            MobilizationRecord.status == "active",
+            MobilizationRecord.status == "active"
         )
     )
     total_active_workers = total_active_workers_result.scalar_one() or 0
 
-    total_companies_result = await db.execute(
-        select(func.count(ContractorCompany.id)).where(ContractorCompany.tenantId == part)
-    )
+    total_companies_result = await db.execute(select(func.count(ContractorCompany.id)))
     total_companies = total_companies_result.scalar_one() or 0
 
     open_passes_result = await db.execute(
         select(func.count(GatePass.id)).where(
-            GatePass.tenantId == part,
             GatePass.status == "active",
             GatePass.validUntil >= now,
         )
@@ -147,7 +136,6 @@ async def corporate_dashboard(
         # Current workforce count (active mobilizations)
         wf_result = await db.execute(
             select(func.count(MobilizationRecord.id)).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.siteId == site.id,
                 MobilizationRecord.status == "active",
             )
@@ -157,7 +145,6 @@ async def corporate_dashboard(
         # Active contractor companies at this site
         active_cos_result = await db.execute(
             select(func.count(func.distinct(MobilizationRecord.contractorCompanyId))).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.siteId == site.id,
                 MobilizationRecord.status == "active",
             )
@@ -167,7 +154,6 @@ async def corporate_dashboard(
         # Pending mobilizations
         pending_result = await db.execute(
             select(func.count(MobilizationRecord.id)).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.siteId == site.id,
                 MobilizationRecord.status.in_([
                     "pending_checks",
@@ -177,7 +163,7 @@ async def corporate_dashboard(
         )
         pending = pending_result.scalar_one() or 0
 
-        indicator, reason = await _health_indicator(db, site, now, part)
+        indicator, reason = await _health_indicator(db, site, now)
 
         site_data.append({
             "id": site.id,
@@ -197,8 +183,7 @@ async def corporate_dashboard(
     scored_companies = (
         await db.execute(
             select(ContractorCompany).where(
-                ContractorCompany.tenantId == part,
-                ContractorCompany.prequalificationScore.isnot(None),
+                ContractorCompany.prequalificationScore.isnot(None)
             ).order_by(ContractorCompany.prequalificationScore.desc())
         )
     ).scalars().all()
@@ -240,17 +225,15 @@ async def site_summary(
 ) -> dict:
     """Single site summary card data."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
     now = datetime.now(timezone.utc)
 
-    site = await get_scoped(db, ConstructionSite, site_id, part)
+    site = await db.get(ConstructionSite, site_id)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
     # Active workforce count
     wf_result = await db.execute(
         select(func.count(MobilizationRecord.id)).where(
-            MobilizationRecord.tenantId == part,
             MobilizationRecord.siteId == site_id,
             MobilizationRecord.status == "active",
         )
@@ -264,7 +247,6 @@ async def site_summary(
     today_checks = (
         await db.execute(
             select(GateClearanceCheck).where(
-                GateClearanceCheck.tenantId == part,
                 GateClearanceCheck.siteId == site_id,
                 GateClearanceCheck.createdAt >= today_start,
                 GateClearanceCheck.createdAt <= today_end,
@@ -280,7 +262,6 @@ async def site_summary(
     # Pending mobilizations
     pending_result = await db.execute(
         select(func.count(MobilizationRecord.id)).where(
-            MobilizationRecord.tenantId == part,
             MobilizationRecord.siteId == site_id,
             MobilizationRecord.status.in_([
                 "pending_checks",
@@ -293,7 +274,6 @@ async def site_summary(
     # Expired inductions (not yet flagged as expired)
     expired_ind_result = await db.execute(
         select(func.count(SiteInduction.id)).where(
-            SiteInduction.tenantId == part,
             SiteInduction.siteId == site_id,
             SiteInduction.validUntil < now,
             SiteInduction.isExpired.is_(False),
@@ -301,7 +281,7 @@ async def site_summary(
     )
     expired_inductions = expired_ind_result.scalar_one() or 0
 
-    indicator, health_reason = await _health_indicator(db, site, now, part)
+    indicator, health_reason = await _health_indicator(db, site, now)
 
     return {
         "site": {
@@ -349,16 +329,12 @@ async def site_performance(
     """30-day rolling performance metrics for a site card — gate activity
     by day, mobilization breakdown, induction compliance, contractor scores."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    if await is_foreign(db, ConstructionSite, site_id, part):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
     now = datetime.now(timezone.utc)
     since = now - timedelta(days=days)
 
     # Gate activity
     gate_result = await db.execute(
         select(GateClearanceCheck).where(
-            GateClearanceCheck.tenantId == part,
             GateClearanceCheck.siteId == site_id,
             GateClearanceCheck.createdAt >= since,
         ).order_by(GateClearanceCheck.createdAt.asc())
@@ -381,10 +357,7 @@ async def site_performance(
 
     # Mobilization breakdown
     mob_result = await db.execute(
-        select(MobilizationRecord).where(
-            MobilizationRecord.tenantId == part,
-            MobilizationRecord.siteId == site_id,
-        )
+        select(MobilizationRecord).where(MobilizationRecord.siteId == site_id)
     )
     mobs = mob_result.scalars().all()
     mob_breakdown = {}
@@ -398,7 +371,6 @@ async def site_performance(
         worker_ids = [m.contractorWorkerId for m in active_mobs]
         ind_result = await db.execute(
             select(SiteInduction).where(
-                SiteInduction.tenantId == part,
                 SiteInduction.siteId == site_id,
                 SiteInduction.contractorWorkerId.in_(worker_ids),
                 SiteInduction.validUntil >= now,

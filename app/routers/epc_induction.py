@@ -16,7 +16,6 @@ from app.core.deps import get_current_user
 from app.models.epc import SiteInduction, MobilizationRecord, ContractorWorker, ConstructionSite
 from app.models.user import User
 from app.services.permissions import PermissionContext, can
-from app.services.tenant_partition import get_scoped, is_foreign, partition_for
 
 router = APIRouter(prefix="/api/epc/inductions", tags=["epc-inductions"])
 
@@ -124,17 +123,14 @@ def _induction_dict(ind: SiteInduction) -> dict:
 async def list_inductions(
     siteId: str | None = Query(None),
     contractorWorkerId: str | None = Query(None),
-    workerId: str | None = Query(None, description="Alias of contractorWorkerId (worker profile page)"),
     mobilizationRecordId: str | None = Query(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """List inductions. Filter by siteId, contractorWorkerId, or mobilizationRecordId."""
-    contractorWorkerId = contractorWorkerId or workerId
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
 
-    q = select(SiteInduction).where(SiteInduction.tenantId == part)
+    q = select(SiteInduction)
     if siteId:
         q = q.where(SiteInduction.siteId == siteId)
     if contractorWorkerId:
@@ -156,18 +152,6 @@ async def create_induction(
 ) -> dict:
     """Record a new site induction. Updates linked MobilizationRecord after creation."""
     await _require(db, user, "EPC.CREATE")
-    part = await partition_for(db, user)
-
-    # Referenced rows of another partition are treated as missing. (Ids that do
-    # not exist at all keep their previous behaviour — this endpoint never
-    # validated them.)
-    for model, ref_id, label in (
-        (ContractorWorker, body.contractorWorkerId, "Contractor worker"),
-        (ConstructionSite, body.siteId, "Construction site"),
-        (MobilizationRecord, body.mobilizationRecordId, "Mobilization record"),
-    ):
-        if await is_foreign(db, model, ref_id, part):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"{label} not found")
 
     now = datetime.now(timezone.utc)
     conducted_at = body.conductedAt or now
@@ -181,7 +165,6 @@ async def create_induction(
     is_expired = valid_until < now
 
     induction = SiteInduction(
-        tenantId=part,
         contractorWorkerId=body.contractorWorkerId,
         siteId=body.siteId,
         mobilizationRecordId=body.mobilizationRecordId,
@@ -215,7 +198,7 @@ async def create_induction(
     await db.flush()  # get induction.id
 
     # Update linked MobilizationRecord preMobilisationChecks
-    mob = await get_scoped(db, MobilizationRecord, body.mobilizationRecordId, part)
+    mob = await db.get(MobilizationRecord, body.mobilizationRecordId)
     if mob is not None:
         checks = dict(mob.preMobilisationChecks or {})
         checks["site_induction_complete"] = True
@@ -236,9 +219,6 @@ async def site_compliance(
 ) -> dict:
     """Induction compliance summary for a construction site."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    if await is_foreign(db, ConstructionSite, site_id, part):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
     now = datetime.now(timezone.utc)
     soon_threshold = now + timedelta(days=30)
@@ -247,7 +227,6 @@ async def site_compliance(
     active_mobs = (
         await db.execute(
             select(MobilizationRecord).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.siteId == site_id,
                 MobilizationRecord.status == "active",
             )
@@ -266,7 +245,6 @@ async def site_compliance(
             await db.execute(
                 select(SiteInduction)
                 .where(
-                    SiteInduction.tenantId == part,
                     SiteInduction.contractorWorkerId == mob.contractorWorkerId,
                     SiteInduction.siteId == site_id,
                 )
@@ -315,7 +293,7 @@ async def get_induction(
     """Get a single induction by ID."""
     await _require(db, user, "EPC.READ")
 
-    induction = await get_scoped(db, SiteInduction, induction_id, await partition_for(db, user))
+    induction = await db.get(SiteInduction, induction_id)
     if induction is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Induction not found")
 
@@ -332,7 +310,7 @@ async def update_induction(
     """Patch an induction — record acknowledgement, assessment score, etc."""
     await _require(db, user, "EPC.UPDATE")
 
-    induction = await get_scoped(db, SiteInduction, induction_id, await partition_for(db, user))
+    induction = await db.get(SiteInduction, induction_id)
     if induction is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Induction not found")
 

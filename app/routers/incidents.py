@@ -68,11 +68,12 @@ from app.services import (
     statutory_forms,
     workflow_engine,
 )
+from app.services.numbering import next_number
 from app.services.audit_log import record_event
+from app.services.access_scope import build_record_scope
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
 )
 from app.services.rca import generate_rca_summary, normalise_rca_method
 from app.services.storage import (
@@ -107,16 +108,13 @@ async def list_incidents(
     read_check = await can(db, user.id, "INCIDENT.READ", PermissionContext())
     if not read_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, read_check.reason or "Access denied")
-    plants = await get_accessible_plants(db, user.id)
-    stmt = select(Incident)
-    if plants is None:
-        pass
-    elif not plants:
-        return {"items": [], "total": 0}
-    else:
-        stmt = stmt.where(Incident.plantId.in_(plants))
-    if read_check.matched_scope == "OWN_RECORDS":
-        stmt = stmt.where(Incident.reporterId == user.id)
+    # Same rules as GET /{id}: the INCIDENT.READ scope — plant, department or
+    # own reports — never the any-module plant set.
+    scope = await build_record_scope(db, user.id, "INCIDENT.READ")
+    stmt = scope.apply(
+        select(Incident), Incident.plantId,
+        owner=Incident.reporterId == user.id, department_col=Incident.departmentId,
+    )
     # Newest-created first — platform-wide register convention.
     rows = (
         await db.execute(
@@ -295,10 +293,7 @@ async def create_incident(
     # Linked observations — "missed warnings" in the same area, last 90 days
     linked_observation_ids = await _detect_linked_observations(db, payload.plantId, payload.areaId)
 
-    last = (
-        await db.execute(select(func.count()).select_from(Incident).where(Incident.plantId == payload.plantId))
-    ).scalar_one()
-    number = f"INC-{occurred_at.year}-{plant.code}-{last + 1:04d}"
+    number = await next_number(db, column=Incident.number, stem=f"INC-{occurred_at.year}-{plant.code}-")
 
     incident = Incident(
         number=number,
@@ -481,7 +476,7 @@ async def get_incident(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-    record = {"reporterId": incident.reporterId}
+    record = {"reporterId": incident.reporterId, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.READ",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -504,7 +499,7 @@ async def update_incident(
     if incident.status == IncidentStatus.CLOSED:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot edit a closed incident.")
 
-    record = {"reporterId": incident.reporterId}
+    record = {"reporterId": incident.reporterId, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.UPDATE",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -574,10 +569,6 @@ async def update_incident(
             db.add(IncidentInvestigationMember(incidentId=incident.id, userId=uid, role="LEAD" if i == 0 else "MEMBER"))
 
     await db.flush()
-    # The flush expires server-set columns (updatedAt's onupdate). Reload them
-    # here — otherwise IncidentOut reads them via a sync lazy-load, which the
-    # async session refuses (MissingGreenlet → 500 after the save succeeded).
-    await db.refresh(incident)
     return IncidentOut.model_validate(incident)
 
 
@@ -605,7 +596,7 @@ async def delete_incident(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-    record = {"reporterId": incident.reporterId}
+    record = {"reporterId": incident.reporterId, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.DELETE",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -654,6 +645,7 @@ async def classify_incident(
     record = {
         "reporterId": incident.reporterId,
         "investigationTeamLead": incident.investigationTeamLead,
+        "departmentId": incident.departmentId,
     }
     result = await can(
         db, user.id, "INCIDENT.APPROVE",
@@ -793,7 +785,7 @@ async def _load_incident_for_update(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
-    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead}
+    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, permission,
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -801,6 +793,17 @@ async def _load_incident_for_update(
     if not result.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, result.reason or "Access denied")
     return incident
+
+
+async def _similarity_scope(db: AsyncSession, user: User) -> dict[str, Any]:
+    """What other incidents this user may see in similarity results — the same
+    INCIDENT.READ rules as the register (plant, department, own reports).
+    Passed to incident_similarity.similar_incidents."""
+    scope = await build_record_scope(db, user.id, "INCIDENT.READ")
+    clause = scope.filter(
+        Incident.plantId, owner=Incident.reporterId == user.id, department_col=Incident.departmentId,
+    )
+    return {"scope_clause": clause}
 
 
 @router.post("/{incident_id}/severity", response_model=IncidentOut)
@@ -856,6 +859,12 @@ async def patch_cause_analysis(
         causes = ca.get("causes") or []
         derived_roots = [c.get("text") for c in causes if c.get("isRootCause") and c.get("text")]
         if derived_roots:
+            # An accepted AI root cause lives in rootCauses but not on the
+            # canvas; re-deriving from the canvas alone silently dropped it.
+            ai_rec = (incident.aiAssist or {}).get("rootCauseSuggestion") or {}
+            ai_text = ai_rec.get("text") if ai_rec.get("status") in ("accepted", "edited") else None
+            if ai_text and ai_text in (incident.rootCauses or []) and ai_text not in derived_roots:
+                derived_roots.append(ai_text)
             incident.rootCauses = derived_roots
     for fld in ("immediateCauses", "underlyingCauses", "rootCauses", "contributingFactors"):
         v = getattr(payload, fld)
@@ -875,7 +884,9 @@ async def suggest_root_cause_endpoint(
     """Feature 2 — AI root-cause suggestion with COMPUTED confidence. Fail-soft:
     returns {suggestion: null} (never 500) when the provider is unavailable."""
     incident = await _load_incident_for_update(db, incident_id, user)
-    suggestion = await incident_ai.suggest_root_cause(db, incident)
+    suggestion = await incident_ai.suggest_root_cause(
+        db, incident, **(await _similarity_scope(db, user))
+    )
     if suggestion is None:
         return {"suggestion": None, "available": incident_ai.available(), "reason": "AI suggestion unavailable"}
     rec = {
@@ -1017,7 +1028,7 @@ async def similar_incidents_endpoint(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
-    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead}
+    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.READ",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -1025,10 +1036,17 @@ async def similar_incidents_endpoint(
     if not result.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, result.reason or "Access denied")
 
-    matches = await incident_similarity.similar_incidents(db, incident, only_closed=False, limit=10)
-    quarter_cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
-    quarter_count = sum(1 for m in matches if (m.get("date") or "") >= quarter_cutoff)
-    return {"matches": matches, "count": len(matches), "quarterCount": quarter_count}
+    # Score every candidate, count the quarter from all of them, show the top 10
+    # (counting from the top 10 alone undercounted the "N this quarter" chip).
+    all_matches = await incident_similarity.similar_incidents(
+        db, incident, only_closed=False, limit=incident_similarity._CANDIDATE_CAP,
+        **(await _similarity_scope(db, user)),
+    )
+    # Incident dates are stored naive (UTC); compare like with like.
+    quarter_cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).replace(tzinfo=None).isoformat()
+    quarter_count = sum(1 for m in all_matches if (m.get("date") or "")[:26] >= quarter_cutoff[:26])
+    matches = all_matches[:10]
+    return {"matches": matches, "count": len(all_matches), "quarterCount": quarter_count}
 
 
 @router.get("/{incident_id}/downstream-impact")
@@ -1044,7 +1062,7 @@ async def downstream_impact_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
     result = await can(
         db, user.id, "INCIDENT.READ",
-        PermissionContext(record_id=incident.id, plant_id=incident.plantId, record={"reporterId": incident.reporterId}),
+        PermissionContext(record_id=incident.id, plant_id=incident.plantId, record={"reporterId": incident.reporterId, "departmentId": incident.departmentId}),
     )
     if not result.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, result.reason or "Access denied")
@@ -1140,7 +1158,7 @@ async def list_statutory_forms(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
     result = await can(
         db, user.id, "INCIDENT.READ",
-        PermissionContext(record_id=incident.id, plant_id=incident.plantId, record={"reporterId": incident.reporterId}),
+        PermissionContext(record_id=incident.id, plant_id=incident.plantId, record={"reporterId": incident.reporterId, "departmentId": incident.departmentId}),
     )
     if not result.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, result.reason or "Access denied")
@@ -1184,7 +1202,7 @@ async def download_statutory_form(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
     result = await can(
         db, user.id, "INCIDENT.READ",
-        PermissionContext(record_id=incident.id, plant_id=incident.plantId, record={"reporterId": incident.reporterId}),
+        PermissionContext(record_id=incident.id, plant_id=incident.plantId, record={"reporterId": incident.reporterId, "departmentId": incident.departmentId}),
     )
     if not result.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, result.reason or "Access denied")
@@ -1210,7 +1228,7 @@ async def list_capas(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
-    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead}
+    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.READ",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -1238,7 +1256,7 @@ async def create_capa(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
-    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead}
+    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.UPDATE",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -1286,7 +1304,7 @@ async def delete_capa(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
-    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead}
+    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.UPDATE",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -1318,7 +1336,7 @@ async def _require_incident_for_action(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
-    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead}
+    record = {"reporterId": incident.reporterId, "investigationTeamLead": incident.investigationTeamLead, "departmentId": incident.departmentId}
     res = await can(
         db, user_id, f"INCIDENT.{action}",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -1803,6 +1821,7 @@ async def reclassify_incident(
     record = {
         "reporterId": incident.reporterId,
         "investigationTeamLead": incident.investigationTeamLead,
+        "departmentId": incident.departmentId,
     }
     result = await can(
         db, user.id, "INCIDENT.UPDATE",
@@ -1887,7 +1906,7 @@ async def list_attachments(
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
-    record = {"reporterId": incident.reporterId}
+    record = {"reporterId": incident.reporterId, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.READ",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -1925,7 +1944,7 @@ async def upload_attachment(
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
 
-    record = {"reporterId": incident.reporterId}
+    record = {"reporterId": incident.reporterId, "departmentId": incident.departmentId}
     result = await can(
         db, user.id, "INCIDENT.UPDATE",
         PermissionContext(record_id=incident.id, plant_id=incident.plantId, record=record),
@@ -2005,7 +2024,7 @@ async def delete_attachment(
     if att is None or att.incidentId != incident_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Attachment not found")
     incident = await db.get(Incident, incident_id)
-    record = {"reporterId": incident.reporterId if incident else None, "uploadedById": att.uploadedById}
+    record = {"reporterId": incident.reporterId if incident else None, "uploadedById": att.uploadedById, "departmentId": incident.departmentId if incident else None}
     result = await can(
         db, user.id, "INCIDENT.UPDATE",
         PermissionContext(record_id=att.id, plant_id=incident.plantId if incident else None, record=record),
@@ -2032,7 +2051,7 @@ async def download_attachment(
     # The uploader can always view their own file — guarantees the person who
     # uploaded a photo can preview it even without an INCIDENT.READ grant.
     is_uploader = att.uploadedById == user.id
-    record = {"reporterId": incident.reporterId if incident else None, "uploadedById": att.uploadedById}
+    record = {"reporterId": incident.reporterId if incident else None, "uploadedById": att.uploadedById, "departmentId": incident.departmentId if incident else None}
     result = await can(
         db, user.id, "INCIDENT.READ",
         PermissionContext(record_id=incident.id if incident else None, plant_id=incident.plantId if incident else None, record=record),

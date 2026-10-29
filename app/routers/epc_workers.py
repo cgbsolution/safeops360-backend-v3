@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.epc import (
-    ConstructionSite,
     ContractorCompany,
     ContractorWorker,
     GateClearanceCheck,
@@ -28,7 +27,6 @@ from app.models.epc import (
 )
 from app.models.user import User
 from app.services.permissions import PermissionContext, can
-from app.services.tenant_partition import get_scoped, is_foreign, partition_for
 
 router = APIRouter(prefix="/api/epc/workers", tags=["epc-workers"])
 
@@ -156,17 +154,15 @@ def _worker_dict(worker: ContractorWorker, active_mobilizations: int = 0) -> dic
 
 
 async def _generate_worker_code(db: AsyncSession) -> str:
-    # Counted globally on purpose — workerCode is unique across partitions.
     year = datetime.now(timezone.utc).year
     count_result = await db.execute(select(func.count(ContractorWorker.id)))
     count = (count_result.scalar_one() or 0) + 1
     return f"CW-{year}-{count:04d}"
 
 
-async def _active_mob_count(db: AsyncSession, worker_id: str, part: str) -> int:
+async def _active_mob_count(db: AsyncSession, worker_id: str) -> int:
     result = await db.execute(
         select(func.count(MobilizationRecord.id)).where(
-            MobilizationRecord.tenantId == part,
             MobilizationRecord.contractorWorkerId == worker_id,
             MobilizationRecord.status == "active",
         )
@@ -186,8 +182,7 @@ async def list_workers(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    stmt = select(ContractorWorker).where(ContractorWorker.tenantId == part)
+    stmt = select(ContractorWorker)
     if contractorCompanyId:
         stmt = stmt.where(ContractorWorker.contractorCompanyId == contractorCompanyId)
     if overallStatus:
@@ -207,7 +202,7 @@ async def list_workers(
 
     out: list[dict] = []
     for w in workers:
-        amc = await _active_mob_count(db, w.id, part)
+        amc = await _active_mob_count(db, w.id)
         out.append(_worker_dict(w, amc))
     return {"count": len(out), "workers": out}
 
@@ -219,10 +214,9 @@ async def register_worker(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.CREATE")
-    part = await partition_for(db, user)
 
-    # Verify contractor company exists (in the caller's partition)
-    company = await get_scoped(db, ContractorCompany, body.contractorCompanyId, part)
+    # Verify contractor company exists
+    company = await db.get(ContractorCompany, body.contractorCompanyId)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
 
@@ -231,7 +225,6 @@ async def register_worker(
         existing = (
             await db.execute(
                 select(ContractorWorker).where(
-                    ContractorWorker.tenantId == part,
                     ContractorWorker.contractorCompanyId == body.contractorCompanyId,
                     ContractorWorker.aadhaarLast4 == body.aadhaarLast4,
                 )
@@ -248,7 +241,7 @@ async def register_worker(
     if not worker_code:
         worker_code = await _generate_worker_code(db)
 
-    # Check uniqueness of workerCode (global — the column is globally unique)
+    # Check uniqueness of workerCode
     existing_code = (
         await db.execute(
             select(ContractorWorker).where(ContractorWorker.workerCode == worker_code)
@@ -260,7 +253,6 @@ async def register_worker(
         )
 
     worker = ContractorWorker(
-        tenantId=part,
         contractorCompanyId=body.contractorCompanyId,
         workerCode=worker_code,
         fullName=body.fullName,
@@ -301,8 +293,7 @@ async def get_worker(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    worker = await get_scoped(db, ContractorWorker, worker_id, part)
+    worker = await db.get(ContractorWorker, worker_id)
     if worker is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Worker not found")
 
@@ -310,10 +301,7 @@ async def get_worker(
     mobilizations = (
         await db.execute(
             select(MobilizationRecord)
-            .where(
-                MobilizationRecord.tenantId == part,
-                MobilizationRecord.contractorWorkerId == worker_id,
-            )
+            .where(MobilizationRecord.contractorWorkerId == worker_id)
             .order_by(MobilizationRecord.createdAt.desc())
         )
     ).scalars().all()
@@ -322,10 +310,7 @@ async def get_worker(
     inductions = (
         await db.execute(
             select(SiteInduction)
-            .where(
-                SiteInduction.tenantId == part,
-                SiteInduction.contractorWorkerId == worker_id,
-            )
+            .where(SiteInduction.contractorWorkerId == worker_id)
             .order_by(SiteInduction.conductedAt.desc())
         )
     ).scalars().all()
@@ -369,8 +354,7 @@ async def update_worker(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.UPDATE")
-    part = await partition_for(db, user)
-    worker = await get_scoped(db, ContractorWorker, worker_id, part)
+    worker = await db.get(ContractorWorker, worker_id)
     if worker is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Worker not found")
 
@@ -380,7 +364,7 @@ async def update_worker(
 
     await db.commit()
     await db.refresh(worker)
-    amc = await _active_mob_count(db, worker_id, part)
+    amc = await _active_mob_count(db, worker_id)
     return _worker_dict(worker, amc)
 
 
@@ -412,30 +396,18 @@ async def bulk_import_workers(
     """Bulk register contractor workers. Idempotent — existing workers (matched
     by aadhaarLast4 + contractorCompanyId) are updated, not duplicated."""
     await _require(db, user, "EPC.CREATE")
-    part = await partition_for(db, user)
     now = datetime.now(timezone.utc)
     year = now.year
 
     created, updated, errors = 0, 0, []
-    foreign_company: dict[str, bool] = {}
 
     for i, row in enumerate(body.workers):
         try:
-            # A company of another partition is treated as missing.
-            if row.contractorCompanyId not in foreign_company:
-                foreign_company[row.contractorCompanyId] = await is_foreign(
-                    db, ContractorCompany, row.contractorCompanyId, part
-                )
-            if foreign_company[row.contractorCompanyId]:
-                errors.append({"row": i + 1, "name": row.fullName, "error": "Contractor company not found"})
-                continue
-
             # Dedup check: aadhaar last 4 + company
             existing = None
             if row.aadhaarLast4:
                 result = await db.execute(
                     select(ContractorWorker).where(
-                        ContractorWorker.tenantId == part,
                         ContractorWorker.aadhaarLast4 == row.aadhaarLast4,
                         ContractorWorker.contractorCompanyId == row.contractorCompanyId,
                     )
@@ -450,7 +422,7 @@ async def bulk_import_workers(
                 existing.yearsExperience = row.yearsExperience
                 updated += 1
             else:
-                # Create (code counted globally — workerCode is globally unique)
+                # Create
                 count_result = await db.execute(select(func.count(ContractorWorker.id)))
                 count = (count_result.scalar_one() or 0) + 1
                 worker_code = f"CW-{year}-{count:04d}"
@@ -463,7 +435,6 @@ async def bulk_import_workers(
                         pass
 
                 worker = ContractorWorker(
-                    tenantId=part,
                     contractorCompanyId=row.contractorCompanyId,
                     workerCode=worker_code,
                     fullName=row.fullName,
@@ -503,14 +474,11 @@ async def gate_status(
 ) -> dict:
     """Dry-run gate clearance check — preview result without creating any records."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    worker = await get_scoped(db, ContractorWorker, worker_id, part)
+    worker = await db.get(ContractorWorker, worker_id)
     if worker is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Worker not found")
-    if await is_foreign(db, ConstructionSite, siteId, part):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
-    company = await get_scoped(db, ContractorCompany, worker.contractorCompanyId, part)
+    company = await db.get(ContractorCompany, worker.contractorCompanyId)
     now = datetime.now(timezone.utc)
     checks: dict[str, dict] = {}
 
@@ -518,7 +486,6 @@ async def gate_status(
     active_mob = (
         await db.execute(
             select(MobilizationRecord).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.contractorWorkerId == worker_id,
                 MobilizationRecord.siteId == siteId,
                 MobilizationRecord.status == "active",
@@ -535,7 +502,6 @@ async def gate_status(
         await db.execute(
             select(SiteInduction)
             .where(
-                SiteInduction.tenantId == part,
                 SiteInduction.contractorWorkerId == worker_id,
                 SiteInduction.siteId == siteId,
             )

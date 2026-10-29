@@ -16,10 +16,13 @@ admin / operations:
   POST /api/agents/calibration/run                  — manual calibration trigger
 
 Permission model:
-  • GET endpoints require AGENT.RCA_INVOKE (someone who can use the
-    agent can see its config).
-  • PATCH + prompt-promote require AGENT.RCA_CONFIGURE (Corporate HSE
-    or SYSTEM_ADMIN per seed).
+  • Agent list / detail / metrics / prompt metadata are open to any
+    authenticated user (read-only operations dashboard).
+  • PATCH + prompt-promote require AGENT.RCA_CONFIGURE at ALL_PLANTS.
+    AGENT.RCA_CONFIGURE is the only agent-config permission in the RBAC
+    seed, so it governs every agent; and an agent's model, prompt and
+    authority apply to every plant, so a plant-scoped grant (HSE_MANAGER
+    holds it at OWN_PLANT) must not change them for everyone.
   • The manual calibration trigger requires AGENT.RCA_CONFIGURE — it's
     an operational action.
   • The cost summary requires AGENT.AUDIT_VIEW (cost is sensitive info
@@ -34,6 +37,7 @@ decisions live in agent_service.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -62,7 +66,12 @@ from app.schemas.agent import (
 )
 from app.services.agents import agent_service
 from app.services.agents.calibration import run_calibration
-from app.services.permissions import PermissionContext, can
+from app.services.permissions import (
+    PermissionContext,
+    can,
+    get_accessible_plants_for,
+    permission_scopes,
+)
 
 router = APIRouter(tags=["agents-config"])
 
@@ -82,6 +91,34 @@ async def _require(
             status.HTTP_403_FORBIDDEN,
             check.reason or f"{permission_code} required",
         )
+
+
+async def _require_global_config(db: AsyncSession, user_id: str) -> None:
+    """Agent config is platform-wide, so changing it needs the config
+    permission at ALL_PLANTS, not just at the caller's own plant."""
+    await _require(db, user_id, "AGENT.RCA_CONFIGURE")
+    if "ALL_PLANTS" not in await permission_scopes(db, user_id, "AGENT.RCA_CONFIGURE"):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Agent configuration applies to every plant and needs AGENT.RCA_CONFIGURE "
+            "at ALL_PLANTS scope.",
+        )
+
+
+# A model id the API will accept: "claude-" + lowercase letters, digits, dots
+# and hyphens. Anything else would make every later invocation fail with an
+# API error, so reject it here instead.
+_MODEL_ID_RE = re.compile(r"^claude-[a-z0-9.-]+$")
+
+
+def _validate_model_id(value: str, field: str) -> str:
+    v = value.strip()
+    if not _MODEL_ID_RE.match(v):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Invalid {field} {value!r}: expected a Claude model id such as 'claude-sonnet-4-6'.",
+        )
+    return v
 
 
 # ─── List + detail ────────────────────────────────────────────────────
@@ -125,7 +162,7 @@ async def update_agent(
 ) -> AgentOut:
     """Change agent runtime config. Authority promotion is clamped to
     Agent.maxAuthorityLevel — sending L2 when ceiling is L1 returns 400."""
-    await _require(db, user.id, "AGENT.RCA_CONFIGURE")
+    await _require_global_config(db, user.id)
     agent = await _load_agent(db, code)
 
     levels = {"L0": 0, "L1": 1, "L2": 2}
@@ -153,9 +190,9 @@ async def update_agent(
     if payload.isInPilot is not None:
         agent.isInPilot = payload.isInPilot
     if payload.primaryModelId is not None:
-        agent.primaryModelId = payload.primaryModelId
+        agent.primaryModelId = _validate_model_id(payload.primaryModelId, "primaryModelId")
     if payload.escalationModelId is not None:
-        agent.escalationModelId = payload.escalationModelId
+        agent.escalationModelId = _validate_model_id(payload.escalationModelId, "escalationModelId")
 
     await db.commit()
     await db.refresh(agent)
@@ -303,6 +340,11 @@ async def list_agent_invocations(
     if status_filter:
         stmt = stmt.where(AgentInvocation.status == status_filter)
         count_stmt = count_stmt.where(AgentInvocation.status == status_filter)
+    # A plant-scoped auditor sees only runs on records at their plants.
+    plants = await get_accessible_plants_for(db, user.id, "AGENT.AUDIT_VIEW")
+    if plants is not None:
+        stmt = stmt.where(AgentInvocation.sourcePlantId.in_(plants))
+        count_stmt = count_stmt.where(AgentInvocation.sourcePlantId.in_(plants))
 
     stmt = stmt.order_by(AgentInvocation.invokedAt.desc()).limit(limit).offset(offset)
     rows = (await db.execute(stmt)).scalars().all()
@@ -411,7 +453,7 @@ async def promote_agent_prompt(
     """Make a specific prompt version the active one. Used both for
     promoting a new version and for rolling back to a previous one
     after a failed experiment."""
-    await _require(db, user.id, "AGENT.RCA_CONFIGURE")
+    await _require_global_config(db, user.id)
     agent = await _load_agent(db, code)
     prompt = (
         await db.execute(
@@ -486,6 +528,8 @@ async def agent_cost_summary(
     """
     await _require(db, user.id, "AGENT.AUDIT_VIEW")
     window_start = datetime.now(timezone.utc) - timedelta(days=days)
+    # Plant-scoped auditors get the breakdown for their own plants only.
+    plants = await get_accessible_plants_for(db, user.id, "AGENT.AUDIT_VIEW")
 
     # Top line + by-agent.
     by_agent_stmt = (
@@ -500,8 +544,11 @@ async def agent_cost_summary(
         .join(AgentInvocation, AgentInvocation.agentId == Agent.id)
         .where(AgentInvocation.invokedAt >= window_start)
         .group_by(Agent.code, Agent.name)
-        .order_by(func.sum(AgentInvocation.totalCostUsd).desc())
+        # NULLS LAST: errored runs have no cost; DESC would sort them first.
+        .order_by(func.sum(AgentInvocation.totalCostUsd).desc().nulls_last())
     )
+    if plants is not None:
+        by_agent_stmt = by_agent_stmt.where(AgentInvocation.sourcePlantId.in_(plants))
     by_agent_rows = (await db.execute(by_agent_stmt)).all()
     by_agent: list[CostBreakdownRow] = []
     total_invocations = 0
@@ -537,8 +584,10 @@ async def agent_cost_summary(
         .outerjoin(Plant, Plant.id == AgentInvocation.sourcePlantId)
         .where(AgentInvocation.invokedAt >= window_start)
         .group_by(AgentInvocation.sourcePlantId, Plant.name)
-        .order_by(func.sum(AgentInvocation.totalCostUsd).desc())
+        .order_by(func.sum(AgentInvocation.totalCostUsd).desc().nulls_last())
     )
+    if plants is not None:
+        by_plant_stmt = by_plant_stmt.where(AgentInvocation.sourcePlantId.in_(plants))
     by_plant_rows = (await db.execute(by_plant_stmt)).all()
     by_plant: list[CostBreakdownRow] = []
     for row in by_plant_rows:

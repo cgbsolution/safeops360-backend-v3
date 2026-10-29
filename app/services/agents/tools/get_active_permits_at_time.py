@@ -24,6 +24,8 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import plant_is_readable
+
 from app.models.incident import Incident
 from app.models.permit import Permit, PermitStatus, PermitType
 from app.services.agents.tools._enums import coerce_enum
@@ -112,6 +114,12 @@ async def handle(
             ),
             "permits": [],
         }
+
+    if not await plant_is_readable(db, "PTW.READ", plant_id):
+        raise ValueError(
+            f"plantId {plant_id!r} is outside the plants you can read permits for. "
+            "Omit plantId to use the source record's plant."
+        )
 
     stmt = (
         select(Permit)

@@ -33,11 +33,12 @@ from app.schemas.flra import (
     FLRAUpdate,
     JobStepInput,
 )
+from app.services.numbering import next_number
 from app.services.flra_gate import maybe_complete_flra, resolve_crew_for_flra
+from app.services.access_scope import build_record_scope
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
     get_user_role_codes,
 )
 from app.routers.ptw import REQUIRED_TRAINING_CODES
@@ -87,14 +88,14 @@ async def list_flras(
     read_check = await can(db, user.id, "FLRA.READ", PermissionContext())
     if not read_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, read_check.reason or "Access denied")
-    plants = await get_accessible_plants(db, user.id)
-    stmt = select(FLRA)
-    if plants is None:
-        pass
-    elif not plants:
-        return {"items": [], "total": 0}
-    else:
-        stmt = stmt.where(FLRA.plantId.in_(plants))
+    # Same rules as GET /{id}: the FLRA.READ scope — plant, department or the
+    # FLRAs the user leads. The old plant-set filter ignored OWN_RECORDS and
+    # OWN_DEPARTMENT entirely, so a worker saw every FLRA at their plants.
+    scope = await build_record_scope(db, user.id, "FLRA.READ")
+    stmt = scope.apply(
+        select(FLRA), FLRA.plantId,
+        owner=FLRA.leaderId == user.id, department_col=FLRA.departmentId,
+    )
     # Newest-created first — platform-wide register convention.
     rows = (
         await db.execute(stmt.order_by(FLRA.createdAt.desc(), FLRA.id.desc()).limit(100))
@@ -161,12 +162,7 @@ async def create_flra(
     else:
         _validate_step_hazards(payload.jobSteps)
 
-    last = (
-        await db.execute(
-            select(func.count()).select_from(FLRA).where(FLRA.plantId == payload.plantId)
-        )
-    ).scalar_one()
-    number = f"FLRA-{plant.code}-{last + 1:04d}"
+    number = await next_number(db, column=FLRA.number, stem=f"FLRA-{plant.code}-")
 
     crew_ids = await resolve_crew_for_flra(
         db,
@@ -292,7 +288,7 @@ async def get_flra(
     flra = await db.get(FLRA, flra_id)
     if flra is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-    record = {"leaderId": flra.leaderId}
+    record = {"leaderId": flra.leaderId, "departmentId": flra.departmentId}
     result = await can(
         db,
         user.id,
@@ -324,7 +320,7 @@ async def update_flra(
             "An FLRA can only be edited while it is In Progress (current status: "
             f"{flra.status.value.replace('_', ' ').title()}).",
         )
-    record = {"leaderId": flra.leaderId}
+    record = {"leaderId": flra.leaderId, "departmentId": flra.departmentId}
     result = await can(
         db,
         user.id,
@@ -360,7 +356,7 @@ async def delete_flra(
     flra = await db.get(FLRA, flra_id)
     if flra is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "FLRA not found")
-    record = {"leaderId": flra.leaderId}
+    record = {"leaderId": flra.leaderId, "departmentId": flra.departmentId}
     result = await can(
         db,
         user.id,
@@ -540,12 +536,7 @@ async def redo_flra(
     plant = await db.get(Plant, flra.plantId)
     if plant is None:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Plant lookup failed")
-    last = (
-        await db.execute(
-            select(func.count()).select_from(FLRA).where(FLRA.plantId == flra.plantId)
-        )
-    ).scalar_one()
-    new_number = f"FLRA-{plant.code}-{last + 1:04d}"
+    new_number = await next_number(db, column=FLRA.number, stem=f"FLRA-{plant.code}-")
 
     sigs = (
         await db.execute(select(FLRACrewSignature).where(FLRACrewSignature.flraId == flra.id))

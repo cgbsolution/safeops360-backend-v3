@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -47,6 +47,7 @@ from app.schemas.signal_engine import (
     SignalRunOut,
     SignalSummary,
 )
+from app.services.insights.access import aggregate_access
 from app.services.permissions import get_user_role_codes
 from app.services.plant_directory import resolve_plant_names, site_label
 from app.services.signal_engine.registry import RULES_BY_CODE
@@ -58,6 +59,74 @@ _ADMIN_ROLES = {"SYSTEM_ADMIN", "SUPER_ADMIN", "ADMIN", "PLATFORM_ADMIN"}
 
 async def _is_admin(db: AsyncSession, user: User) -> bool:
     return bool(set(await get_user_role_codes(db, user.id)) & _ADMIN_ROLES)
+
+
+# Signal source module → the READ permission guarding that module's records.
+# PLATFORM-only rules (data quality) map to nothing: admin-only.
+_MODULE_READ = {
+    "INCIDENT": "INCIDENT.READ",
+    "NEAR_MISS": "NEAR_MISS.READ",
+    "OBSERVATION": "OBSERVATION.READ",
+    "CAPA": "CAPA.READ",
+    "HIRA": "HIRA.READ",
+    "PTW": "PTW.READ",
+    "MOC": "MOC.READ",
+    "LOTO": "LOTO.READ",
+    "TRAINING": "TRAINING.READ",
+    "CAMS_AUDIT": "CAMS.READ",
+    "ERM": "ERM.READ",
+}
+
+
+async def _visible_sites_by_rule(db: AsyncSession, user: User) -> dict[str, list[str] | None]:
+    """rule code → sites whose signals this user may see (None == every site).
+
+    A signal is a plant-level finding drawn from its rule's source modules, so
+    it is visible where the reader holds a plant-level read grant on at least
+    one of those modules. Without this the feed showed every plant's signals to
+    every logged-in user (a NW+SW reader saw nine plants)."""
+    per_perm: dict[str, list[str] | None] = {}
+    for perm in set(_MODULE_READ.values()):
+        access = await aggregate_access(db, user.id, perm)
+        if access.allowed:
+            per_perm[perm] = access.plants
+    out: dict[str, list[str] | None] = {}
+    for code, impl in RULES_BY_CODE.items():
+        perms = [_MODULE_READ[m] for m in impl.source_modules if m in _MODULE_READ]
+        held = [per_perm[p] for p in perms if p in per_perm]
+        if any(h is None for h in held):
+            out[code] = None
+        else:
+            out[code] = sorted({site for h in held for site in h})
+    return out
+
+
+async def _scope_clause(db: AsyncSession, user: User):
+    """WHERE clause limiting Signal rows to what `user` may see; None == no limit."""
+    if await _is_admin(db, user):
+        return None
+    clauses = []
+    for code, sites in (await _visible_sites_by_rule(db, user)).items():
+        if sites is None:
+            clauses.append(Signal.ruleCode == code)
+        elif sites:
+            # Estate-wide (siteId NULL) signals need unrestricted read.
+            clauses.append(and_(Signal.ruleCode == code, Signal.siteId.in_(sites)))
+    return or_(*clauses) if clauses else false()
+
+
+async def _load_visible(db: AsyncSession, user: User, signal_id: str) -> Signal:
+    """Fetch one signal the user may see; 404 otherwise (never confirm existence)."""
+    stmt = select(Signal).where(Signal.id == signal_id)
+    clause = await _scope_clause(db, user)
+    if clause is not None:
+        stmt = stmt.where(clause)
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signal not found")
+    if row.category == "DATA_QUALITY" and not await _is_admin(db, user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This signal is on the platform data-quality register.")
+    return row
 
 
 async def _require_admin(db: AsyncSession, user: User) -> None:
@@ -110,6 +179,9 @@ async def list_signals(
 ) -> SignalListResponse:
     admin = await _is_admin(db, user)
     stmt = select(Signal).where(Signal.tenantId == DEFAULT_TENANT)
+    clause = await _scope_clause(db, user)
+    if clause is not None:
+        stmt = stmt.where(clause)
 
     if status_:
         stmt = stmt.where(Signal.status.in_([s.upper() for s in status_]))
@@ -169,6 +241,9 @@ async def signal_summary(
     base = select(Signal).where(Signal.tenantId == DEFAULT_TENANT)
     if not admin:
         base = base.where(Signal.category != "DATA_QUALITY")
+    clause = await _scope_clause(db, user)
+    if clause is not None:
+        base = base.where(clause)
     rows = (await db.execute(base)).scalars().all()
 
     by_status: dict[str, int] = {}
@@ -202,15 +277,12 @@ async def get_signal(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SignalOut:
+    await _load_visible(db, user, signal_id)
     row = (
         await db.execute(
             select(Signal).options(selectinload(Signal.evidence)).where(Signal.id == signal_id)
         )
-    ).scalar_one_or_none()
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signal not found")
-    if row.category == "DATA_QUALITY" and not await _is_admin(db, user):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "This signal is on the platform data-quality register.")
+    ).scalar_one()
     return (await _to_out(db, [row], with_evidence=True))[0]
 
 
@@ -230,9 +302,7 @@ async def acknowledge(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SignalOut:
-    row = await db.get(Signal, signal_id)
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signal not found")
+    row = await _load_visible(db, user, signal_id)
     if row.status in ("DISMISSED", "EXPIRED"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"A {row.status.lower()} signal cannot be acknowledged.")
     row.status = "ACKNOWLEDGED"
@@ -252,9 +322,9 @@ async def dismiss(
     """Dismiss with a reason. The reason is mandatory and kept: a later run will
     NOT resurrect a dismissed signal, so the record of who decided it was not
     worth acting on is the only remaining trace of that judgement."""
-    row = await db.get(Signal, signal_id)
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signal not found")
+    row = await _load_visible(db, user, signal_id)
+    if row.status == "EXPIRED":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "An expired signal cannot be dismissed.")
     row.status = "DISMISSED"
     row.dismissedBy = user.id
     row.dismissedAt = _now()
@@ -279,11 +349,7 @@ async def resolve(
     still see the problem should not be silenced by someone asserting it is
     fixed. Once the condition genuinely clears, the run expires it.
     """
-    row = await db.get(Signal, signal_id)
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signal not found")
-    if row.category == "DATA_QUALITY" and not await _is_admin(db, user):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "This signal is on the platform data-quality register.")
+    row = await _load_visible(db, user, signal_id)
     if row.status == "DISMISSED":
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,

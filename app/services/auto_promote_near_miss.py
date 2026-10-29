@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.numbering import next_number
 from app.models.incident import Incident, IncidentStatus, IncidentType
 from app.models.near_miss import NearMiss, NearMissStatus
 from app.models.plant import Plant
@@ -33,17 +34,9 @@ from app.services.notifications import send_email, send_sms
 
 async def _next_incident_number(db: AsyncSession, plant_code: str, year: int) -> str:
     count = (await db.execute(select(WorkflowInstance.id))).scalars().all()  # placeholder
-    # Number = INC-YYYY-PLANT-NNNN where NNNN is the count of incidents at this plant + 1
-    from sqlalchemy import func
-
-    last = (
-        await db.execute(
-            select(func.count())
-            .select_from(Incident)
-            .where(Incident.plantId.in_(select(Plant.id).where(Plant.code == plant_code)))
-        )
-    ).scalar_one()
-    return f"INC-{year}-{plant_code}-{last + 1:04d}"
+    # Number = INC-YYYY-PLANT-NNNN, highest issued + 1 (shared with the
+    # incident create route, so the two can never hand out the same number).
+    return await next_number(db, column=Incident.number, stem=f"INC-{year}-{plant_code}-")
 
 
 async def _users_with_role(db: AsyncSession, role_code: str, plant_id: str | None = None) -> list[User]:

@@ -89,7 +89,13 @@ def _median(values: list[float]) -> float | None:
 
 
 async def load_context(
-    db: AsyncSession, *, module: str, plant: str | None, now: datetime, week_of: datetime
+    db: AsyncSession,
+    *,
+    module: str,
+    plant: str | None,
+    now: datetime,
+    week_of: datetime,
+    plants: list[str] | None = None,
 ) -> GeneratorContext:
     window_start = now - timedelta(days=_WINDOW_DAYS)
 
@@ -116,6 +122,8 @@ async def load_context(
     )
     if plant:
         stmt = stmt.where(Observation.plantId == plant)
+    if plants is not None:  # a reader's plant set; [] matches nothing
+        stmt = stmt.where(Observation.plantId.in_(plants))
     rows = (await db.execute(stmt)).all()
     records = [
         ObsRec(

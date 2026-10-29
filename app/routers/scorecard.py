@@ -50,19 +50,6 @@ async def _scope(db: AsyncSession, user: User) -> list[str] | None:
     return allowed
 
 
-async def _export_labels(db: AsyncSession, payload: dict) -> dict[str, str]:
-    """Display-label overrides for the plants the document covers.
-
-    One site → that site's profile. Several → only if they all share one
-    profile (labels_for_plants keeps defaults for a mixed scope).
-    """
-    from app.services.display_labels import labels_for_plant, labels_for_plants
-
-    if payload.get("site"):
-        return await labels_for_plant(db, payload["site"])
-    return await labels_for_plants(db, [s.get("siteId") for s in payload.get("bySite") or []])
-
-
 async def _payload(
     db: AsyncSession, user: User, site: str | None, grain: str, periods: int
 ) -> dict:
@@ -110,7 +97,7 @@ async def export_pdf(
     payload = await _payload(db, user, site, grain, periods)
     name = _filename(payload, "pdf")
     return Response(
-        content=render_scorecard_pdf(payload, await _export_labels(db, payload)),
+        content=render_scorecard_pdf(payload),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
     )
@@ -130,7 +117,7 @@ async def export_pptx(
     payload = await _payload(db, user, site, grain, periods)
     name = _filename(payload, "pptx")
     return Response(
-        content=render_scorecard_pptx(payload, await _export_labels(db, payload)),
+        content=render_scorecard_pptx(payload),
         media_type=(
             "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         ),

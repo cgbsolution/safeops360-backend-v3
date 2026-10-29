@@ -158,16 +158,11 @@ async def my_modules(
         effective = [c for c in ceiling if is_module_enabled_for_plant(c, plantId, state)]
     else:
         effective = ceiling
-    from app.licensing.plant_modules import disabled_for_plant
-
     return {
         "status": state.status,
         "isOperational": state.is_operational,
         "plantId": plantId,
         "enabledModules": effective,
-        # Ungated modules (no licence code) this plant has switched off. Empty
-        # unless an admin/seed wrote an explicit enabled=false row.
-        "disabledModules": disabled_for_plant(plantId),
     }
 
 

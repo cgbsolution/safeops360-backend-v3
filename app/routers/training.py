@@ -8,6 +8,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.services.numbering import next_number
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_permission_with_context
 from app.models.training import (
@@ -675,14 +676,7 @@ async def list_session_attendance(
 
 async def _next_schedule_number(db: AsyncSession, plant: Plant) -> str:
     year = datetime.now(timezone.utc).year
-    count = (
-        await db.execute(
-            select(func.count())
-            .select_from(TrainingSchedule)
-            .where(TrainingSchedule.plantId == plant.id)
-        )
-    ).scalar_one()
-    return f"TS-{year}-{plant.code}-{count + 1:04d}"
+    return await next_number(db, column=TrainingSchedule.scheduleNumber, stem=f"TS-{year}-{plant.code}-")
 
 
 @router.post(

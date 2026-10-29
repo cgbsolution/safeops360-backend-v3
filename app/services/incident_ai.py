@@ -39,8 +39,9 @@ _SUMMARY_SYSTEM = (
 
 _ROOT_CAUSE_SYSTEM = (
     "You are an EHS root-cause analysis assistant. You are given the current "
-    "incident's immediate and underlying causes, plus the root causes of the "
-    "most similar past incidents. Propose ONE concise, specific root-cause "
+    "incident's report (what happened, where, the activity) and its immediate "
+    "and underlying causes, plus the root causes of the most similar past "
+    "incidents. Propose ONE concise, specific root-cause "
     "statement (a systemic/underlying cause, not a restatement of the event). "
     "Do NOT invent a confidence number — confidence is computed separately. "
     'Respond ONLY as JSON: {"rootCause": "<one sentence>"}.'
@@ -71,17 +72,29 @@ async def draft_summary(db: AsyncSession, incident: Incident) -> dict[str, Any] 
         system=_SUMMARY_SYSTEM,
         user=_report_blob(incident),
         max_tokens=400,
-        temperature=0.1,
     )
     if not result or not isinstance(result, dict):
         return None
-    summary = (result.get("summary") or "").strip()
+    summary = _clean_text(result.get("summary"))
     if not summary:
         return None
     return {"summary": summary}
 
 
-async def suggest_root_cause(db: AsyncSession, incident: Incident) -> dict[str, Any] | None:
+def _clean_text(value: Any) -> str:
+    """The model's string field, or "" for a missing / non-string value
+    (a list or object here used to 500 on .strip())."""
+    return value.strip() if isinstance(value, str) else ""
+
+
+async def suggest_root_cause(
+    db: AsyncSession,
+    incident: Incident,
+    *,
+    plant_ids: list[str] | None = None,
+    reporter_id: str | None = None,
+    scope_clause: Any = None,
+) -> dict[str, Any] | None:
     """Return {"text", "confidence", "basedOnIncidentIds"} or None (fail-soft).
 
     Confidence = (# retrieved matches sharing the current incident's causal
@@ -89,12 +102,17 @@ async def suggest_root_cause(db: AsyncSession, incident: Incident) -> dict[str, 
     incident `type` is the v1 causal-category proxy; when Feature 3 adds
     structured causal categorisation, swap the category key without touching
     this contract.
+
+    `plant_ids` / `reporter_id` keep the retrieved incidents (whose root
+    causes go into the prompt and whose ids are stored) within what the
+    caller may read — see incident_similarity.similar_incidents.
     """
     if not is_configured():
         return None
 
     matches = await incident_similarity.similar_incidents(
-        db, incident, only_closed=True, limit=10
+        db, incident, only_closed=True, limit=10, plant_ids=plant_ids, reporter_id=reporter_id,
+        scope_clause=scope_clause,
     )
     retrieved = len(matches)
     based_on = [m["incidentId"] for m in matches]
@@ -110,8 +128,14 @@ async def suggest_root_cause(db: AsyncSession, incident: Incident) -> dict[str, 
     for m in matches:
         for rc in m.get("rootCauses") or []:
             retrieved_causes.append(f"- ({m['number']}) {rc}")
+    # The incident's own facts. Most incidents carry only a description (the
+    # structured cause arrays are usually empty), and without it the model was
+    # asked for a root cause of an event it was never told about.
     user = "\n".join(
         [
+            _report_blob(incident),
+            f"Activity being performed: {incident.activityBeingPerformed or '—'}",
+            f"Immediate cause (free text): {incident.immediateCause or '—'}",
             f"Current immediate causes: {', '.join(incident.immediateCauses or []) or '—'}",
             f"Current underlying causes: {', '.join(incident.underlyingCauses or []) or '—'}",
             "",
@@ -120,11 +144,11 @@ async def suggest_root_cause(db: AsyncSession, incident: Incident) -> dict[str, 
         ]
     )
     result = await complete_json(
-        system=_ROOT_CAUSE_SYSTEM, user=user, max_tokens=300, temperature=0.2
+        system=_ROOT_CAUSE_SYSTEM, user=user, max_tokens=300
     )
     if not result or not isinstance(result, dict):
         return None
-    text = (result.get("rootCause") or "").strip()
+    text = _clean_text(result.get("rootCause"))
     if not text:
         return None
     return {"text": text, "confidence": confidence, "basedOnIncidentIds": based_on}

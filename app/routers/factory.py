@@ -45,7 +45,7 @@ from app.schemas import factory as S
 from app.services import factory as svc
 from app.services import factory_ext as svc_ext
 from app.services import factory_snapshot as snap_svc
-from app.services.permissions import PermissionContext, can, get_accessible_plants
+from app.services.permissions import PermissionContext, can, get_accessible_plants_for
 
 router = APIRouter(prefix="/api/factory", tags=["factory"])
 
@@ -188,7 +188,7 @@ async def list_profiles(
     await _require(db, user, "FACILITY.READ")
     # Plant-scope the dashboard: a Factory Manager (OWN_PLANT) sees only their
     # site(s); a group manager (ALL_PLANTS) gets None ⇒ unrestricted.
-    accessible = await get_accessible_plants(db, user.id)
+    accessible = await get_accessible_plants_for(db, user.id, "FACILITY.READ")
     if accessible is not None and not accessible:
         return S.FactoryProfileListResponse(items=[], total=0)
     stmt = select(FactoryProfile).where(FactoryProfile.isDeleted.is_(False))
@@ -800,7 +800,7 @@ async def upsert_social_compliance(profile_id: str, body: S.SocialComplianceProf
 async def _scoped_profiles(db: AsyncSession, user: User, state: str | None):
     """Tenant-scoped, optionally state-filtered factory list (mirrors list_profiles
     scoping). Returns None when the user has no plant access (caller returns empty)."""
-    accessible = await get_accessible_plants(db, user.id)
+    accessible = await get_accessible_plants_for(db, user.id, "FACILITY.READ")
     if accessible is not None and not accessible:
         return None
     stmt = select(FactoryProfile).where(FactoryProfile.isDeleted.is_(False))
@@ -1023,7 +1023,7 @@ async def recompute_snapshots(user: User = Depends(get_current_user), db: AsyncS
     """Refresh the LIVE compliance snapshot for every accessible factory by
     reading the existing engines. Cheap at demo scale; powers F-01 fast at 100+."""
     await _require(db, user, "FACILITY.READ")
-    accessible = await get_accessible_plants(db, user.id)
+    accessible = await get_accessible_plants_for(db, user.id, "FACILITY.READ")
     stmt = select(FactoryProfile).where(FactoryProfile.isDeleted.is_(False))
     if accessible is not None:
         if not accessible:

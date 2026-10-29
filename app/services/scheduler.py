@@ -20,8 +20,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.db import AsyncSessionLocal
 
 log = logging.getLogger("safeops360.scheduler")
@@ -74,11 +76,6 @@ async def _job_incident_alerts(db) -> dict:
 async def _job_cams_repeats(db) -> dict:
     from app.services.cams_analytics import detect_repeat_findings
     return await detect_repeat_findings(db)
-
-
-async def _job_fire_checklist_overdue(db) -> dict:
-    from app.services.fire_reminders import sweep
-    return await sweep(db)
 
 
 async def _job_fire_status(db) -> dict:
@@ -333,7 +330,6 @@ JOBS: dict[str, Job] = {j.id: j for j in [
     Job("incident_risk_alerts", "Incident → ERM risk review flag (I-04)", 6 * HOUR, _job_incident_alerts),
     Job("cams_repeat_findings", "CAMS repeat-finding detection", 12 * HOUR, _job_cams_repeats),
     Job("fire_equipment_status", "Fire equipment status recompute", 1 * DAY, _job_fire_status),
-    Job("fire_checklist_overdue", "Fire checklist overdue reminders + escalation", 1 * DAY, _job_fire_checklist_overdue),
     Job("compliance_tasks", "Compliance status + task generation", 1 * DAY, _job_compliance),
     Job("audit_trail_integrity", "Audit-trail hash-chain integrity check", 7 * DAY, _job_audit_integrity),
     Job("capture_voice_pipeline", "Field-capture voice transcription + translation", HOUR // 4, _job_capture_voice),
@@ -441,19 +437,62 @@ async def _execute_job(job_id: str, job: Job, trigger: str) -> dict[str, Any]:
     return {"jobId": job_id, "status": status, "summary": summary, "error": error}
 
 
+# A RUNNING JobRun is only ever closed by its own _execute_job; if the process
+# dies mid-run (restart, deploy) the row stays RUNNING forever and the jobs page
+# shows it as live. Older than this, it cannot still be running.
+ABANDONED_RUN_AFTER = timedelta(hours=6)
+
+
+async def reap_abandoned_runs(db: AsyncSession) -> int:
+    """Mark long-dead RUNNING JobRun rows FAILED. Returns how many were closed."""
+    from app.models.job_run import JobRun
+
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - ABANDONED_RUN_AFTER
+    result = await db.execute(
+        update(JobRun)
+        .where(JobRun.status == "RUNNING")
+        .where(JobRun.startedAt < cutoff)
+        .values(
+            status="FAILED",
+            finishedAt=datetime.now(timezone.utc).replace(tzinfo=None),
+            error="Abandoned: the process stopped before the run finished (restart or deploy).",
+        )
+    )
+    return result.rowcount or 0
+
+
+def scheduled_jobs(allow: str) -> dict[str, Job]:
+    """The jobs the supervisor runs: `allow` is the SCHEDULER_JOBS setting, a
+    comma-separated list of job ids; empty means every job."""
+    wanted = {j.strip() for j in allow.split(",") if j.strip()}
+    if not wanted:
+        return dict(JOBS)
+    unknown = wanted - JOBS.keys()
+    if unknown:
+        log.warning("SCHEDULER_JOBS names unknown job ids, ignored: %s", ", ".join(sorted(unknown)))
+    return {jid: job for jid, job in JOBS.items() if jid in wanted}
+
+
 async def supervisor_loop(stop: asyncio.Event) -> None:
     """Single supervisor — every 60s, run any job whose interval has elapsed since
     its last success. Staggered naturally by differing intervals."""
+    jobs = scheduled_jobs(get_settings().scheduler_jobs)
+    log.info("scheduler running %d of %d jobs", len(jobs), len(JOBS))
     next_due: dict[str, datetime] = {}
     now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
-        for jid, job in JOBS.items():
+        reaped = await reap_abandoned_runs(db)
+        await db.commit()
+        if reaped:
+            log.info("closed %d abandoned RUNNING job runs", reaped)
+    async with AsyncSessionLocal() as db:
+        for jid, job in jobs.items():
             last = await _last_success(db, jid)
             last_aware = (last.replace(tzinfo=timezone.utc) if last and last.tzinfo is None else last) if last else None
             next_due[jid] = (last_aware + timedelta(seconds=job.interval_seconds)) if last_aware else now
     while not stop.is_set():
         now = datetime.now(timezone.utc)
-        for jid, job in JOBS.items():
+        for jid, job in jobs.items():
             if now >= next_due.get(jid, now):
                 await run_job(jid, trigger="SCHEDULED")
                 next_due[jid] = datetime.now(timezone.utc) + timedelta(seconds=job.interval_seconds)

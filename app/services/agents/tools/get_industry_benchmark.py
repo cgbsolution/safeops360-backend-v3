@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.config import get_settings
+
 
 DEFINITION: dict[str, Any] = {
     "name": "get_industry_benchmark",
@@ -46,9 +48,11 @@ DEFINITION: dict[str, Any] = {
             "industryContext": {
                 "type": "string",
                 "description": (
-                    "Optional industry context — defaults to 'CEMENT' since the "
-                    "platform is deployed primarily in cement manufacturing. "
-                    "Values: 'CEMENT', 'STEEL', 'CHEMICALS', 'REFINERY', 'GENERAL'."
+                    f"Optional industry context. This deployment is "
+                    f"{get_settings().agent_industry_context.upper()!r}, which is "
+                    "the default — only pass another value if the incident is "
+                    "clearly from a different industry. Values: 'STEEL', 'CEMENT', "
+                    "'CHEMICALS', 'REFINERY', 'GENERAL'."
                 ),
             },
         },
@@ -63,7 +67,78 @@ DEFINITION: dict[str, Any] = {
 # Keep this table compact — quality over coverage. Empty types fall
 # back to GENERAL.
 
+_ILO_STEEL = "ILO Code of practice: Safety and health in the iron and steel industry (2005)"
+
 _BENCHMARK: dict[tuple[str, str], list[dict[str, Any]]] = {
+    # STEEL entries added 2026-10-25 for the Jindal Stainless deployment,
+    # drawn from the ILO code of practice; pending EHS SME review.
+    ("LTI", "STEEL"): [
+        {
+            "pattern": "Caught-in or struck-by during maintenance on mill, conveyor or roll-change equipment",
+            "commonRootCauses": [
+                "Not every energy source (electrical, hydraulic, pneumatic, gravity) isolated and verified before access",
+                "Guard or interlock bypassed for access and not restored",
+                "Cobble clearing or roll change done without a written method",
+            ],
+            "contributingFactors": [
+                "Pressure to restart the line quickly",
+                "Contract crews unfamiliar with the specific line",
+            ],
+            "source": _ILO_STEEL,
+        },
+        {
+            "pattern": "Overhead (EOT) crane and lifting incidents",
+            "commonRootCauses": [
+                "Lifting gear not inspected, or wrong slinging for the load",
+                "No exclusion zone under suspended loads",
+                "Breakdown in signalling between crane operator and ground crew",
+            ],
+            "contributingFactors": [
+                "Congested bays and poor visibility from fume or steam",
+            ],
+            "source": _ILO_STEEL,
+        },
+    ],
+    ("FATALITY", "STEEL"): [
+        {
+            "pattern": "Molten metal or slag meeting water or damp material (steam explosion)",
+            "commonRootCauses": [
+                "Wet or damp scrap, tools or refractory introduced to the melt",
+                "Cooling-water leak (panels, lances) not detected before tapping or charging",
+                "Ladle or vessel condition not inspected before use",
+            ],
+            "contributingFactors": [
+                "People inside the exclusion zone during tapping or charging",
+            ],
+            "source": _ILO_STEEL,
+        },
+        {
+            "pattern": "Toxic gas exposure (carbon monoxide) from process-gas systems",
+            "commonRootCauses": [
+                "Gas isolation and purging not verified before work or entry",
+                "No continuous or personal CO monitoring",
+                "Confined-space entry without a permit or standby person",
+            ],
+            "contributingFactors": [
+                "Leaks treated as routine and not reported",
+            ],
+            "source": _ILO_STEEL,
+        },
+    ],
+    ("FIRE", "STEEL"): [
+        {
+            "pattern": "Hydraulic or lubricating-oil fire in mill cellars and basements",
+            "commonRootCauses": [
+                "Oil leaks and oil-soaked material left near hot surfaces",
+                "Hot work without a fire watch or area clearance",
+                "Fire detection or suppression impaired and not restored",
+            ],
+            "contributingFactors": [
+                "Cellars rarely inspected because access is difficult",
+            ],
+            "source": _ILO_STEEL,
+        },
+    ],
     ("LTI", "CEMENT"): [
         {
             "pattern": "Rotating equipment entanglement during maintenance",
@@ -179,7 +254,7 @@ async def handle(
     source_module: str | None = None,
 ) -> dict[str, Any]:
     incident_type = input["incidentType"]
-    industry = input.get("industryContext", "CEMENT").upper()
+    industry = str(input.get("industryContext") or get_settings().agent_industry_context).upper()
 
     # Try specific industry first, fall back to GENERAL.
     patterns = _BENCHMARK.get((incident_type, industry)) or _BENCHMARK.get(

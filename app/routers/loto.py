@@ -1319,9 +1319,11 @@ async def permit_loto_status(
     permit = await db.get(Permit, permit_id)
     if permit is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Permit not found")
-    await require_permission_with_context(
-        "PTW.READ", user, db, plant_id=permit.plantId, record_id=permit.id
-    )
+    from app.services.ptw_access import check_permit_access
+
+    allowed, reason = await check_permit_access(db, permit, user, "PTW.READ")
+    if not allowed:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, reason or "Access denied")
 
     item: ExecutionListItem | None = None
     if permit.lotoExecutionId:

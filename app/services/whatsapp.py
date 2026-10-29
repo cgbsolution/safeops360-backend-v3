@@ -24,7 +24,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -76,8 +76,11 @@ async def start_registration(db: AsyncSession, phone: str) -> dict[str, Any]:
     await db.flush()
     send = await send_message(phone, text=f"Your SafeOps360 verification code is {code}. Valid {OTP_TTL_MINUTES} min.")
     out: dict[str, Any] = {"status": "otp_sent", "delivered": send.get("sent", False)}
-    if not send.get("sent"):
-        out["devOtp"] = code  # channel not configured — surface for local/demo verification only
+    # Only echo the code when explicitly enabled for local/demo use. "Channel
+    # not configured" alone is not enough: that is the default state of a real
+    # deployment, and this endpoint is unauthenticated.
+    if not send.get("sent") and get_settings().expose_dev_otp:
+        out["devOtp"] = code
     return out
 
 
@@ -159,17 +162,42 @@ async def classify_transcript(text: str) -> dict[str, Any]:
             "ENVIRONMENTAL, FIRE, PROCESS_SAFETY, HIPO_NEAR_MISS]; severity ∈ "
             '[LOW, MEDIUM, HIGH, CRITICAL]. Respond ONLY as JSON {"type":..,"severity":..}.'
         ),
-        user=text[:2000], max_tokens=60, temperature=0.0,
+        user=text[:2000], max_tokens=60,
     )
-    if not result:
+    if not isinstance(result, dict):
         return default
-    t = str(result.get("type", "")).upper()
-    s = str(result.get("severity", "")).upper()
+    from app.services.agents.tools._enums import INCIDENT_TYPE_ALIASES
+
+    # Models answer "Lost Time Injury" / "near-miss" as often as the code.
+    t = str(result.get("type", "")).strip().upper().replace(" ", "_").replace("-", "_")
+    t = INCIDENT_TYPE_ALIASES.get(t, t)
+    s = str(result.get("severity", "")).strip().upper()
     valid_t = {e.value for e in IncidentType}
     return {
         "type": t if t in valid_t else default["type"],
         "severity": s if s in {"LOW", "MEDIUM", "HIGH", "CRITICAL"} else default["severity"],
     }
+
+
+async def _next_incident_number(db: AsyncSession, plant_code: str, year: int) -> str:
+    """INC-{year}-{plant}-NNNN as MAX+1 over existing numbers of that shape,
+    soft-deleted rows included. count(rows)+1 collided with the plant's other
+    numbering styles and with deleted rows, and the unique violation lost the
+    WhatsApp report."""
+    prefix = f"INC-{year}-{plant_code}-"
+    numbers = (
+        await db.execute(
+            select(Incident.number)
+            .where(Incident.number.like(f"{prefix}%"))
+            .execution_options(include_deleted=True)
+        )
+    ).scalars().all()
+    highest = 0
+    for n in numbers:
+        tail = n[len(prefix):]
+        if tail.isdigit():
+            highest = max(highest, int(tail))
+    return f"{prefix}{highest + 1:04d}"
 
 
 async def create_incident_from_whatsapp(
@@ -189,10 +217,7 @@ async def create_incident_from_whatsapp(
 
     itype = IncidentType(classification.get("type", "HIPO_NEAR_MISS"))
     now = _now()
-    last = (
-        await db.execute(select(func.count()).select_from(Incident).where(Incident.plantId == plant.id))
-    ).scalar_one()
-    number = f"INC-{now.year}-{plant.code}-{last + 1:04d}"
+    number = await _next_incident_number(db, plant.code, now.year)
 
     incident = Incident(
         number=number, date=now, occurredAt=now, reportedAt=now, type=itype,
@@ -246,6 +271,15 @@ async def handle_inbound(db: AsyncSession, *, phone: str, message_type: str,
         return {"action": "registration", "reason": "unverified sender", **reg}
 
     log.senderId = sender.id
+
+    # A button reply (approve/reclassify on our own prompts) or an empty
+    # message is not a report: it used to become a "Voice report via WhatsApp"
+    # incident with no content.
+    if message_type == "interactive" or (not (text or "").strip() and not (message_type == "voice" and media_id)):
+        log.status = "ignored"
+        log.detail = f"No report content ({message_type}); no incident created."
+        await db.flush()
+        return {"action": "ignored", "reason": "no report content"}
 
     transcript = text
     if message_type == "voice" and media_id:

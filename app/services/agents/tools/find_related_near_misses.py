@@ -18,6 +18,10 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import readable_plants, restrict_to_plants
+
+from app.services.agents.tools._enums import coerce_enum
+
 from app.models.incident import Incident
 from app.models.near_miss import NearMiss
 from app.models.observation import Severity
@@ -110,6 +114,7 @@ async def handle(
         .where(NearMiss.date >= window_start)
         .where(NearMiss.date <= anchor)
     )
+    stmt = restrict_to_plants(stmt, NearMiss.plantId, await readable_plants(db, "NEAR_MISS.READ"))
 
     if hazard := input.get("hazardCategory"):
         stmt = stmt.where(NearMiss.hazardCategory == hazard)
@@ -122,8 +127,7 @@ async def handle(
         stmt = stmt.where(or_(*clauses))
 
     if min_sev := input.get("minPotentialSeverity"):
-        if min_sev not in _SEVERITY_RANK:
-            raise ValueError(f"Unknown minPotentialSeverity {min_sev!r}")
+        min_sev = coerce_enum(min_sev, Severity, "minPotentialSeverity").value
         # Severity is stored as the enum value; we want all values at or
         # above the threshold. Easiest: explicit list.
         allowed = [s for s, rank in _SEVERITY_RANK.items() if rank >= _SEVERITY_RANK[min_sev]]

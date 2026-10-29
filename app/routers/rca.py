@@ -253,6 +253,25 @@ async def _load_full(db: AsyncSession, rca_id: str) -> RootCauseAnalysis:
         raise HTTPException(404, "RCA not found")
     return rca
 
+async def _assert_rca_scope(db: AsyncSession, user: User, rca: RootCauseAnalysis) -> None:
+    """Record-level read scope for one RCA: the RCA.READ plant scope (RCAs
+    with no plant need an all-plant grant) and the caller's risk domains —
+    the same rules the register applies. GET-by-id used to check the bare
+    permission, so any RCA was readable by id."""
+    scope = await build_query_scope(db, user.id, "RCA.READ")
+    if not scope.allows_plant(rca.plantId):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Permission 'RCA.READ' present but scope does not include this record")
+    allowed = await _effective_domains(db, user)
+    if allowed is not None and rca.primaryDomain not in allowed:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This RCA is outside your risk domains")
+
+
+async def _load_scoped(db: AsyncSession, user: User, rca_id: str) -> RootCauseAnalysis:
+    rca = await _load_scoped(db, user, rca_id)
+    await _assert_rca_scope(db, user, rca)
+    return rca
+
+
 
 # ─────────────────────────────────────────────────────────────────────
 # RCA register + detail
@@ -352,7 +371,7 @@ async def list_rcas(
 @router.get("/{rca_id}", response_model=S.RcaDetail)
 async def get_rca(rca_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _require(db, user, "RCA.READ")
-    rca = await _load_full(db, rca_id)
+    rca = await _load_scoped(db, user, rca_id)
     return await _detail(db, rca)
 
 
@@ -427,7 +446,7 @@ async def expose_event_rca(body: S.RcaCreateEvent, user: User = Depends(get_curr
 async def update_rca(rca_id: str, body: S.RcaUpdate, user: User = Depends(get_current_user),
                      db: AsyncSession = Depends(get_db)):
     await _require(db, user, "RCA.CREATE")
-    rca = await _load_full(db, rca_id)
+    rca = await _load_scoped(db, user, rca_id)
     data = body.model_dump(exclude_unset=True)
     if "methodology" in data and data["methodology"]:
         from app.services.rca import normalise_rca_method
@@ -444,7 +463,7 @@ async def update_rca(rca_id: str, body: S.RcaUpdate, user: User = Depends(get_cu
 @router.post("/{rca_id}/submit", response_model=S.RcaDetail)
 async def submit_rca(rca_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _require(db, user, "RCA.CREATE")
-    rca = await _load_full(db, rca_id)
+    rca = await _load_scoped(db, user, rca_id)
     if rca.status in ("APPROVED", "SUPERSEDED"):
         raise HTTPException(400, f"Cannot submit an RCA in status {rca.status}")
     rca.status = "PEER_REVIEW"
@@ -457,7 +476,7 @@ async def submit_rca(rca_id: str, user: User = Depends(get_current_user), db: As
 async def approve_rca(rca_id: str, body: S.ApproveIn, user: User = Depends(get_current_user),
                       db: AsyncSession = Depends(get_db)):
     await _require(db, user, "RCA.APPROVE")
-    rca = await _load_full(db, rca_id)
+    rca = await _load_scoped(db, user, rca_id)
     rca.status = "APPROVED"
     rca.approverId = user.id
     rca.approvedAt = _now()
@@ -485,7 +504,7 @@ async def reopen_rca(rca_id: str, reason: str = Query(..., min_length=5),
     no reopen path existed (DECISIONS.md D8); fires the CRITICAL rca.reopened
     impact rule since live permits may rest on its validated controls."""
     await _require(db, user, "RCA.APPROVE")
-    rca = await _load_full(db, rca_id)
+    rca = await _load_scoped(db, user, rca_id)
     if rca.status != "APPROVED":
         raise HTTPException(400, f"Only an APPROVED RCA can be reopened (status is {rca.status})")
     rca.status = "IN_ANALYSIS"
@@ -514,6 +533,7 @@ async def delete_rca(rca_id: str, reason: str = Query(..., min_length=10),
     rca = await db.get(RootCauseAnalysis, rca_id)
     if rca is None or rca.isDeleted:
         raise HTTPException(404, "RCA not found")
+    await _assert_rca_scope(db, user, rca)
     soft_delete(rca, user.id, reason)  # hard-delete is ORM-blocked (governed)
     rca.updatedBy = user.id
     await db.flush()
@@ -526,7 +546,7 @@ async def delete_rca(rca_id: str, reason: str = Query(..., min_length=10),
 async def add_cause(rca_id: str, body: S.CauseTagIn, user: User = Depends(get_current_user),
                     db: AsyncSession = Depends(get_db)):
     await _require(db, user, "RCA.TAG")
-    rca = await _load_full(db, rca_id)
+    rca = await _load_scoped(db, user, rca_id)
     sub = await db.get(RootCauseSubCause, body.subCauseId)
     if sub is None or sub.isDeleted:
         raise HTTPException(404, "Sub-cause not found")
@@ -544,6 +564,7 @@ async def add_cause(rca_id: str, body: S.CauseTagIn, user: User = Depends(get_cu
 async def remove_cause(rca_id: str, cause_id: str, user: User = Depends(get_current_user),
                        db: AsyncSession = Depends(get_db)):
     await _require(db, user, "RCA.TAG")
+    await _load_scoped(db, user, rca_id)
     cause = await db.get(RcaIdentifiedCause, cause_id)
     if cause is None or cause.rcaId != rca_id:
         raise HTTPException(404, "Cause not found")
@@ -556,7 +577,7 @@ async def remove_cause(rca_id: str, cause_id: str, user: User = Depends(get_curr
 async def add_risk_link(rca_id: str, body: S.RiskLinkIn, user: User = Depends(get_current_user),
                         db: AsyncSession = Depends(get_db)):
     await _require(db, user, "RCA.TAG")
-    rca = await _load_full(db, rca_id)
+    rca = await _load_scoped(db, user, rca_id)
     risk = await db.get(EnterpriseRisk, body.riskId)
     if risk is None or risk.isDeleted:
         raise HTTPException(404, "Risk not found")
@@ -573,6 +594,7 @@ async def add_risk_link(rca_id: str, body: S.RiskLinkIn, user: User = Depends(ge
 async def remove_risk_link(rca_id: str, link_id: str, user: User = Depends(get_current_user),
                            db: AsyncSession = Depends(get_db)):
     await _require(db, user, "RCA.TAG")
+    await _load_scoped(db, user, rca_id)
     link = await db.get(RcaRiskLink, link_id)
     if link is None or link.rcaId != rca_id:
         raise HTTPException(404, "Link not found")
@@ -589,6 +611,7 @@ async def raise_capa(rca_id: str, body: S.RaiseCapaIn, user: User = Depends(get_
     rca = await db.get(RootCauseAnalysis, rca_id)
     if rca is None or rca.isDeleted:
         raise HTTPException(404, "RCA not found")
+    await _assert_rca_scope(db, user, rca)
     try:
         capa = await spawn_capa(
             db, source_code="ENTERPRISE_RCA", plant_id=rca.plantId, title=body.title, problem=body.problem,

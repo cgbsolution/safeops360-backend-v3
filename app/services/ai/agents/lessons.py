@@ -11,6 +11,8 @@ skip and don't block closure.
 
 from __future__ import annotations
 
+import asyncio
+
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.ai.anthropic_client import complete_json, is_configured
 
 AGENT_ID = "LessonsDistributionAgent"
+
+# Runs after the closure commits (see post_closure_rules); this only caps how
+# long a stuck call can occupy the background task.
+LESSONS_TIMEOUT_S = 60.0
 
 _SYSTEM_PROMPT = """You are SafeOps360's LessonsDistributionAgent. Your job is to turn a single closed safety observation into a concise, sharable lesson that helps prevent the same issue elsewhere in the organisation.
 
@@ -114,23 +120,45 @@ async def run_lessons_distribution(
     except Exception:
         pass
 
-    result = await complete_json(
-        system=_SYSTEM_PROMPT,
-        user=_summarise_observation_for_prompt(payload),
-        max_tokens=600,
-        temperature=0.2,
-    )
+    try:
+        result = await asyncio.wait_for(
+            complete_json(
+                system=_SYSTEM_PROMPT,
+                user=_summarise_observation_for_prompt(payload),
+                max_tokens=600,
+            ),
+            timeout=LESSONS_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        return {"agentId": AGENT_ID, "skipped": True, "reason": "model call timed out"}
     if result is None:
         return {"agentId": AGENT_ID, "skipped": True, "reason": "model call failed"}
+    if not isinstance(result, dict):
+        return {"agentId": AGENT_ID, "skipped": True, "reason": "model returned an unexpected shape"}
+
+    lesson = str(result.get("lesson") or "").strip()[:600]
+    if not lesson:
+        return {"agentId": AGENT_ID, "skipped": True, "reason": "model returned no lesson"}
+    confidence = str(result.get("confidence") or "MEDIUM").strip().upper()
 
     # Light shape check — don't trust the model blindly
     cleaned = {
         "agentId": AGENT_ID,
         "model": settings_model,
-        "lesson": str(result.get("lesson") or "").strip()[:600],
-        "audience": [str(a) for a in (result.get("audience") or [])][:8],
-        "actions": [str(a) for a in (result.get("actions") or [])][:5],
-        "tags": [str(t) for t in (result.get("tags") or [])][:6],
-        "confidence": str(result.get("confidence") or "MEDIUM").upper(),
+        "lesson": lesson,
+        "audience": _str_list(result.get("audience"), 8),
+        "actions": _str_list(result.get("actions"), 5),
+        "tags": _str_list(result.get("tags"), 6),
+        "confidence": confidence if confidence in {"LOW", "MEDIUM", "HIGH"} else "MEDIUM",
     }
     return cleaned
+
+
+def _str_list(value: Any, limit: int) -> list[str]:
+    """A model "list" may arrive as a bare string or null; never iterate a
+    string character by character."""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    return [str(v).strip() for v in value if str(v).strip()][:limit]

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 try:
     from dateutil.relativedelta import relativedelta as _relativedelta
@@ -101,15 +102,60 @@ from app.services.hira_capa import (
     control_ids_with_capas,
     sync_recommended_control_capas,
 )
+from app.services.access_scope import build_record_scope
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
+    get_accessible_plants_for,
 )
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/hira", tags=["hira"])
+
+
+def _study_record(study: HiraStudy) -> dict[str, Any]:
+    """Record dict can() matches for a study: owners + department."""
+    return {
+        "createdById": study.createdById,
+        "teamLeaderId": study.teamLeaderId,
+        "departmentId": study.departmentId,
+    }
+
+
+def _study_ctx(study: HiraStudy, record_id: str | None = None) -> PermissionContext:
+    """Record-level context for a study (or one of its entries): plant,
+    department and owners, so OWN_DEPARTMENT / OWN_RECORDS grants resolve."""
+    return PermissionContext(
+        record_id=record_id or study.id,
+        plant_id=study.plantId,
+        department_id=study.departmentId,
+        record=_study_record(study),
+    )
+
+
+async def _hira_read_scope(db: AsyncSession, user: User, permission: str = "HIRA.READ"):
+    """(RecordScope, WHERE clause on HiraStudy) for registers and dashboards —
+    the same plant / department / owner rules as the study detail endpoint."""
+    scope = await build_record_scope(db, user.id, permission)
+    clause = scope.filter(
+        HiraStudy.plantId,
+        owner=or_(HiraStudy.createdById == user.id, HiraStudy.teamLeaderId == user.id),
+        department_col=HiraStudy.departmentId,
+    )
+    return scope, clause
+
+
+def _scoped(stmt, clause):
+    return stmt if clause is None else stmt.where(clause)
+
+
+async def _require_hira_plant(db: AsyncSession, user: User, plant_id: str) -> None:
+    """Plant-keyed HIRA lookups (for-ptw / for-flra / for-inspection) take the
+    plant from the caller; it must be one the caller holds HIRA.READ at."""
+    scope = await build_record_scope(db, user.id, "HIRA.READ")
+    if not scope.allows_plant(plant_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Permission 'HIRA.READ' does not include this plant")
 
 # ─────────────────────────────────────────────────────────────────────
 # ALARP tolerability banding
@@ -661,7 +707,7 @@ async def list_studies(
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
 
-    accessible_plants = await get_accessible_plants(db, user.id)
+    _scope, scope_clause = await _hira_read_scope(db, user)
 
     base = (
         select(HiraStudy)
@@ -671,12 +717,7 @@ async def list_studies(
             selectinload(HiraStudy.area),
         )
     )
-    if accessible_plants is None:
-        pass  # ALL_PLANTS
-    elif len(accessible_plants) == 0:
-        return HiraStudyListResponse(items=[], total=0, statusCounts={})
-    else:
-        base = base.where(HiraStudy.plantId.in_(accessible_plants))
+    base = _scoped(base, scope_clause)
 
     stmt = base
     if status_filter:
@@ -721,8 +762,7 @@ async def list_studies(
 
     # Status counts — across the user's accessible scope (not just the filtered slice)
     sc_q = select(HiraStudy.status, func.count(HiraStudy.id)).group_by(HiraStudy.status)
-    if accessible_plants is not None:
-        sc_q = sc_q.where(HiraStudy.plantId.in_(accessible_plants))
+    sc_q = _scoped(sc_q, scope_clause)
     sc_rows = (await db.execute(sc_q)).all()
     status_counts = {s: int(c) for s, c in sc_rows}
 
@@ -846,7 +886,7 @@ async def get_study(
         db,
         user.id,
         "HIRA.READ",
-        PermissionContext(record_id=study.id, plant_id=study.plantId, record={"createdById": study.createdById, "teamLeaderId": study.teamLeaderId}),
+        _study_ctx(study),
     )
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
@@ -883,11 +923,7 @@ async def get_study_detail(
         db,
         user.id,
         "HIRA.READ",
-        PermissionContext(
-            record_id=study.id,
-            plant_id=study.plantId,
-            record={"createdById": study.createdById, "teamLeaderId": study.teamLeaderId},
-        ),
+        _study_ctx(study),
     )
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
@@ -997,7 +1033,7 @@ async def list_entries(
         db,
         user.id,
         "HIRA.READ",
-        PermissionContext(record_id=study.id, plant_id=study.plantId),
+        _study_ctx(study),
     )
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
@@ -1244,7 +1280,7 @@ async def get_entry(
         db,
         user.id,
         "HIRA.READ",
-        PermissionContext(record_id=entry.id, plant_id=entry.study.plantId),
+        _study_ctx(entry.study, entry.id),
     )
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
@@ -2040,7 +2076,7 @@ async def list_entry_capas(
     entry = await db.get(HiraEntry, entry_id, options=[selectinload(HiraEntry.study)])
     if entry is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry not found")
-    await require_permission_with_context("HIRA.READ", user, db, plant_id=entry.study.plantId, record_id=entry.id)
+    await require_permission_with_context("HIRA.READ", user, db, plant_id=entry.study.plantId, record_id=entry.id, record=_study_record(entry.study))
     rows = (await db.execute(
         select(HiraCapa).where(HiraCapa.entryId == entry_id).order_by(HiraCapa.createdAt)
     )).scalars().all()
@@ -2148,7 +2184,8 @@ async def hazard_ptw_prefill(
     if entry is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry not found")
     await require_permission_with_context(
-        "HIRA.READ", user, db, plant_id=entry.study.plantId, record_id=entry.id
+        "HIRA.READ", user, db, plant_id=entry.study.plantId, record_id=entry.id,
+        record=_study_record(entry.study),
     )
 
     lib = row.hazard
@@ -2659,7 +2696,7 @@ async def list_review_cycles(
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
 
-    accessible = await get_accessible_plants(db, user.id)
+    _scope, scope_clause = await _hira_read_scope(db, user)
     stmt = (
         select(HiraReviewCycle)
         .join(HiraEntry, HiraReviewCycle.entryId == HiraEntry.id)
@@ -2668,12 +2705,7 @@ async def list_review_cycles(
             selectinload(HiraReviewCycle.entry).selectinload(HiraEntry.study)
         )
     )
-    if accessible is None:
-        pass
-    elif len(accessible) == 0:
-        return []
-    else:
-        stmt = stmt.where(HiraStudy.plantId.in_(accessible))
+    stmt = _scoped(stmt, scope_clause)
     if status_filter:
         stmt = stmt.where(HiraReviewCycle.status == status_filter)
     else:
@@ -2715,8 +2747,6 @@ async def bulk_no_change(
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
 
-    accessible_plants = await get_accessible_plants(db, user.id)
-
     rows = (
         await db.execute(
             select(HiraReviewCycle)
@@ -2725,9 +2755,15 @@ async def bulk_no_change(
         )
     ).scalars().all()
 
-    # Filter to only cycles within accessible plants
-    if accessible_plants is not None:
-        rows = [r for r in rows if r.entry and r.entry.study and r.entry.study.plantId in accessible_plants]
+    # Only cycles on studies the caller may execute on (HIRA.EXECUTE scope at
+    # the study's plant / department) — not the any-module plant set.
+    allowed_rows = []
+    for r in rows:
+        if r.entry and r.entry.study and (
+            await can(db, user.id, "HIRA.EXECUTE", _study_ctx(r.entry.study, r.entry.id))
+        ).allowed:
+            allowed_rows.append(r)
+    rows = allowed_rows
 
     now = datetime.now(timezone.utc)
     notes = payload.notes or "No change required — bulk submission"
@@ -2767,7 +2803,12 @@ async def get_review_cycle(
     cycle = await db.get(HiraReviewCycle, cycle_id)
     if cycle is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cycle not found")
-    check = await can(db, user.id, "HIRA.READ", PermissionContext())
+    # Record-level check through the cycle's entry → study (plant, department,
+    # owners); a bare HIRA.READ check returned any plant's cycle.
+    entry = await db.get(HiraEntry, cycle.entryId, options=[selectinload(HiraEntry.study)])
+    if entry is None or entry.study is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cycle not found")
+    check = await can(db, user.id, "HIRA.READ", _study_ctx(entry.study, entry.id))
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
     return HiraReviewCycleOut.model_validate(cycle)
@@ -2891,7 +2932,7 @@ async def list_versions(
         db,
         user.id,
         "HIRA.READ",
-        PermissionContext(record_id=entry.id, plant_id=entry.study.plantId),
+        _study_ctx(entry.study, entry.id),
     )
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
@@ -2941,6 +2982,7 @@ async def for_flra(
     check = await can(db, user.id, "HIRA.READ", PermissionContext())
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
+    await _require_hira_plant(db, user, plant_id)
 
     stmt = (
         select(HiraEntry, HiraStudy)
@@ -2971,6 +3013,7 @@ async def for_ptw(
     check = await can(db, user.id, "HIRA.READ", PermissionContext())
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
+    await _require_hira_plant(db, user, plant_id)
 
     base = (
         select(HiraEntry, HiraStudy)
@@ -3038,6 +3081,7 @@ async def for_inspection(
     check = await can(db, user.id, "HIRA.READ", PermissionContext())
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
+    await _require_hira_plant(db, user, plant_id)
 
     stmt = (
         select(HiraEntry)
@@ -3230,15 +3274,15 @@ async def dashboard_coverage(
     check = await can(db, user.id, "HIRA.READ", PermissionContext())
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
-    accessible = await get_accessible_plants(db, user.id)
+    scope, scope_clause = await _hira_read_scope(db, user)
 
     from app.models.masters import Department
 
     total_q = select(func.count()).select_from(Department).where(Department.active.is_(True))
-    if accessible is not None:
-        if not accessible:
+    if not scope.unrestricted:
+        if not scope.plant_ids:
             return HiraDashboardCoverage(totalDepartments=0, coveredDepartments=0, coveragePct=0)
-        total_q = total_q.where(Department.plantId.in_(accessible))
+        total_q = total_q.where(Department.plantId.in_(scope.plant_ids))
 
     total = (await db.execute(total_q)).scalar_one() or 0
 
@@ -3247,8 +3291,7 @@ async def dashboard_coverage(
         .where(HiraStudy.status == "ACTIVE")
         .where(HiraStudy.departmentId.is_not(None))
     )
-    if accessible is not None:
-        covered_q = covered_q.where(HiraStudy.plantId.in_(accessible))
+    covered_q = _scoped(covered_q, scope_clause)
     covered = (await db.execute(covered_q)).scalar_one() or 0
 
     pct = int(round((covered / total) * 100)) if total > 0 else 0
@@ -3263,7 +3306,7 @@ async def dashboard_high_risk(
     check = await can(db, user.id, "HIRA.READ", PermissionContext())
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
-    accessible = await get_accessible_plants(db, user.id)
+    _scope, scope_clause = await _hira_read_scope(db, user)
 
     base = (
         select(func.count())
@@ -3272,10 +3315,7 @@ async def dashboard_high_risk(
         .where(HiraEntry.isCurrentVersion.is_(True))
         .where(HiraEntry.status.in_(["APPROVED", "ACTIVE", "FLAGGED_FOR_REVIEW", "PENDING_REAPPROVAL"]))
     )
-    if accessible is not None:
-        if not accessible:
-            return HiraDashboardHighRisk(high=0, critical=0, total=0)
-        base = base.where(HiraStudy.plantId.in_(accessible))
+    base = _scoped(base, scope_clause)
 
     high = (await db.execute(base.where(HiraEntry.residualRiskLevel == "HIGH"))).scalar_one() or 0
     critical = (await db.execute(base.where(HiraEntry.residualRiskLevel == "CRITICAL"))).scalar_one() or 0
@@ -3290,7 +3330,7 @@ async def dashboard_risk_reduction(
     check = await can(db, user.id, "HIRA.READ", PermissionContext())
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
-    accessible = await get_accessible_plants(db, user.id)
+    _scope, scope_clause = await _hira_read_scope(db, user)
 
     stmt = (
         select(HiraEntry.initialRiskScore, HiraEntry.residualRiskScore)
@@ -3298,10 +3338,7 @@ async def dashboard_risk_reduction(
         .where(HiraEntry.isCurrentVersion.is_(True))
         .where(HiraEntry.status.in_(["APPROVED", "ACTIVE", "PENDING_REAPPROVAL"]))
     )
-    if accessible is not None:
-        if not accessible:
-            return HiraDashboardRiskReduction(initialTotal=0, residualTotal=0, reductionPct=0)
-        stmt = stmt.where(HiraStudy.plantId.in_(accessible))
+    stmt = _scoped(stmt, scope_clause)
 
     rows = (await db.execute(stmt)).all()
     initial_total = sum(r[0] or 0 for r in rows)
@@ -3320,7 +3357,7 @@ async def dashboard_top_hazards(
     check = await can(db, user.id, "HIRA.READ", PermissionContext())
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
-    accessible = await get_accessible_plants(db, user.id)
+    _scope, scope_clause = await _hira_read_scope(db, user)
 
     stmt = (
         select(HiraHazard.category, func.count(HiraEntryHazard.id).label("c"))
@@ -3333,10 +3370,7 @@ async def dashboard_top_hazards(
         .order_by(func.count(HiraEntryHazard.id).desc())
         .limit(5)
     )
-    if accessible is not None:
-        if not accessible:
-            return []
-        stmt = stmt.where(HiraStudy.plantId.in_(accessible))
+    stmt = _scoped(stmt, scope_clause)
     rows = (await db.execute(stmt)).all()
     return [HiraDashboardTopHazard(category=cat, count=int(cnt)) for cat, cnt in rows]
 
@@ -3596,7 +3630,18 @@ async def study_wizard_options(
     if not (hira_ok or capa_ok):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
 
-    accessible = await get_accessible_plants(db, user.id)
+    # Plants the caller may create in for the permission(s) they hold — not
+    # the any-module plant set, which is "every plant" for anyone with an
+    # ALL_PLANTS grant on some unrelated module.
+    accessible: list[str] | None = []
+    for code, ok in (("HIRA.CREATE", hira_ok), ("CAPA.CREATE", capa_ok)):
+        if not ok:
+            continue
+        plants = await get_accessible_plants_for(db, user.id, code)
+        if plants is None:
+            accessible = None
+            break
+        accessible = sorted(set(accessible) | set(plants))
 
     plants_q = select(Plant.id, Plant.code, Plant.name)
     if accessible is not None:
@@ -3696,7 +3741,7 @@ async def entry_wizard_options(
         db,
         user.id,
         "HIRA.UPDATE",
-        PermissionContext(record_id=study.id, plant_id=study.plantId),
+        _study_ctx(study),
     )
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
@@ -3747,7 +3792,7 @@ async def dashboard_review_compliance(
     check = await can(db, user.id, "HIRA.READ", PermissionContext())
     if not check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
-    accessible = await get_accessible_plants(db, user.id)
+    _scope, scope_clause = await _hira_read_scope(db, user)
 
     now = datetime.now(timezone.utc)
     in30 = now + timedelta(days=30)
@@ -3759,10 +3804,7 @@ async def dashboard_review_compliance(
         .join(HiraEntry, HiraReviewCycle.entryId == HiraEntry.id)
         .join(HiraStudy, HiraEntry.studyId == HiraStudy.id)
     )
-    if accessible is not None:
-        if not accessible:
-            return HiraDashboardReviewCompliance(overdue=0, dueSoon30Days=0, completedLast90Days=0)
-        base = base.where(HiraStudy.plantId.in_(accessible))
+    base = _scoped(base, scope_clause)
 
     overdue = (
         await db.execute(

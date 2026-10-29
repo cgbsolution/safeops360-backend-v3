@@ -13,9 +13,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.numbering import next_number
 from app.models.erm_p2 import LegalObligation
 from app.models.factory_ext import RegulatoryRegistration
 
@@ -35,8 +36,7 @@ def _now() -> datetime:
 
 
 async def _next_code(db: AsyncSession) -> str:
-    n = (await db.execute(select(func.count()).select_from(LegalObligation))).scalar() or 0
-    return f"LO-{_now().year}-{n + 1:04d}"
+    return await next_number(db, column=LegalObligation.obligationCode, stem=f"LO-{_now().year}-")
 
 
 async def link_registrations_to_obligations(db: AsyncSession, actor_id: str | None = None) -> dict[str, Any]:

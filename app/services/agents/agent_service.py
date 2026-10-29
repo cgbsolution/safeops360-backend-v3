@@ -40,16 +40,19 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.db import AsyncSessionLocal
 from app.models.agent import Agent, AgentInvocation, AgentPrompt, AgentToolCall
 from app.models.capa import Capa
-from app.models.hira import HiraEntry, HiraStudy
-from app.models.incident import Incident
+from app.models.flra import FLRA
+from app.models.hira import HiraCapa, HiraEntry, HiraEntryHazard, HiraHazard, HiraStudy
+from app.models.incident import Incident, IncidentCapa
 from app.models.near_miss import NearMiss
 from app.models.observation import Observation
 from app.models.permit import Permit
 from app.services.agents.context_builders import CONTEXT_BUILDERS
 from app.services.agents.tools import get_tool_definitions, get_tool_handler
+from app.services.agents.tools._scope import tool_scope
 from app.services.ai.anthropic_client import (
     AnthropicApiError,
     AnthropicNotConfiguredError,
@@ -63,9 +66,15 @@ from app.services.ai.anthropic_client import (
 # affects routing. Real numbers come from billing.
 _MODEL_PRICING: dict[str, tuple[float, float]] = {
     # model_id: (input_per_million, output_per_million)
-    "claude-opus-4-7": (15.0, 75.0),
+    # Opus 4.7 is $5/$25 (the $15/$75 figure was Opus 4.1-era pricing and
+    # tripled every escalated run's recorded cost).
+    "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-5-5": (4.0, 20.0),
+    "claude-sonnet-5-5": (2.0, 10.0),
+    "claude-haiku-5-5": (0.10, 0.50),
     "claude-sonnet-4-6": (3.0, 15.0),
     "claude-haiku-4-5-20251001": (1.0, 5.0),
+    "claude-haiku-4-5": (1.0, 5.0),
 }
 _DEFAULT_PRICE = (3.0, 15.0)  # fallback when model not in table
 
@@ -84,22 +93,43 @@ _INVOKE_PERMISSIONS: dict[str, str] = {
 }
 
 
-# ─── Hallucination patterns ────────────────────────────────────────────
-# Regex patterns matching the SafeOps360 record number conventions. The
-# detector greps the agent's final output for these patterns and
-# verifies each match against the DB. Unverified matches are flagged.
-#
-# Patterns observed in seed data:
-#   INC-2025-LUM-0042   (Incident)
-#   OBS-2025-LUM-0001   (Observation)
-#   NM-2025-LUM-0007    (Near Miss)
-#   PTW-LUM-0042        (Permit)
-_RECORD_ID_PATTERNS: list[tuple[str, str, type[Any]]] = [
-    (r"\bINC-\d{4}-[A-Z]{2,5}-\d{3,6}\b", "Incident", Incident),
-    (r"\bOBS-\d{4}-[A-Z]{2,5}-\d{3,6}\b", "Observation", Observation),
-    (r"\bNM-\d{4}-[A-Z]{2,5}-\d{3,6}\b", "NearMiss", NearMiss),
-    (r"\bPTW-[A-Z]{2,5}-\d{3,6}\b", "Permit", Permit),
-]
+# ─── Hallucination check ───────────────────────────────────────────────
+# Record numbers come in many shapes (INC-2026-NW-0045, INC-PFI-002,
+# INC-SW-HIST-02-01, PTW-AXM-2026-0841, FACROLL-PTW-AMD-01, SO-2026-NW-0231,
+# CAPA-MAG-MAG-TIR1-01, ...), so fixed per-format regexes both missed real
+# references and matched fragments of them ("PTW-AXM-2026" out of
+# PTW-AXM-2026-0841). Instead, take every whole hyphenated token, classify it
+# by its record prefix (first segment, or second for site-prefixed numbers),
+# and look the exact token up in every column that holds that kind of number.
+_RECORD_TOKEN = re.compile(r"(?<![A-Za-z0-9-])([A-Z][A-Z0-9]*(?:-[A-Z0-9]+){1,6})(?![A-Za-z0-9-])")
+
+# prefix -> (label, [(model, column name), ...])
+_RECORD_PREFIXES: dict[str, tuple[str, list[tuple[type[Any], str]]]] = {
+    "INC": ("Incident", [(Incident, "number")]),
+    "PTW": ("Permit", [(Permit, "number")]),
+    "NM": ("NearMiss", [(NearMiss, "number")]),
+    "OBS": ("Observation", [(Observation, "number")]),
+    "SO": ("Observation", [(Observation, "number")]),
+    "CAPA": (
+        "CAPA",
+        [(Capa, "capaNumber"), (Capa, "aliasNumber"), (IncidentCapa, "capaNumber"), (HiraCapa, "number")],
+    ),
+    "HIRA": ("HIRA study", [(HiraStudy, "number")]),
+    "FLRA": ("FLRA", [(FLRA, "number")]),
+}
+
+
+def _classify_record_token(token: str) -> str | None:
+    """Return the record prefix a token refers to, or None if it isn't a
+    record number (e.g. ISO-45001, XCORR-019, AINV-2026-000001)."""
+    if not any(ch.isdigit() for ch in token):
+        return None
+    parts = token.split("-")
+    if parts[0] in _RECORD_PREFIXES:
+        return parts[0]
+    if len(parts) > 2 and parts[1] in _RECORD_PREFIXES:
+        return parts[1]
+    return None
 
 
 @dataclass
@@ -178,6 +208,10 @@ async def start_invocation(
         status="RUNNING",
     )
     db.add(invocation)
+    # Count every run here, not only the ones that reach PENDING_REVIEW, so
+    # the metric matches the AgentInvocation rows (errored runs included).
+    agent.totalInvocations = (agent.totalInvocations or 0) + 1
+    prompt.invocationCount = (prompt.invocationCount or 0) + 1
     await db.flush()
     await db.refresh(invocation)
     await db.commit()
@@ -252,14 +286,19 @@ async def run_invocation(
             await tool_db.rollback()
             raise
 
+    settings = get_settings()
     try:
-        loop_result: ToolLoopResult = await complete_with_tools(
-            system=prompt.systemPrompt,
-            initial_user_message=json.dumps(context, default=str, indent=2),
-            tools=tool_definitions,
-            dispatch_tool=dispatch_tool,
-            model=invocation.modelUsed,
-        )
+        # Tools read only what the invoking user may read (see tools/_scope.py).
+        with tool_scope(invocation.invokedById):
+            loop_result: ToolLoopResult = await complete_with_tools(
+                system=prompt.systemPrompt,
+                initial_user_message=json.dumps(context, default=str, indent=2),
+                tools=tool_definitions,
+                dispatch_tool=dispatch_tool,
+                model=invocation.modelUsed,
+                max_tokens=settings.agent_max_tokens_per_turn,
+                max_iterations=settings.agent_max_tool_iterations,
+            )
     except AnthropicNotConfiguredError as e:
         await _mark_errored(db, invocation, "INTERNAL", str(e))
         return _result_from(invocation)
@@ -295,7 +334,7 @@ async def run_invocation(
         # Parse the final response into reasoning / suggestion / confidence
         parsed = _parse_final_response(loop_result.final_text)
         invocation.agentReasoning = parsed["reasoning"]
-        invocation.agentSuggestion = parsed["suggestion"]
+        invocation.agentSuggestion = await _label_hira_hazards(db, agent.code, parsed["suggestion"])
         invocation.agentConfidence = parsed["confidence"]
         invocation.rawApiResponse = loop_result.raw_last_response
 
@@ -324,13 +363,17 @@ async def run_invocation(
         if loop_result.hit_iteration_cap:
             invocation.errorType = "ITERATION_CAP"
             invocation.errorDetails = "Agent loop hit max_iterations without end_turn"
+        elif loop_result.stop_reason == "max_tokens":
+            invocation.errorType = "TRUNCATED"
+            invocation.errorDetails = (
+                "The answer hit the per-turn output limit and was cut off; "
+                "raise AGENT_MAX_TOKENS_PER_TURN or re-run."
+            )
+        elif loop_result.stop_reason == "refusal":
+            invocation.errorType = "REFUSAL"
+            invocation.errorDetails = "The model declined to answer this request."
 
         invocation.status = "PENDING_REVIEW"
-        await db.flush()
-
-        # Rolling metric: total invocations only (decision-dependent counters
-        # update in record_human_decision()).
-        agent.totalInvocations += 1
         await db.commit()
     except Exception as e:  # noqa: BLE001
         await _mark_errored(
@@ -697,6 +740,59 @@ def _parse_final_response(text: str) -> dict[str, Any]:
     return out
 
 
+async def _label_hira_hazards(
+    db: AsyncSession, agent_code: str, suggestion: Any
+) -> Any:
+    """HIRA suggestions name hazards by id only, which the review card would
+    show as raw cuids. Put the library name and category beside each id, and
+    keep one entry per hazard — the model sometimes repeats one and marks the
+    copy "disregard". An id found in neither table is labelled as such."""
+    if agent_code != "HIRA_ASSISTANT" or not isinstance(suggestion, dict):
+        return suggestion
+    hazards = suggestion.get("suggested_hazards")
+    controls = suggestion.get("control_suggestions")
+    hazards = [h for h in hazards if isinstance(h, dict)] if isinstance(hazards, list) else None
+    controls = [c for c in controls if isinstance(c, dict)] if isinstance(controls, list) else None
+    if not hazards and not controls:
+        return suggestion
+
+    ids = {h.get("hazard_master_id") for h in hazards or []}
+    ids |= {c.get("hazard_id") for c in controls or []}
+    ids = {i for i in ids if isinstance(i, str) and i}
+    labels: dict[str, tuple[str, str]] = {}
+    if ids:
+        rows = await db.execute(
+            select(HiraHazard.id, HiraHazard.name, HiraHazard.category).where(HiraHazard.id.in_(ids))
+        )
+        labels = {r.id: (r.name, r.category) for r in rows}
+        # Controls may point at a team-added entry hazard instead of the library row.
+        rest = ids - labels.keys()
+        if rest:
+            rows = await db.execute(
+                select(HiraEntryHazard.id, HiraHazard.name, HiraHazard.category)
+                .join(HiraHazard, HiraHazard.id == HiraEntryHazard.hazardId)
+                .where(HiraEntryHazard.id.in_(rest))
+            )
+            labels.update({r.id: (r.name, r.category) for r in rows})
+
+    def labelled(item: dict[str, Any], id_key: str) -> dict[str, Any]:
+        name, category = labels.get(item.get(id_key), ("Not found in the hazard library", None))
+        return {"hazard": name, "hazard_category": category, **item}
+
+    out = dict(suggestion)
+    if hazards is not None:
+        best: dict[Any, dict[str, Any]] = {}
+        for h in hazards:
+            key = h.get("hazard_master_id") or id(h)  # only real ids are merged
+            kept = best.get(key)
+            if kept is None or (h.get("relevance_confidence") or 0) > (kept.get("relevance_confidence") or 0):
+                best[key] = h
+        out["suggested_hazards"] = [labelled(h, "hazard_master_id") for h in best.values()]
+    if controls is not None:
+        out["control_suggestions"] = [labelled(c, "hazard_id") for c in controls]
+    return out
+
+
 async def _detect_hallucinations(
     db: AsyncSession, text: str
 ) -> list[dict[str, Any]] | None:
@@ -710,20 +806,29 @@ async def _detect_hallucinations(
     catch it explicitly.
     """
     findings: list[dict[str, Any]] = []
-    for pattern, type_label, model in _RECORD_ID_PATTERNS:
-        for match in re.finditer(pattern, text):
-            value = match.group(0)
-            stmt = select(model.id).where(getattr(model, "number") == value).limit(1)
-            existing = (await db.execute(stmt)).scalar_one_or_none()
-            if existing is None:
-                findings.append(
-                    {
-                        "type": "INVENTED_RECORD_ID",
-                        "recordType": type_label,
-                        "value": value,
-                        "context": "Pattern matched but no row with this number exists",
-                    }
-                )
+    seen: set[str] = set()
+    for match in _RECORD_TOKEN.finditer(text or ""):
+        value = match.group(1)
+        prefix = _classify_record_token(value)
+        if prefix is None or value in seen:
+            continue
+        seen.add(value)
+        type_label, columns = _RECORD_PREFIXES[prefix]
+        exists = False
+        for model, column in columns:
+            stmt = select(model.id).where(getattr(model, column) == value).limit(1)
+            if (await db.execute(stmt)).scalar_one_or_none() is not None:
+                exists = True
+                break
+        if not exists:
+            findings.append(
+                {
+                    "type": "INVENTED_RECORD_ID",
+                    "recordType": type_label,
+                    "value": value,
+                    "context": "Looks like a record number but no row with this number exists",
+                }
+            )
     return findings or None
 
 

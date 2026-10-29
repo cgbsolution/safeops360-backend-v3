@@ -7,7 +7,7 @@ returns the most recent snapshot per identity for the lifecycle comparison.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -20,10 +20,22 @@ from app.services.insights.weekly.lifecycle import LiveInsight
 _RETENTION_WEEKS = 26  # keep ≥26 weeks (spec §2)
 
 
+def _utc(dt: datetime | None) -> datetime | None:
+    """InsightSnapshot's columns are timestamptz. The engine works in naive UTC
+    (domain tables are naive), and asyncpg encodes a NAIVE value for a
+    timestamptz parameter as host-local time — so on a non-UTC host every week
+    lookup missed (0 rows instead of 19), the read path recomputed on each GET,
+    and the upsert keyed the week hours off. Mark naive values as UTC here."""
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
 async def load_prior_by_key(
     db: AsyncSession, *, tenant: str, module: str, week_of: datetime
 ) -> dict[str, InsightSnapshot]:
     """Most recent snapshot per identityKey strictly before this week (§6)."""
+    week_of = _utc(week_of)
     horizon = week_of - timedelta(weeks=_RETENTION_WEEKS)
     rows = (
         await db.execute(
@@ -47,6 +59,8 @@ async def upsert_week(
     db: AsyncSession, *, tenant: str, module: str, week_of: datetime, computed_at: datetime, lives: list[LiveInsight]
 ) -> int:
     written = 0
+    week_of = _utc(week_of)
+    computed_at = _utc(computed_at)
     for li in lives:
         c = li.candidate
         values = {
@@ -61,8 +75,8 @@ async def upsert_week(
             "lifecycleState": li.state,
             "consecutiveWeeksSurfaced": li.consecutiveWeeksSurfaced,
             "consecutiveEscalations": li.consecutiveEscalations,
-            "firstSeenWeek": li.firstSeenWeek or week_of,
-            "lastHeroWeek": (week_of if li.wasHero else li.lastHeroWeek),
+            "firstSeenWeek": _utc(li.firstSeenWeek) or week_of,
+            "lastHeroWeek": (week_of if li.wasHero else _utc(li.lastHeroWeek)),
             "payload": c.payload(),
             "recordIds": c.recordIds,
             "wasHero": li.wasHero,
@@ -97,6 +111,7 @@ async def load_current_view_rows(
     db: AsyncSession, *, tenant: str, module: str, week_of: datetime
 ) -> list[InsightSnapshot]:
     """This week's snapshots (hero + row), for the read endpoint."""
+    week_of = _utc(week_of)
     return (
         await db.execute(
             select(InsightSnapshot)

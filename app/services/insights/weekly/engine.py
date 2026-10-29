@@ -116,7 +116,12 @@ async def get_current_week_view(
     rows = await repo.load_current_view_rows(db, tenant=tenant, module=module, week_of=week)
     if not rows:
         # Never computed this week — run once so a fresh demo isn't blank.
-        await compute_weekly(db, module=module, plant=plant, tenant=tenant, week_of=week)
+        # Snapshots carry no plant column and are shared by every reader for
+        # the week, so this always computes the platform-wide set, exactly as
+        # the scheduled job does. Passing the caller's `plant` here used to
+        # persist one plant's view as everyone's week. Plant-scoped readers are
+        # served by compute_weekly_view() instead.
+        await compute_weekly(db, module=module, plant=None, tenant=tenant, week_of=week)
         await db.commit()
         rows = await repo.load_current_view_rows(db, tenant=tenant, module=module, week_of=week)
 
@@ -139,8 +144,77 @@ async def get_current_week_view(
     return {
         "module": module,
         "weekOf": week.isoformat(),
+        "scope": "all",
         "hero": _snap_view(hero_row) if hero_row else None,
         "row": [_snap_view(r) for r in row_cards[:3]],
         "moreCount": max(0, len(surplus) + max(0, len(row_cards) - 3)),
+        "empty": empty,
+    }
+
+
+def _live_view(li: LiveInsight) -> dict:
+    payload = li.candidate.payload() if callable(getattr(li.candidate, "payload", None)) else {}
+    payload = payload if isinstance(payload, dict) else {}
+    return {
+        "identityKey": li.key,
+        "type": li.candidate.type,
+        "lifecycleState": li.state,
+        "score": round(float(li.score or 0.0), 1),
+        "weeksRunning": int(li.consecutiveWeeksSurfaced or 1),
+        "display": payload.get("display") or {},
+        "rail": payload.get("rail") or {},
+    }
+
+
+async def compute_weekly_view(
+    db: AsyncSession,
+    *,
+    module: str = "safety_observation",
+    plants: list[str],
+    cfg: ScoreConfig | None = None,
+) -> dict:
+    """This week's view over exactly `plants`, computed in memory — nothing is
+    persisted. The stored snapshots are platform-wide (no plant dimension), so a
+    plant-scoped reader can't be served from them without seeing other plants.
+    Without per-plant history every insight reads as "new" (no velocity or
+    streaks); the scores, hero and row are otherwise the same pipeline."""
+    cfg = cfg or ScoreConfig()
+    now = _now_naive()
+    week = week_of_monday(now)
+    ctx = await load_context(db, module=module, plant=None, now=now, week_of=week, plants=plants)
+    candidates = run_generators(ctx, cfg)
+
+    lives: list[LiveInsight] = []
+    for c in candidates:
+        c.scoreComponents = {
+            **c.scoreComponents,
+            "velocity": scoring.velocity(c.magnitude, None),
+            "magnitude": c.magnitude,
+        }
+        lives.append(LiveInsight(candidate=c, score=scoring.finalize(cfg, c.scoreComponents)))
+    lifecycle.evaluate(lives, {}, week, floor=cfg.floor)
+    lives.extend(lifecycle.promote_meta(lives, week))
+
+    hero = lifecycle.pick_hero(lives, floor=cfg.floor)
+    if hero is not None:
+        hero.wasHero = True
+    row = lifecycle.assign_row(lives, hero, week)
+
+    in_row = {id(li) for li in row}
+    surplus = [li for li in lives if li is not hero and id(li) not in in_row]
+    empty = None
+    if hero is None:
+        empty = {
+            "topScore": round(max((li.score for li in lives), default=0.0), 1),
+            "floor": SURFACING_FLOOR,
+            "clustersWatched": len(lives),
+        }
+    return {
+        "module": module,
+        "weekOf": week.isoformat(),
+        "scope": "plants",
+        "hero": _live_view(hero) if hero else None,
+        "row": [_live_view(li) for li in row[:3]],
+        "moreCount": max(0, len(surplus) + max(0, len(row) - 3)),
         "empty": empty,
     }

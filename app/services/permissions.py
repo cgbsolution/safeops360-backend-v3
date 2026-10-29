@@ -71,6 +71,7 @@ _TTL_SECONDS = 300.0
 def invalidate_user_permissions(user_id: str | None = None) -> None:
     if user_id is None:
         _CACHE.clear()
+        _DEPT_CACHE.clear()
     else:
         _CACHE.pop(user_id, None)
 
@@ -179,6 +180,50 @@ _OWNER_FIELDS = (
 )
 
 
+# Department.id → (name, plantId). Departments are a small, rarely edited
+# master; caching them keeps the OWN_DEPARTMENT check off the DB hot path.
+_DEPT_CACHE: dict[str, tuple[str, str] | None] = {}
+
+
+async def _department_info(db: AsyncSession, department_id: str) -> tuple[str, str] | None:
+    if department_id not in _DEPT_CACHE:
+        from app.models.masters import Department
+
+        row = (
+            await db.execute(select(Department.name, Department.plantId).where(Department.id == department_id))
+        ).first()
+        _DEPT_CACHE[department_id] = (row[0], row[1]) if row else None
+    return _DEPT_CACHE[department_id]
+
+
+async def _department_matches(
+    db: AsyncSession,
+    profile: Any,
+    department_id: str | None,
+    department_name: str | None,
+    plant_id: str | None,
+) -> bool:
+    """Does a record's department (id and/or name) belong to the user's own
+    department at one of the user's plants?"""
+    mine = (profile.department or "").strip().lower()
+    if not mine:
+        return False
+    plants = profile.plantIds or set()
+    if plant_id and plant_id not in plants:
+        return False
+    if department_name and department_name.strip().lower() == mine:
+        return True
+    if not department_id:
+        return False
+    if department_id.strip().lower() == mine:  # legacy rows storing the name
+        return True
+    info = await _department_info(db, department_id)
+    if info is None:
+        return False
+    name, dept_plant = info
+    return name.strip().lower() == mine and dept_plant in plants
+
+
 def _matches_own_records(user_id: str, record: dict[str, Any]) -> bool:
     if any(record.get(field) == user_id for field in _OWNER_FIELDS):
         return True
@@ -209,6 +254,15 @@ async def can(
     if profile is None:
         return CanResult(allowed=False, reason="User profile lookup failed")
 
+    # A plant named in the context must be one of the user's plants for the
+    # narrower scopes too. Without this an OWN_DEPARTMENT / OWN_RECORDS grant
+    # passed any plant-only check (create, plant-filtered list), so e.g. an
+    # EAI reader at one plant could open every plant's register.
+    plant_ok = not ctx.plant_id or bool(profile.plantIds and ctx.plant_id in profile.plantIds)
+    record = ctx.record or {}
+    record_dept_id = ctx.department_id or record.get("departmentId")
+    record_dept_name = record.get("departmentName")
+
     for m in matches:
         if m.scope == "OWN_PLANT":
             if ctx.plant_id and profile.plantIds and ctx.plant_id in profile.plantIds:
@@ -217,15 +271,23 @@ async def can(
                 return CanResult(allowed=True, matched_scope="OWN_PLANT")
 
         if m.scope == "OWN_DEPARTMENT":
-            if ctx.department_id and profile.department and ctx.department_id == profile.department:
+            # The user's own records are inside their department scope.
+            if ctx.record and _matches_own_records(user_id, ctx.record):
                 return CanResult(allowed=True, matched_scope="OWN_DEPARTMENT")
-            if not ctx.department_id and not ctx.record_id:
+            # Records carry a Department.id (per plant); the user carries a
+            # department name. Comparing the two directly never matched, so a
+            # department head was refused every record of their own department.
+            if (record_dept_id or record_dept_name) and profile.department and await _department_matches(
+                db, profile, record_dept_id, record_dept_name, ctx.plant_id
+            ):
+                return CanResult(allowed=True, matched_scope="OWN_DEPARTMENT")
+            if not record_dept_id and not record_dept_name and not ctx.record_id and plant_ok:
                 return CanResult(allowed=True, matched_scope="OWN_DEPARTMENT")
 
         if m.scope == "OWN_RECORDS":
             if ctx.record and _matches_own_records(user_id, ctx.record):
                 return CanResult(allowed=True, matched_scope="OWN_RECORDS")
-            if not ctx.record_id:
+            if not ctx.record_id and plant_ok:
                 return CanResult(allowed=True, matched_scope="OWN_RECORDS")
 
     return CanResult(

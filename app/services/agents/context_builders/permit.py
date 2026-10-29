@@ -114,8 +114,6 @@ async def build_context(db: AsyncSession, permit_id: str) -> dict[str, Any]:
             "areaName": area.name if area else None,
             "location": permit.location,
             "specificLocation": permit.specificLocation,
-            "gpsLatitude": permit.gpsLatitude,
-            "gpsLongitude": permit.gpsLongitude,
         },
         "validity": {
             "validFrom": _iso(permit.validFrom),
@@ -124,7 +122,7 @@ async def build_context(db: AsyncSession, permit_id: str) -> dict[str, Any]:
         },
         "originator": {
             "userId": originator.id if originator else None,
-            "name": originator.name if originator else None,
+            # Names stay on the platform; role/department carry the signal.
             "role": originator.role if originator else None,
             "department": originator.department if originator else None,
         },
@@ -223,7 +221,6 @@ def _crew_member_payload(
 ) -> dict[str, Any]:
     return {
         "userId": crew.userId,
-        "name": user.name if user else None,
         "role": crew.role,
         "userDesignation": user.designation if user else None,
         "userDepartment": user.department if user else None,

@@ -20,7 +20,6 @@ from app.core.deps import get_current_user
 from app.models.epc import ContractorCompany, ContractorWorker
 from app.models.user import User
 from app.services.permissions import PermissionContext, can
-from app.services.tenant_partition import get_scoped, partition_for
 
 router = APIRouter(prefix="/api/epc/contractors", tags=["epc-contractors"])
 
@@ -120,17 +119,15 @@ def _company_dict(company: ContractorCompany, worker_count: int = 0) -> dict:
 
 
 async def _generate_company_code(db: AsyncSession) -> str:
-    # Counted globally on purpose — code is unique across partitions.
     count_result = await db.execute(select(func.count(ContractorCompany.id)))
     count = (count_result.scalar_one() or 0) + 1
     return f"CC-{count:04d}"
 
 
-async def _get_worker_count(db: AsyncSession, company_id: str, part: str) -> int:
+async def _get_worker_count(db: AsyncSession, company_id: str) -> int:
     result = await db.execute(
         select(func.count(ContractorWorker.id)).where(
-            ContractorWorker.tenantId == part,
-            ContractorWorker.contractorCompanyId == company_id,
+            ContractorWorker.contractorCompanyId == company_id
         )
     )
     return result.scalar_one() or 0
@@ -146,13 +143,11 @@ async def performance_summary(
 ) -> dict:
     """Aggregate performance across all contractor companies (top 10 and bottom 10 by score)."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
 
     companies = (
         await db.execute(
             select(ContractorCompany).where(
-                ContractorCompany.tenantId == part,
-                ContractorCompany.prequalificationScore.isnot(None),
+                ContractorCompany.prequalificationScore.isnot(None)
             )
         )
     ).scalars().all()
@@ -182,8 +177,7 @@ async def performance_summary(
 
     unscored_count_result = await db.execute(
         select(func.count(ContractorCompany.id)).where(
-            ContractorCompany.tenantId == part,
-            ContractorCompany.prequalificationScore.is_(None),
+            ContractorCompany.prequalificationScore.is_(None)
         )
     )
     unscored = unscored_count_result.scalar_one() or 0
@@ -205,8 +199,7 @@ async def list_contractors(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    stmt = select(ContractorCompany).where(ContractorCompany.tenantId == part)
+    stmt = select(ContractorCompany)
     if prequalificationStatus:
         stmt = stmt.where(ContractorCompany.prequalificationStatus == prequalificationStatus)
     if search:
@@ -224,7 +217,7 @@ async def list_contractors(
 
     out: list[dict] = []
     for company in companies:
-        wc = await _get_worker_count(db, company.id, part)
+        wc = await _get_worker_count(db, company.id)
         out.append(_company_dict(company, wc))
     return {"count": len(out), "contractors": out}
 
@@ -236,13 +229,11 @@ async def create_contractor(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.CREATE")
-    part = await partition_for(db, user)
 
     company_code = body.code
     if not company_code:
         company_code = await _generate_company_code(db)
 
-    # Global check — the code column is unique across partitions.
     existing = (
         await db.execute(
             select(ContractorCompany).where(ContractorCompany.code == company_code)
@@ -254,7 +245,6 @@ async def create_contractor(
         )
 
     company = ContractorCompany(
-        tenantId=part,
         code=company_code,
         name=body.name,
         tradeName=body.tradeName,
@@ -283,11 +273,10 @@ async def get_contractor(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    company = await get_scoped(db, ContractorCompany, company_id, part)
+    company = await db.get(ContractorCompany, company_id)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
-    wc = await _get_worker_count(db, company_id, part)
+    wc = await _get_worker_count(db, company_id)
     return _company_dict(company, wc)
 
 
@@ -299,8 +288,7 @@ async def update_contractor(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.UPDATE")
-    part = await partition_for(db, user)
-    company = await get_scoped(db, ContractorCompany, company_id, part)
+    company = await db.get(ContractorCompany, company_id)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
 
@@ -310,7 +298,7 @@ async def update_contractor(
 
     await db.commit()
     await db.refresh(company)
-    wc = await _get_worker_count(db, company_id, part)
+    wc = await _get_worker_count(db, company_id)
     return _company_dict(company, wc)
 
 
@@ -322,8 +310,7 @@ async def prequalify_contractor(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.UPDATE")
-    part = await partition_for(db, user)
-    company = await get_scoped(db, ContractorCompany, company_id, part)
+    company = await db.get(ContractorCompany, company_id)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
 
@@ -342,7 +329,7 @@ async def prequalify_contractor(
 
     await db.commit()
     await db.refresh(company)
-    wc = await _get_worker_count(db, company_id, part)
+    wc = await _get_worker_count(db, company_id)
     return _company_dict(company, wc)
 
 
@@ -355,14 +342,12 @@ async def list_company_workers(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    company = await get_scoped(db, ContractorCompany, company_id, part)
+    company = await db.get(ContractorCompany, company_id)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
 
     stmt = select(ContractorWorker).where(
-        ContractorWorker.tenantId == part,
-        ContractorWorker.contractorCompanyId == company_id,
+        ContractorWorker.contractorCompanyId == company_id
     )
     if overallStatus:
         stmt = stmt.where(ContractorWorker.overallStatus == overallStatus)

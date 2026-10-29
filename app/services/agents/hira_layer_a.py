@@ -31,11 +31,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.hira import HiraEntry, HiraStudy
-from app.models.incident import Incident
+from app.models.incident import Incident, IncidentType
 
 
 # ─── Trigger vocabularies ────────────────────────────────────────────
@@ -263,7 +263,14 @@ async def evaluate_layer_a(
                     select(Incident.id, Incident.severity, Incident.date)
                     .where(Incident.plantId == plant_id)
                     .where(Incident.areaId == area_id)
-                    .where(Incident.severity.in_(["HIGH", "CRITICAL"]))
+                    # Severity is often left blank (33 of 34 LTIs on the live
+                    # data), so a serious incident TYPE counts too.
+                    .where(
+                        or_(
+                            Incident.severity.in_(["HIGH", "CRITICAL"]),
+                            Incident.type.in_([IncidentType.LTI, IncidentType.FATALITY]),
+                        )
+                    )
                     .where(Incident.date >= cutoff)
                     .limit(10)
                 )
@@ -274,7 +281,7 @@ async def evaluate_layer_a(
             result.findings.append(
                 LayerAFinding(
                     rule_code="HA-06",
-                    rule_summary=f"{len(rows)} HIGH/CRITICAL incidents in this area in last 12 months",
+                    rule_summary=f"{len(rows)} serious (HIGH/CRITICAL or LTI/fatality) incidents in this area in last 12 months",
                     mandatory_control_themes=["site-history review with incident learnings"],
                     reviewer_note="Repeat-incident area — controls that previously failed must be inspected before this activity.",
                 )

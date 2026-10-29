@@ -23,10 +23,7 @@ is no export-only query.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from collections.abc import Mapping
 from typing import Any
-
-from app.services.display_labels import label
 
 from app.services.report_pdf import (
     GOLD,
@@ -79,14 +76,10 @@ def _delta(cur: Any, prev: Any, unit: str, good: str) -> tuple[str, tuple[int, i
     return (txt, NAVY_MID if improving else RED)
 
 
-def render_scorecard_pdf(payload: dict[str, Any], labels: Mapping[str, str] | None = None) -> bytes:
-    """Render the scorecard deck. Same data, same filters, as the screen.
-
-    `labels` are the display-label overrides for the plants in scope; every
-    lookup falls through to the literal this renderer always used.
-    """
+def render_scorecard_pdf(payload: dict[str, Any]) -> bytes:
+    """Render the scorecard deck. Same data, same filters, as the screen."""
     grain_label = "Monthly" if payload.get("grain") == "month" else "Quarterly"
-    site_label = payload.get("siteName") or label(labels, "term.all_sites", "All sites")
+    site_label = payload.get("siteName") or "All sites"
     periods = payload.get("periods") or []
     current_label = periods[-1] if periods else "—"
 
@@ -126,7 +119,7 @@ def render_scorecard_pdf(payload: dict[str, Any], labels: Mapping[str, str] | No
     pdf.multi_cell(
         0, 5,
         f"Generated {_dt(payload.get('generatedAt'))}. Computed from frozen monthly rollups "
-        f"({cov.get('plantMonths', 0)} {label(labels, 'scorecard.plant_months', 'plant-months')}, {cov.get('firstPeriod') or '—'} to "
+        f"({cov.get('plantMonths', 0)} plant-months, {cov.get('firstPeriod') or '—'} to "
         f"{cov.get('lastPeriod') or '—'}). Frequency rates are read from the Manhours module's "
         f"own submitted figures, not recomputed.",
     )
@@ -191,11 +184,11 @@ def render_scorecard_pdf(payload: dict[str, Any], labels: Mapping[str, str] | No
     # ── Per-site breakdown ──────────────────────────────────────────────────
     by_site = payload.get("bySite") or []
     if len(by_site) > 1:
-        _h(pdf, f"{label(labels, 'scorecard.by_site', 'By site')} — {current_label}")
+        _h(pdf, f"By site — {current_label}")
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(*ICE)
         pdf.set_text_color(*NAVY)
-        for w, t, a in ((76, label(labels, "term.site", "Site"), "L"), (24, "Obs", "R"), (24, "Near miss", "R"),
+        for w, t, a in ((76, "Site", "L"), (24, "Obs", "R"), (24, "Near miss", "R"),
                         (24, "Incidents", "R"), (22, "LTI", "R"), (20, "LTIFR", "R")):
             pdf.cell(w, 6, t, border=0, fill=True, align=a)
         pdf.ln(6)

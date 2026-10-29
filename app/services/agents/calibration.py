@@ -54,6 +54,11 @@ from app.models.agent import Agent, AgentInvocation, AgentPrompt
 # human, so it's outside the decided pool.
 _DECIDED_STATUSES = ("ACCEPTED", "MODIFIED", "REJECTED", "EXPIRED")
 
+# Runs that completed (so their latency/cost are real) — the decided ones
+# plus PENDING_REVIEW. Averaging over decided runs only left latency/cost
+# blank for every agent whose drafts nobody had ruled on yet.
+_COMPLETED_STATUSES = ("PENDING_REVIEW", *_DECIDED_STATUSES)
+
 
 @dataclass
 class AgentCalibrationResult:
@@ -91,7 +96,7 @@ async def run_calibration(db: AsyncSession) -> list[AgentCalibrationResult]:
         # and cost across non-RUNNING / non-ERRORED rows. One query
         # per agent — Postgres counts via case-when expressions in a
         # single scan.
-        decided_filter = AgentInvocation.status.in_(_DECIDED_STATUSES)
+        completed_filter = AgentInvocation.status.in_(_COMPLETED_STATUSES)
         agg_stmt = (
             select(
                 func.count(AgentInvocation.id).label("total"),
@@ -109,13 +114,13 @@ async def run_calibration(db: AsyncSession) -> list[AgentCalibrationResult]:
                 ).label("exp"),
                 func.avg(
                     case(
-                        (decided_filter, AgentInvocation.latencyMs),
+                        (completed_filter, AgentInvocation.latencyMs),
                         else_=None,
                     )
                 ).label("avg_latency"),
                 func.avg(
                     case(
-                        (decided_filter, AgentInvocation.totalCostUsd),
+                        (completed_filter, AgentInvocation.totalCostUsd),
                         else_=None,
                     )
                 ).label("avg_cost"),

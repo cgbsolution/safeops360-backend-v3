@@ -66,7 +66,6 @@ from app.schemas.permit import (
 )
 from app.services import workflow_engine
 from app.services.permissions import PermissionContext, can, get_user_role_codes
-from app.services.tenant_roles import with_stock_equivalents
 from app.services.ptw_closure_gate import (
     closure_gate,
     unexecuted_withdrawal_blocker,
@@ -296,27 +295,10 @@ async def declare_work_completed(
     """Receiver declares work done: structured outcome + restoration
     confirmations + narrative + evidence. Replaces the legacy Return step
     (returnedAt/returnedById stay stamped in lockstep for old read-sites)."""
-    # The named receiver declares with their receiver grant (PTW.EXECUTE), the
-    # same rule as /accept — a worker or contractor-coordinator receiver holds
-    # EXECUTE but not UPDATE, and was refused with a 403 at the last step of
-    # the work they had just done. Everyone else still needs PTW.UPDATE.
-    _pre = await db.get(Permit, permit_id)
-    if _pre is not None and _pre.receiverId == user.id:
-        _ctx = PermissionContext(
-            record_id=_pre.id,
-            plant_id=_pre.plantId,
-            record={"originatorId": _pre.originatorId, "issuerId": _pre.issuerId, "receiverId": _pre.receiverId},
-        )
-        if not (await can(db, user.id, "PTW.UPDATE", _ctx)).allowed:
-            exe = await can(db, user.id, "PTW.EXECUTE", _ctx)
-            if not exe.allowed:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, exe.reason or "Access denied")
-        permit = _pre
-    else:
-        permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
+    permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
 
     if permit.receiverId is not None and permit.receiverId != user.id:
-        role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
+        role_codes = await get_user_role_codes(db, user.id)
         if not any(r in _PRIV_ROLES for r in role_codes):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -442,7 +424,7 @@ async def withdraw_unexecuted_permit(
 
     # Same population that may pull a pre-active permit through /cancel, plus
     # the named receiver — they are the party who did not start the work.
-    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
+    role_codes = await get_user_role_codes(db, user.id)
     is_priv = any(r in _HANDBACK_ROLES for r in role_codes)
     if not (
         is_priv
@@ -570,7 +552,7 @@ async def handback_inspection(
     Work Completed declaration and records the inspection checklist +
     photos + GPS + signature. Closure approval cannot proceed without it."""
     permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
-    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
+    role_codes = await get_user_role_codes(db, user.id)
     if not any(r in _HANDBACK_ROLES for r in role_codes):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -651,7 +633,7 @@ async def cancel_permit(
             f"A {permit.status.value} permit cannot be cancelled.",
         )
 
-    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
+    role_codes = await get_user_role_codes(db, user.id)
     is_priv = any(r in _PRIV_ROLES for r in role_codes)
     if mid_flow and not is_priv:
         raise HTTPException(
@@ -759,7 +741,7 @@ async def verify_isolation(
     NOTHING wrote isolationVerifiedAt, so permits with isolations could
     never activate through the API)."""
     permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
-    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
+    role_codes = await get_user_role_codes(db, user.id)
     if user.id != permit.receiverId and not any(
         r in _HANDBACK_ROLES for r in role_codes
     ):
@@ -900,14 +882,7 @@ async def upload_attachment(
     upd = await can(db, user.id, "PTW.UPDATE", _ctx)
     if not upd.allowed:
         appr = await can(db, user.id, "PTW.APPROVE", _ctx)
-        # The named receiver must attach the onsite photo for Accept and Work
-        # Completed; a worker / contractor-coordinator receiver holds only
-        # PTW.EXECUTE, so without this the mandatory photo could never upload.
-        rcv = (
-            permit.receiverId == user.id
-            and (await can(db, user.id, "PTW.EXECUTE", _ctx)).allowed
-        )
-        if not appr.allowed and not rcv:
+        if not appr.allowed:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, upd.reason or "Access denied"
             )

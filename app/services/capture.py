@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.numbering import next_number
 from app.core.config import get_settings
 from app.models.capture import CaptureAttachment, CaptureSubmission, CaptureTaxonomy, TaxonomyAlias
 
@@ -42,12 +43,7 @@ def is_owner(sub: CaptureSubmission, user_id: str) -> bool:
 # ── Numbering ─────────────────────────────────────────────────────────────────
 async def next_fld_number(db: AsyncSession, plant_code: str, plant_id: str) -> str:
     year = datetime.now(timezone.utc).year
-    count = (
-        await db.execute(
-            select(func.count()).select_from(CaptureSubmission).where(CaptureSubmission.plantId == plant_id)
-        )
-    ).scalar_one()
-    return f"FLD-{year}-{plant_code}-{count + 1:04d}"
+    return await next_number(db, column=CaptureSubmission.number, stem=f"FLD-{year}-{plant_code}-")
 
 
 # ── Triage: 5x5 mapping (technician never sees the matrix) ───────────────────

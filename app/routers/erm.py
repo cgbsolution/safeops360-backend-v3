@@ -49,7 +49,7 @@ from app.services.capa_spawn import next_capa_number
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
+    get_accessible_plants_for,
     get_user_role_codes,
 )
 
@@ -136,7 +136,7 @@ async def _scope_query(db: AsyncSession, user: User):
     """Return (base_stmt, role_codes, accessible_plants). Applies plant-scope and
     the Plant-HSE-Head OPS-rollup-only restriction (test T-23)."""
     role_codes = await get_user_role_codes(db, user.id)
-    accessible = await get_accessible_plants(db, user.id)  # None == all
+    accessible = await get_accessible_plants_for(db, user.id, "ERM.READ")  # None == all
     stmt = select(EnterpriseRisk).where(EnterpriseRisk.isDeleted.is_(False))
 
     is_privileged = any(

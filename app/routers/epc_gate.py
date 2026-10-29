@@ -12,7 +12,7 @@ new GatePass with the overrideApplied flag set on the original check record.
 from __future__ import annotations
 
 import json
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -33,7 +33,6 @@ from app.models.epc import (
 )
 from app.models.user import User
 from app.services.permissions import PermissionContext, can
-from app.services.tenant_partition import get_scoped, is_foreign, partition_for
 
 router = APIRouter(prefix="/api/epc/gate", tags=["epc-gate"])
 
@@ -75,7 +74,6 @@ def _end_of_today_utc() -> datetime:
 
 
 async def _generate_pass_number(db: AsyncSession, site_code: str) -> str:
-    # Counted globally on purpose — passNumber is unique across partitions.
     today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
     count_result = await db.execute(select(func.count(GatePass.id)))
     count = (count_result.scalar_one() or 0) + 1
@@ -132,7 +130,6 @@ async def _run_eight_checks(
     company: ContractorCompany,
     site_id: str,
     now: datetime,
-    part: str,
 ) -> dict:
     """Run all 8 gate clearance checks. Returns {check_name: {result, detail}} dict."""
     checks: dict[str, dict] = {}
@@ -141,7 +138,6 @@ async def _run_eight_checks(
     active_mob = (
         await db.execute(
             select(MobilizationRecord).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.contractorWorkerId == worker.id,
                 MobilizationRecord.siteId == site_id,
                 MobilizationRecord.status == "active",
@@ -158,7 +154,6 @@ async def _run_eight_checks(
         await db.execute(
             select(SiteInduction)
             .where(
-                SiteInduction.tenantId == part,
                 SiteInduction.contractorWorkerId == worker.id,
                 SiteInduction.siteId == site_id,
             )
@@ -201,10 +196,7 @@ async def _run_eight_checks(
     # c. competency
     worker_competencies: list = worker.competencyRecords or []
     site_config_result = await db.execute(
-        select(SiteComplianceConfig).where(
-            SiteComplianceConfig.tenantId == part,
-            SiteComplianceConfig.siteId == site_id,
-        )
+        select(SiteComplianceConfig).where(SiteComplianceConfig.siteId == site_id)
     )
     site_cfg = site_config_result.scalar_one_or_none()
     mandatory_competencies: list = (site_cfg.mandatoryTraining or []) if site_cfg else []
@@ -355,7 +347,6 @@ async def _issue_gate_pass(
     check: GateClearanceCheck,
     worker: ContractorWorker,
     company: ContractorCompany,
-    part: str,
     pass_type: str = "daily",
     override: bool = False,
 ) -> GatePass:
@@ -367,7 +358,6 @@ async def _issue_gate_pass(
     active_mob = (
         await db.execute(
             select(MobilizationRecord).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.contractorWorkerId == worker.id,
                 MobilizationRecord.siteId == site.id,
                 MobilizationRecord.status == "active",
@@ -390,7 +380,7 @@ async def _issue_gate_pass(
     })
 
     gate_pass = GatePass(
-        tenantId=part,
+        tenantId=worker.tenantId,
         siteId=site.id,
         clearanceCheckId=check.id,
         contractorWorkerId=worker.id,
@@ -428,23 +418,19 @@ async def gate_check(
 ) -> dict:
     """Run gate clearance check. Target: < 2 seconds end-to-end."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
 
     start_time = datetime.now(timezone.utc)
     now = start_time
 
     # Load site
-    site = await get_scoped(db, ConstructionSite, body.siteId, part)
+    site = await db.get(ConstructionSite, body.siteId)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
     # Find worker by workerCode (exact) or fullName (partial)
     worker = (
         await db.execute(
-            select(ContractorWorker).where(
-                ContractorWorker.tenantId == part,
-                ContractorWorker.workerCode == body.workerIdentifier,
-            )
+            select(ContractorWorker).where(ContractorWorker.workerCode == body.workerIdentifier)
         )
     ).scalar_one_or_none()
 
@@ -453,8 +439,7 @@ async def gate_check(
         workers = (
             await db.execute(
                 select(ContractorWorker).where(
-                    ContractorWorker.tenantId == part,
-                    ContractorWorker.fullName.ilike(f"%{body.workerIdentifier}%"),
+                    ContractorWorker.fullName.ilike(f"%{body.workerIdentifier}%")
                 )
             )
         ).scalars().all()
@@ -470,12 +455,12 @@ async def gate_check(
             )
         worker = workers[0]
 
-    company = await get_scoped(db, ContractorCompany, worker.contractorCompanyId, part)
+    company = await db.get(ContractorCompany, worker.contractorCompanyId)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
 
     # Run all 8 checks
-    checks = await _run_eight_checks(db, worker, company, body.siteId, now, part)
+    checks = await _run_eight_checks(db, worker, company, body.siteId, now)
 
     # Determine overall result
     blocking = [k for k, c in checks.items() if c["result"] == "fail"]
@@ -493,7 +478,7 @@ async def gate_check(
 
     # Create GateClearanceCheck record
     check = GateClearanceCheck(
-        tenantId=part,
+        tenantId=worker.tenantId,
         siteId=body.siteId,
         contractorWorkerId=worker.id,
         workerName=worker.fullName,
@@ -516,7 +501,7 @@ async def gate_check(
     # Issue gate pass if cleared
     gate_pass = None
     if overall in ("cleared", "cleared_with_warnings"):
-        gate_pass = await _issue_gate_pass(db, site, check, worker, company, part)
+        gate_pass = await _issue_gate_pass(db, site, check, worker, company)
 
     await db.commit()
     await db.refresh(check)
@@ -531,44 +516,13 @@ async def gate_check(
 
 @router.get("/log")
 async def gate_log(
-    siteId: str | None = Query(None),
-    workerId: str | None = Query(None, description="A worker's own gate history (last 30 days) instead of a site's day"),
+    siteId: str = Query(...),
     date: str | None = Query(None, description="YYYY-MM-DD, defaults to today"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Gate log for a site on a given date — or, with `workerId`, that worker's
-    checks across every site over the last 30 days (the worker profile's gate
-    history, which previously called this endpoint without the required siteId
-    and so always rendered empty)."""
+    """Gate log for a site on a given date."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    if workerId and not siteId:
-        if await is_foreign(db, ContractorWorker, workerId, part):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Worker not found")
-        since = datetime.now(timezone.utc) - timedelta(days=30)
-        checks = (
-            await db.execute(
-                select(GateClearanceCheck)
-                .where(
-                    GateClearanceCheck.tenantId == part,
-                    GateClearanceCheck.contractorWorkerId == workerId,
-                    GateClearanceCheck.createdAt >= since,
-                )
-                .order_by(GateClearanceCheck.createdAt.desc())
-            )
-        ).scalars().all()
-        return {
-            "workerId": workerId,
-            "totalChecks": len(checks),
-            "cleared": sum(1 for c in checks if c.overallResult in ("cleared", "cleared_with_warnings")),
-            "notCleared": sum(1 for c in checks if c.overallResult == "not_cleared"),
-            "entries": [_check_result_dict(c) for c in checks],
-        }
-    if not siteId:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "siteId or workerId is required")
-    if await is_foreign(db, ConstructionSite, siteId, part):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
     if date:
         try:
@@ -586,7 +540,6 @@ async def gate_log(
         await db.execute(
             select(GateClearanceCheck)
             .where(
-                GateClearanceCheck.tenantId == part,
                 GateClearanceCheck.siteId == siteId,
                 GateClearanceCheck.createdAt >= day_start,
                 GateClearanceCheck.createdAt <= day_end,
@@ -616,9 +569,8 @@ async def override_check(
 ) -> dict:
     """Apply HSE manager override to a not-cleared check. Issues a gate pass with override flag."""
     await _require(db, user, "EPC.GATE_OVERRIDE")
-    part = await partition_for(db, user)
 
-    check = await get_scoped(db, GateClearanceCheck, body.checkId, part)
+    check = await db.get(GateClearanceCheck, body.checkId)
     if check is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Gate clearance check not found")
 
@@ -631,15 +583,15 @@ async def override_check(
     if check.overrideApplied:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Override has already been applied to this check")
 
-    site = await get_scoped(db, ConstructionSite, check.siteId, part)
+    site = await db.get(ConstructionSite, check.siteId)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
-    worker = await get_scoped(db, ContractorWorker, check.contractorWorkerId, part)
+    worker = await db.get(ContractorWorker, check.contractorWorkerId)
     if worker is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Worker not found")
 
-    company = await get_scoped(db, ContractorCompany, worker.contractorCompanyId, part)
+    company = await db.get(ContractorCompany, worker.contractorCompanyId)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
 
@@ -653,7 +605,7 @@ async def override_check(
 
     await db.flush()
 
-    gate_pass = await _issue_gate_pass(db, site, check, worker, company, part, override=True)
+    gate_pass = await _issue_gate_pass(db, site, check, worker, company, override=True)
 
     await db.commit()
     await db.refresh(check)
@@ -675,9 +627,8 @@ async def active_passes(
 ) -> dict:
     """All active gate passes for a site (workers currently on site today)."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
 
-    site = await get_scoped(db, ConstructionSite, site_id, part)
+    site = await db.get(ConstructionSite, site_id)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
@@ -685,7 +636,6 @@ async def active_passes(
     passes = (
         await db.execute(
             select(GatePass).where(
-                GatePass.tenantId == part,
                 GatePass.siteId == site_id,
                 GatePass.status == "active",
                 GatePass.validUntil >= now,

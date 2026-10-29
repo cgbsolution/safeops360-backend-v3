@@ -173,3 +173,22 @@ async def test_industry_benchmark_includes_disclaimer_on_match() -> None:
         source_module=None,
     )
     assert "_disclaimer" in result
+
+
+# ─── coerce_enum aliases ──────────────────────────────────────────────
+
+
+def test_coerce_enum_accepts_plain_english_names() -> None:
+    from app.models.incident import IncidentType
+    from app.models.permit import PermitType
+    from app.services.agents.tools._enums import (
+        INCIDENT_TYPE_ALIASES,
+        PERMIT_TYPE_ALIASES,
+        coerce_enum,
+    )
+
+    assert coerce_enum("Hot Work", PermitType, "permitType", PERMIT_TYPE_ALIASES) == PermitType.HOT_WORK
+    assert coerce_enum("LOTO", PermitType, "permitType", PERMIT_TYPE_ALIASES) == PermitType.ELECTRICAL_LOTO
+    assert coerce_enum("Lost Time Injury", IncidentType, "incidentType", INCIDENT_TYPE_ALIASES) == IncidentType.LTI
+    with pytest.raises(ValueError, match="Valid values are"):
+        coerce_enum("Unsafe Act", PermitType, "permitType", PERMIT_TYPE_ALIASES)

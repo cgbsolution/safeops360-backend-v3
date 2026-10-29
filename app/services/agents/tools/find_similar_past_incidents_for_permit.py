@@ -20,6 +20,10 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import readable_plants
+
+from app.services.agents.tools._enums import PERMIT_TYPE_ALIASES, coerce_enum
+
 from app.models.incident import Incident, IncidentStatus
 from app.models.permit import Permit, PermitType
 
@@ -98,15 +102,18 @@ async def handle(
 
     permit_type: PermitType | None
     if raw := input.get("permitType"):
-        try:
-            permit_type = PermitType(raw)
-        except ValueError as e:
-            raise ValueError(
-                f"Unknown permitType {raw!r}. Valid: "
-                f"{sorted(t.value for t in PermitType)}"
-            ) from e
+        permit_type = coerce_enum(raw, PermitType, "permitType", PERMIT_TYPE_ALIASES)
     else:
         permit_type = permit.type
+
+    # The permit's plant, but only if the user may read incidents there.
+    incident_plants = await readable_plants(db, "INCIDENT.READ")
+    if incident_plants is not None and permit.plantId not in incident_plants:
+        return {
+            "permitNumber": permit.number,
+            "incidents": [],
+            "note": "You cannot read incidents at this permit's plant.",
+        }
 
     # Pass 1: same permit type
     pass1_stmt = (

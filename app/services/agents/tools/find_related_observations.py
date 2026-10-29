@@ -16,9 +16,18 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import readable_plants, restrict_to_plants
+
+from app.services.agents.tools._enums import coerce_enum
+
 from app.models.incident import Incident
 from app.models.near_miss import NearMiss
-from app.models.observation import Observation, ObservationCategory
+from app.models.observation import (
+    DB_OBSERVATION_CATEGORIES,
+    OBSERVATION_CATEGORY_ALIASES,
+    Observation,
+    ObservationCategory,
+)
 
 
 DEFINITION: dict[str, Any] = {
@@ -39,7 +48,8 @@ DEFINITION: dict[str, Any] = {
                     "Optional category filter. One of: PPE, HOUSEKEEPING, "
                     "WORK_AT_HEIGHT, HOT_WORK, MOBILE_EQUIPMENT, ELECTRICAL, "
                     "MATERIAL_HANDLING, CONFINED_SPACE, CHEMICAL_HANDLING, "
-                    "EMERGENCY, OTHER."
+                    "EMERGENCY_PREP, TOOLS_EQUIPMENT, PROCEDURES, "
+                    "REACTIONS_OF_PEOPLE, POSITIONS_OF_PEOPLE, OTHERS."
                 ),
             },
             "keywords": {
@@ -110,12 +120,20 @@ async def handle(
     )
     if plant_scope == "SAME_PLANT":
         stmt = stmt.where(Observation.plantId == incident.plantId)
+    # ALL_PLANTS still means "plants this user may read", never every plant.
+    stmt = restrict_to_plants(stmt, Observation.plantId, await readable_plants(db, "OBSERVATION.READ"))
 
     if category:
-        valid = {c.value for c in ObservationCategory}
-        if category not in valid:
-            raise ValueError(f"Unknown category {category!r}. Valid: {sorted(valid)}")
-        stmt = stmt.where(Observation.category == ObservationCategory(category))
+        stmt = stmt.where(
+            Observation.category
+            == coerce_enum(
+                category,
+                ObservationCategory,
+                "category",
+                aliases=OBSERVATION_CATEGORY_ALIASES,
+                allowed=DB_OBSERVATION_CATEGORIES,
+            )
+        )
 
     if keywords:
         clauses = []

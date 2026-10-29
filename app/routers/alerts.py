@@ -261,6 +261,8 @@ async def _daily_brief_payload(
 ) -> dict[str, Any]:
     await _require(db, user, _READ)
     scope = await build_query_scope(db, user.id, _READ)
+    if site_id and not scope.allows_plant(site_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot view the brief for this site.")
     lens = _resolve_role(user, scope, role)
     now = _now()
     window_hours = 24 * 7 if window == "7d" else 24
@@ -392,6 +394,9 @@ async def _daily_brief_payload(
     # deltas that read the outbox (cheap indexed counts on DomainEvent)
     async def _event_delta(event_type: str) -> tuple[int, int]:
         base = select(func.count()).select_from(DomainEvent).where(DomainEvent.eventType == event_type)
+        # Scoped like every other tile — without it this delta counted every
+        # plant's events for a plant-scoped reader.
+        base = scope.apply(base, DomainEvent, plant_attr="siteId")
         if effective_site:
             base = base.where(DomainEvent.siteId == effective_site)
         cur = await _count(db, base.where(DomainEvent.occurredAt >= window_start))

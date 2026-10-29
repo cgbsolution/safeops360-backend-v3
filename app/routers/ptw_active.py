@@ -44,9 +44,8 @@ from app.models.permit import (
 )
 from app.models.user import User
 from app.schemas.permit import PtwEvidenceInput
-from app.services.gas_test import _iso_utc as gas_iso_utc, get_refresh_status, record_gas_reading
+from app.services.gas_test import get_refresh_status, record_gas_reading
 from app.services.permissions import PermissionContext, can, get_user_role_codes
-from app.services.tenant_roles import with_stock_equivalents
 from app.services.ptw_evidence import EvidenceError, record_action_evidence
 
 router = APIRouter(prefix="/api/ptw", tags=["ptw-active"])
@@ -186,7 +185,7 @@ async def post_gas_reading(
         "id": result.reading_id,
         "isExceedance": result.is_exceedance,
         "failedParameters": result.failed_parameters,
-        "refreshDueBy": gas_iso_utc(result.refresh_due_by),
+        "refreshDueBy": result.refresh_due_by.isoformat(),
         "autoSuspended": result.auto_suspended,
     }
 
@@ -220,13 +219,13 @@ async def list_gas_readings(
         "items": [
             {
                 "id": r.id,
-                "recordedAt": gas_iso_utc(r.recordedAt),
+                "recordedAt": r.recordedAt.isoformat(),
                 "recordedById": r.recordedById,
                 "readings": r.readings or [],
                 "isExceedance": r.isExceedance,
                 "isPreEntry": r.isPreEntry,
                 "instrumentSerial": r.instrumentSerial,
-                "refreshDueBy": gas_iso_utc(r.refreshDueBy) if r.refreshDueBy else None,
+                "refreshDueBy": r.refreshDueBy.isoformat() if r.refreshDueBy else None,
             }
             for r in rows
         ],
@@ -426,8 +425,7 @@ async def decide_extension(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     permit = await _load_permit_or_403(db, permit_id, user, "PTW.UPDATE")
-    # Tenant clones count as the stock role (RETAIL_STORE_MANAGER → PLANT_HEAD).
-    role_codes = with_stock_equivalents(await get_user_role_codes(db, user.id))
+    role_codes = await get_user_role_codes(db, user.id)
     if not any(
         r in {"PERMIT_ISSUER", "SAFETY_OFFICER", "HSE_MANAGER", "ADMIN", "SYSTEM_ADMIN", "PLANT_HEAD"}
         for r in role_codes
@@ -460,15 +458,7 @@ async def decide_extension(
     ext.status = payload.decision
 
     if payload.decision == "APPROVED":
-        # newValidTo is read back from a `timestamp without time zone` column
-        # holding UTC, i.e. a NAIVE datetime. Bound into Permit.validTo (a
-        # timestamptz-typed parameter) asyncpg would treat it as the SERVER's
-        # local time — on an IST machine an extension to 23:30 cut the permit
-        # back to 18:00. Mark it UTC explicitly before it is written.
-        new_to = ext.newValidTo
-        if new_to.tzinfo is None:
-            new_to = new_to.replace(tzinfo=timezone.utc)
-        permit.validTo = new_to
+        permit.validTo = ext.newValidTo
         # Daily Brief outbox: an approved extension is a permit modification
         from app.services import events as domain_events
         domain_events.emit(

@@ -31,7 +31,7 @@ from app.models._base import Base, IdMixin
 class ConstructionSite(Base, IdMixin):
     __tablename__ = "ConstructionSite"
 
-    tenantId: Mapped[str] = mapped_column(String, nullable=False, default="default", index=True)
+    tenantId: Mapped[str | None] = mapped_column(String)
     siteCode: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     siteName: Mapped[str] = mapped_column(String, nullable=False)
     projectNumber: Mapped[str | None] = mapped_column(String)
@@ -92,10 +92,6 @@ class ContractorCompany(Base, IdMixin):
     """
     __tablename__ = "ContractorCompany"
 
-    # Tenant partition (services/tenant_partition.py), added by
-    # prisma/apply-epc-tenant-partition-ddl.ts. Pre-existing rows are 'default'.
-    tenantId: Mapped[str] = mapped_column(String, nullable=False, default="default", index=True)
-
     # Existing columns (shared with Near Miss + Incident modules)
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     code: Mapped[str | None] = mapped_column(String, unique=True)
@@ -141,7 +137,7 @@ class ContractorCompany(Base, IdMixin):
 class ContractorWorker(Base, IdMixin):
     __tablename__ = "ContractorWorker"
 
-    tenantId: Mapped[str] = mapped_column(String, nullable=False, default="default", index=True)
+    tenantId: Mapped[str | None] = mapped_column(String)
     contractorCompanyId: Mapped[str] = mapped_column(
         ForeignKey("ContractorCompany.id"), nullable=False, index=True
     )
@@ -206,7 +202,7 @@ class ContractorWorker(Base, IdMixin):
 class MobilizationRecord(Base, IdMixin):
     __tablename__ = "MobilizationRecord"
 
-    tenantId: Mapped[str] = mapped_column(String, nullable=False, default="default", index=True)
+    tenantId: Mapped[str | None] = mapped_column(String)
     mobilizationNumber: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 
     contractorWorkerId: Mapped[str] = mapped_column(
@@ -259,7 +255,7 @@ class MobilizationRecord(Base, IdMixin):
 class SiteInduction(Base, IdMixin):
     __tablename__ = "SiteInduction"
 
-    tenantId: Mapped[str] = mapped_column(String, nullable=False, default="default", index=True)
+    tenantId: Mapped[str | None] = mapped_column(String)
 
     contractorWorkerId: Mapped[str] = mapped_column(
         ForeignKey("ContractorWorker.id"), nullable=False, index=True
@@ -323,7 +319,7 @@ class SiteInduction(Base, IdMixin):
 class GateClearanceCheck(Base, IdMixin):
     __tablename__ = "GateClearanceCheck"
 
-    tenantId: Mapped[str] = mapped_column(String, nullable=False, default="default", index=True)
+    tenantId: Mapped[str | None] = mapped_column(String)
 
     siteId: Mapped[str] = mapped_column(
         ForeignKey("ConstructionSite.id"), nullable=False, index=True
@@ -364,7 +360,7 @@ class GateClearanceCheck(Base, IdMixin):
 class GatePass(Base, IdMixin):
     __tablename__ = "GatePass"
 
-    tenantId: Mapped[str] = mapped_column(String, nullable=False, default="default", index=True)
+    tenantId: Mapped[str | None] = mapped_column(String)
 
     siteId: Mapped[str] = mapped_column(
         ForeignKey("ConstructionSite.id"), nullable=False, index=True
@@ -405,7 +401,7 @@ class GatePass(Base, IdMixin):
 class SiteComplianceConfig(Base, IdMixin):
     __tablename__ = "SiteComplianceConfig"
 
-    tenantId: Mapped[str] = mapped_column(String, nullable=False, default="default", index=True)
+    tenantId: Mapped[str | None] = mapped_column(String)
     siteId: Mapped[str] = mapped_column(
         ForeignKey("ConstructionSite.id"), nullable=False, unique=True
     )

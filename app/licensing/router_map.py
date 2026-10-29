@@ -74,6 +74,7 @@ ROUTER_MODULE: dict[str, str | None] = {
     # ── AI Assistance ──
     "agents": "AI_ASSIST",
     "agents_config": "AI_ASSIST",
+    "copilot": "AI_ASSIST",
     # ── EPC / Sites ──
     "epc_sites": "EPC",
     "epc_contractors": "EPC",

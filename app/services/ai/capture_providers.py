@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import json
 import sys
 from typing import Any, Protocol, TypedDict
@@ -82,7 +83,52 @@ Respond ONLY with a JSON object:
  "confidence": <0..1 — how sure you are about l1Code>}
 If the photo shows no recognisable workplace hazard, use nulls and confidence 0."""
 
-_VISION_MEDIA_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+_VISION_MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+# The API caps a base64 image at 5 MB; base64 inflates by 4/3, so anything
+# above ~3.75 MB raw is re-encoded smaller first. 1568 px is the long edge the
+# API downsamples to anyway, so nothing visible is lost.
+_VISION_MAX_RAW_BYTES = 3_750_000
+_VISION_MAX_EDGE = 1568
+
+
+def _sniff_image_type(image: bytes) -> str | None:
+    """Media type from the file's magic bytes. The client's label can't be
+    trusted: the wizard falls back to the original file when it can't
+    re-encode, and the API rejects an image whose bytes don't match the
+    declared media_type."""
+    if image[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if image[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if image[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if image[:4] == b"RIFF" and image[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _shrink_image(image: bytes) -> bytes | None:
+    """Re-encode as JPEG within the size/edge limits, or None if impossible."""
+    try:
+        from PIL import Image  # noqa: PLC0415 — installed with fpdf2
+
+        with Image.open(io.BytesIO(image)) as img:
+            img = img.convert("RGB")
+            img.thumbnail((_VISION_MAX_EDGE, _VISION_MAX_EDGE))
+            out = io.BytesIO()
+            img.save(out, format="JPEG", quality=85)
+        data = out.getvalue()
+        return data if len(data) <= _VISION_MAX_RAW_BYTES else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _code_or_none(value: Any) -> str | None:
+    """Model-returned taxonomy code → clean string, or None for null-ish values."""
+    if value is None or isinstance(value, (dict, list)):
+        return None
+    code = str(value).strip()
+    return None if code.lower() in ("", "null", "none") else code
 
 
 class IVisionSuggestProvider(Protocol):
@@ -111,10 +157,15 @@ class AnthropicVisionProvider:
         client = _get_client()
         if client is None:
             return None
-        media_type = "image/jpeg" if mime_type == "image/jpg" else mime_type
+        media_type = _sniff_image_type(image)
+        if media_type is None or len(image) > _VISION_MAX_RAW_BYTES:
+            # Unknown format (e.g. HEIC) or too big for the API: try a JPEG
+            # re-encode before giving up.
+            shrunk = _shrink_image(image)
+            if shrunk is None:
+                return None
+            image, media_type = shrunk, "image/jpeg"
         if media_type not in _VISION_MEDIA_TYPES:
-            return None
-        if len(image) > 4.5 * 1024 * 1024:  # API image cap ~5MB base64-decoded
             return None
         from app.core.config import get_settings
 
@@ -141,7 +192,6 @@ class AnthropicVisionProvider:
                 client.messages.create,
                 model=get_settings().anthropic_model,
                 max_tokens=400,
-                # No `temperature`: the anthropic 1.x SDK rejects it (TypeError).
                 system=_VISION_SYSTEM,
                 messages=[{"role": "user", "content": user_content}],
             )
@@ -155,10 +205,12 @@ class AnthropicVisionProvider:
             data = json.loads(raw[start : end + 1])
         except Exception:  # noqa: BLE001
             return None
+        if not isinstance(data, dict):
+            return None
         try:
             return VisionSuggestion(
-                l1Code=data.get("l1Code"),
-                l2Code=data.get("l2Code"),
+                l1Code=_code_or_none(data.get("l1Code")),
+                l2Code=_code_or_none(data.get("l2Code")),
                 description=str(data.get("description") or ""),
                 descriptionEn=str(data.get("descriptionEn") or ""),
                 confidence=max(0.0, min(1.0, float(data.get("confidence") or 0))),
@@ -202,9 +254,8 @@ async def cleanup_text(text: str, lang: str) -> str | None:
         system=_CLEANUP_SYSTEM,
         user=f"LANG={lang}\nNote:\n{text}",
         max_tokens=500,
-        temperature=0.1,
     )
-    if not res:
+    if not isinstance(res, dict):
         return None
     cleaned = str(res.get("cleaned") or "").strip()
     # guard against a degenerate/empty answer — never return something shorter
@@ -239,14 +290,13 @@ async def suggest_category_from_text(
         system=_TEXT_CAT_SYSTEM,
         user="Taxonomy:\n" + json.dumps(tax_lines, ensure_ascii=False) + f"\nLANG={lang}\nNote:\n{text}",
         max_tokens=200,
-        temperature=0.1,
     )
-    if not res:
+    if not isinstance(res, dict):
         return None
     try:
         return CategorySuggestion(
-            l1Code=res.get("l1Code"),
-            l2Code=res.get("l2Code"),
+            l1Code=_code_or_none(res.get("l1Code")),
+            l2Code=_code_or_none(res.get("l2Code")),
             confidence=max(0.0, min(1.0, float(res.get("confidence") or 0))),
         )
     except Exception:  # noqa: BLE001
@@ -303,9 +353,8 @@ async def draft_description(
         system=_DRAFT_SYSTEM,
         user=f"LANG={lang}\n{context}\nWorker's answers:\n" + "\n".join(facts),
         max_tokens=500,
-        temperature=0.2,
     )
-    if not res:
+    if not isinstance(res, dict):
         return None
     description = str(res.get("description") or "").strip()
     if not description:

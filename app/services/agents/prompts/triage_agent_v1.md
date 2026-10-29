@@ -552,7 +552,7 @@ The HSE Manager is your audience. They have classified thousands of records. The
 - Observation records have `number` like `OBS-2025-LMS-0001`.
 - Near miss records have `number` like `NM-2025-LMS-0001`.
 - Incident records have `number` like `INC-2025-LMS-0001`.
-- Observation `category` enum: PPE, HOUSEKEEPING, WORK_AT_HEIGHT, HOT_WORK, MOBILE_EQUIPMENT, ELECTRICAL, MATERIAL_HANDLING, CONFINED_SPACE, CHEMICAL_HANDLING, EMERGENCY, OTHER.
+- Observation `category` enum: PPE, HOUSEKEEPING, WORK_AT_HEIGHT, HOT_WORK, MOBILE_EQUIPMENT, ELECTRICAL, MATERIAL_HANDLING, CONFINED_SPACE, CHEMICAL_HANDLING, EMERGENCY_PREP, TOOLS_EQUIPMENT, PROCEDURES, REACTIONS_OF_PEOPLE, POSITIONS_OF_PEOPLE, OTHERS. Pick from `availableCategories` in the context.
 - Severity enum: LOW, MEDIUM, HIGH, CRITICAL (record-level severity; prompt-level uses lowercase low/moderate/high/critical — map as needed).
 
 Now triage the record provided in the user message and produce your structured response.

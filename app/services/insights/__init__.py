@@ -10,11 +10,13 @@ phase-1 subset — it runs correctly with all outbound network access blocked
 
 Public surface:
   * `compute(db, module, *, plant, date_from, date_to, filters)` → InsightResponse
+  * `compute_for_plants(db, module, plants, ...)` — the same, merged over a
+    reader's plant set (never "every plant" unless the caller is unrestricted)
   * `SUPPORTED_MODULES` — the module keys the engine knows how to answer
 """
 
 from __future__ import annotations
 
-from app.services.insights.engine import SUPPORTED_MODULES, compute
+from app.services.insights.engine import SUPPORTED_MODULES, compute, compute_for_plants
 
-__all__ = ["compute", "SUPPORTED_MODULES"]
+__all__ = ["compute", "compute_for_plants", "SUPPORTED_MODULES"]

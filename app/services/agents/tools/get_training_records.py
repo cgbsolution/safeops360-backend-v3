@@ -20,6 +20,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import MODULE_READ_PERMISSION, plant_is_readable
+
 from app.models.training import TrainingCertificate, TrainingProgram, TrainingRecord
 from app.models.user import User
 
@@ -80,7 +82,11 @@ async def handle(
 ) -> dict[str, Any]:
     user_id = input["userId"]
     user = await db.get(User, user_id)
-    if user is None:
+    if user is None or not await plant_is_readable(
+        db, MODULE_READ_PERMISSION.get(source_module, "INCIDENT.READ"), user.plantId
+    ):
+        # A person at a plant the invoking user can't read is reported as
+        # not found rather than exposing their training history.
         return {"note": f"User {user_id!r} not found", "person": None}
 
     as_of_raw = input.get("asOfDate")

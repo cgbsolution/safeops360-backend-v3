@@ -42,6 +42,7 @@ from app.schemas.observation_sla import (
     TargetDateReassignIn,
     WorkerInvolvedOut,
 )
+from app.services.observation_access import require_observation_read
 from app.services import observation_deroster as deroster_svc
 from app.services import observation_sla as sla
 from app.services.permissions import get_user_role_codes
@@ -101,7 +102,7 @@ async def list_workers_involved(
     db: AsyncSession = Depends(get_db),
 ) -> list[WorkerInvolvedOut]:
     obs = await _load_observation(db, observation_id)
-    await require_permission_with_context("OBSERVATION.READ", user, db, plant_id=obs.plantId)
+    await require_observation_read(db, user, obs)
     rows = await deroster_svc.load_workers_involved(db, observation_id)
     return [WorkerInvolvedOut(**r) for r in rows]
 
@@ -202,7 +203,7 @@ async def target_closure_date_history(
     db: AsyncSession = Depends(get_db),
 ) -> list[TargetDateHistoryOut]:
     obs = await _load_observation(db, observation_id)
-    await require_permission_with_context("OBSERVATION.READ", user, db, plant_id=obs.plantId)
+    await require_observation_read(db, user, obs)
     rows = (
         await db.execute(
             select(ObservationTargetDateHistory)
@@ -288,7 +289,7 @@ async def deroster_audit_log(
     db: AsyncSession = Depends(get_db),
 ) -> list[DerosterEventOut]:
     obs = await _load_observation(db, observation_id)
-    await require_permission_with_context("OBSERVATION.READ", user, db, plant_id=obs.plantId)
+    await require_observation_read(db, user, obs)
     row = await _load_deroster(db, observation_id, worker_id)
     events = (
         await db.execute(

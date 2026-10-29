@@ -90,8 +90,8 @@ async def list_processes(criticality: str | None = Query(None), siteId: str | No
     rows = (await db.execute(select(BusinessProcess).where(BusinessProcess.isDeleted.is_(False)))).scalars().all()
     # Plant HSE Head: own-site OPS processes only (pragmatic site scope)
     if "PLANT_HSE_HEAD" in role_codes and not any(r in role_codes for r in ("CRO", "BCM_COORDINATOR", "RISK_CHAMPION", "EXECUTIVE_VIEWER", "SYSTEM_ADMIN", "ADMIN")):
-        from app.services.permissions import get_accessible_plants
-        acc = await get_accessible_plants(db, user.id)
+        from app.services.permissions import get_accessible_plants_for
+        acc = await get_accessible_plants_for(db, user.id, "BCM.READ")
         if acc is not None:
             rows = [p for p in rows if p.siteId in acc]
     if criticality:

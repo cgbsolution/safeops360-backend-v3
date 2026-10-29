@@ -20,7 +20,6 @@ from app.core.deps import get_current_user
 from app.models.epc import ConstructionSite, MobilizationRecord
 from app.models.user import User
 from app.services.permissions import PermissionContext, can
-from app.services.tenant_partition import get_scoped, partition_for
 
 router = APIRouter(prefix="/api/epc/sites", tags=["epc-sites"])
 
@@ -62,9 +61,7 @@ class SiteCreate(BaseModel):
     awardDate: datetime | None = None
     plannedStartDate: datetime | None = None
     plannedCompletionDate: datetime | None = None
-    # Optional on the Register form: a blank field arrives as null. `int = 0`
-    # rejected that with a 422, which the form rendered as "[object Object]".
-    peakWorkforcePlanned: int | None = 0
+    peakWorkforcePlanned: int = 0
     siteManagerUserId: str | None = None
     siteHseManagerUserId: str | None = None
     siteQualityManagerUserId: str | None = None
@@ -146,10 +143,9 @@ def _site_dict(site: ConstructionSite, workforce_count: int = 0) -> dict:
     }
 
 
-async def _active_workforce_count(db: AsyncSession, site_id: str, part: str) -> int:
+async def _active_workforce_count(db: AsyncSession, site_id: str) -> int:
     result = await db.execute(
         select(func.count(MobilizationRecord.id)).where(
-            MobilizationRecord.tenantId == part,
             MobilizationRecord.siteId == site_id,
             MobilizationRecord.status == "active",
         )
@@ -158,7 +154,6 @@ async def _active_workforce_count(db: AsyncSession, site_id: str, part: str) -> 
 
 
 async def _generate_site_code(db: AsyncSession) -> str:
-    # Counted globally on purpose — siteCode is unique across partitions.
     count_result = await db.execute(select(func.count(ConstructionSite.id)))
     count = (count_result.scalar_one() or 0) + 1
     return f"SITE-{count:04d}"
@@ -175,8 +170,7 @@ async def list_sites(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    stmt = select(ConstructionSite).where(ConstructionSite.tenantId == part)
+    stmt = select(ConstructionSite)
     if status_filter:
         stmt = stmt.where(ConstructionSite.status == status_filter)
     if search:
@@ -189,7 +183,7 @@ async def list_sites(
 
     out: list[dict] = []
     for site in sites:
-        count = await _active_workforce_count(db, site.id, part)
+        count = await _active_workforce_count(db, site.id)
         out.append(_site_dict(site, count))
     return {"count": len(out), "sites": out}
 
@@ -201,13 +195,12 @@ async def create_site(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.CREATE")
-    part = await partition_for(db, user)
 
     site_code = body.siteCode
     if not site_code:
         site_code = await _generate_site_code(db)
 
-    # Check for duplicate siteCode (global — the column is globally unique)
+    # Check for duplicate siteCode
     existing = (
         await db.execute(select(ConstructionSite).where(ConstructionSite.siteCode == site_code))
     ).scalar_one_or_none()
@@ -215,7 +208,6 @@ async def create_site(
         raise HTTPException(status.HTTP_409_CONFLICT, f"Site code '{site_code}' already exists")
 
     site = ConstructionSite(
-        tenantId=part,
         siteCode=site_code,
         siteName=body.siteName,
         projectNumber=body.projectNumber,
@@ -237,7 +229,7 @@ async def create_site(
         awardDate=body.awardDate,
         plannedStartDate=body.plannedStartDate,
         plannedCompletionDate=body.plannedCompletionDate,
-        peakWorkforcePlanned=body.peakWorkforcePlanned or 0,
+        peakWorkforcePlanned=body.peakWorkforcePlanned,
         siteManagerUserId=body.siteManagerUserId,
         siteHseManagerUserId=body.siteHseManagerUserId,
         siteQualityManagerUserId=body.siteQualityManagerUserId,
@@ -258,11 +250,10 @@ async def get_site(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    site = await get_scoped(db, ConstructionSite, site_id, part)
+    site = await db.get(ConstructionSite, site_id)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
-    count = await _active_workforce_count(db, site_id, part)
+    count = await _active_workforce_count(db, site_id)
     return _site_dict(site, count)
 
 
@@ -274,8 +265,7 @@ async def update_site(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.UPDATE")
-    part = await partition_for(db, user)
-    site = await get_scoped(db, ConstructionSite, site_id, part)
+    site = await db.get(ConstructionSite, site_id)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
@@ -285,7 +275,7 @@ async def update_site(
 
     await db.commit()
     await db.refresh(site)
-    count = await _active_workforce_count(db, site_id, part)
+    count = await _active_workforce_count(db, site_id)
     return _site_dict(site, count)
 
 
@@ -296,16 +286,20 @@ async def workforce_count(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    site = await get_scoped(db, ConstructionSite, site_id, part)
+    site = await db.get(ConstructionSite, site_id)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
-    active = await _active_workforce_count(db, site_id, part)
+    active_result = await db.execute(
+        select(func.count(MobilizationRecord.id)).where(
+            MobilizationRecord.siteId == site_id,
+            MobilizationRecord.status == "active",
+        )
+    )
+    active = active_result.scalar_one() or 0
 
     pending_result = await db.execute(
         select(func.count(MobilizationRecord.id)).where(
-            MobilizationRecord.tenantId == part,
             MobilizationRecord.siteId == site_id,
             MobilizationRecord.status.in_([
                 "pending_checks",
@@ -317,7 +311,6 @@ async def workforce_count(
 
     total_result = await db.execute(
         select(func.count(MobilizationRecord.id)).where(
-            MobilizationRecord.tenantId == part,
             MobilizationRecord.siteId == site_id,
         )
     )

@@ -21,6 +21,10 @@ from typing import Any
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.agents.tools._scope import readable_plants, restrict_to_plants
+
+from app.services.agents.tools._enums import INCIDENT_TYPE_ALIASES, coerce_enum
 from sqlalchemy.orm import selectinload
 
 from app.models.equipment import Equipment
@@ -96,14 +100,11 @@ async def handle(
     source_module: str,
 ) -> list[dict[str, Any]]:
     """Return matching incidents as a JSON-serialisable list."""
-    incident_type = input["incidentType"]
     # Validate against the enum so a typo from the model surfaces as a
     # tool error instead of silently matching nothing.
-    valid_types = {t.value for t in IncidentType}
-    if incident_type not in valid_types:
-        raise ValueError(
-            f"Unknown incidentType {incident_type!r}. Valid values: {sorted(valid_types)}"
-        )
+    incident_type = coerce_enum(
+        input["incidentType"], IncidentType, "incidentType", INCIDENT_TYPE_ALIASES
+    ).value
 
     keywords = input.get("keywords") or []
     equipment_category = input.get("equipmentCategory")
@@ -121,6 +122,8 @@ async def handle(
             ),
         )
     )
+
+    stmt = restrict_to_plants(stmt, Incident.plantId, await readable_plants(db, "INCIDENT.READ"))
 
     if equipment_category:
         # Subquery: incident IDs whose equipmentInvolved.equipment.category

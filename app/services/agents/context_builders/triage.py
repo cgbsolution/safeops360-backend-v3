@@ -54,6 +54,7 @@ from app.models.incident import Incident, IncidentStatus
 from app.models.masters import MasterItem
 from app.models.near_miss import NearMiss, NearMissStatus
 from app.models.observation import (
+    DB_OBSERVATION_CATEGORIES,
     Observation,
     ObservationCategory,
     ObservationStatus,
@@ -73,7 +74,7 @@ _STATUTORY_OBS_CATEGORIES: set[str] = {
     "CONFINED_SPACE",
     "HOT_WORK",
     "WORK_AT_HEIGHT",
-    "EMERGENCY",
+    "EMERGENCY_PREP",
     "ELECTRICAL",
 }
 
@@ -294,10 +295,10 @@ def _serialise_record(
 
 def _originator_payload(originator: User | None) -> dict[str, Any]:
     if originator is None:
-        return {"name": None, "role": None, "department": None, "userId": None}
+        return {"role": None, "department": None, "userId": None}
+    # No name: it is not needed for triage and should not leave the platform.
     return {
         "userId": originator.id,
-        "name": originator.name,
         "role": originator.role,
         "department": originator.department,
         "designation": originator.designation,
@@ -316,8 +317,6 @@ def _where_payload(
         "areaName": area.name if area else None,
         "specificLocation": getattr(record, "specificLocation", None),
         "legacyLocation": getattr(record, "location", None),
-        "gpsLatitude": getattr(record, "gpsLatitude", None),
-        "gpsLongitude": getattr(record, "gpsLongitude", None),
     }
 
 
@@ -560,6 +559,7 @@ async def _available_categories(
                 "isStatutory": cat.value in _STATUTORY_OBS_CATEGORIES,
             }
             for cat in ObservationCategory
+            if cat.value in DB_OBSERVATION_CATEGORIES
         ]
 
     # Near miss: hazard categories from masters
@@ -593,6 +593,7 @@ async def _available_categories(
             "isStatutory": cat.value in _STATUTORY_OBS_CATEGORIES,
         }
         for cat in ObservationCategory
+        if cat.value in DB_OBSERVATION_CATEGORIES
     ]
 
 
@@ -607,8 +608,12 @@ def _category_description(code: str) -> str:
         "MATERIAL_HANDLING": "Manual or mechanical material movement and storage.",
         "CONFINED_SPACE": "Confined or restricted spaces requiring entry permit.",
         "CHEMICAL_HANDLING": "Chemical storage, transfer, or potential release.",
-        "EMERGENCY": "Emergency response, evacuation, or alarms.",
-        "OTHER": "Catch-all — use only when no specific category fits.",
+        "EMERGENCY_PREP": "Emergency response, evacuation, or alarms.",
+        "TOOLS_EQUIPMENT": "Hand tools, power tools and equipment — condition, guarding, correct use.",
+        "PROCEDURES": "Procedures — missing, not followed, or inadequate for the task.",
+        "REACTIONS_OF_PEOPLE": "How people react when observed — stopping, adjusting PPE, changing position.",
+        "POSITIONS_OF_PEOPLE": "Body position — line of fire, pinch points, striking or caught-between risk.",
+        "OTHERS": "Catch-all — use only when no specific category fits.",
     }.get(code, "")
 
 

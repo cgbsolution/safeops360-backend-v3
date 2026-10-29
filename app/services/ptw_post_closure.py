@@ -31,6 +31,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.numbering import next_number
 from app.models.flra import FLRA, FLRAJobStep, FLRAStepHazard, FLRAStatus
 from app.models.observation import (
     Observation,
@@ -63,18 +64,14 @@ def _category_for_permit(permit_type: PermitType) -> ObservationCategory:
         # on a triggered Lifting closure. MATERIAL_HANDLING is a valid DB value
         # and the closest fit for lifting operations.
         PermitType.LIFTING: ObservationCategory.MATERIAL_HANDLING,
-        PermitType.EXCAVATION: ObservationCategory.OTHER,
-        PermitType.GENERAL_COLD: ObservationCategory.OTHER,
-    }.get(permit_type, ObservationCategory.OTHER)
+        # OTHERS, not OTHER: the native PG enum has only the plural label.
+        PermitType.EXCAVATION: ObservationCategory.OTHERS,
+        PermitType.GENERAL_COLD: ObservationCategory.OTHERS,
+    }.get(permit_type, ObservationCategory.OTHERS)
 
 
 async def _next_observation_number(db: AsyncSession, plant_code: str) -> str:
-    from sqlalchemy import func
-
-    count = (
-        await db.execute(select(func.count()).select_from(Observation))
-    ).scalar_one()
-    return f"OBS-{plant_code}-{count + 1:05d}"
+    return await next_number(db, column=Observation.number, stem=f"OBS-{plant_code}-", width=5)
 
 
 # ─── Rules ────────────────────────────────────────────────────────────

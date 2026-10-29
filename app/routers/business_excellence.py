@@ -911,12 +911,6 @@ async def export_kaizen(
                 .scalar_one_or_none()
                 or plantId,
             )
-        from app.services.display_labels import labels_for_plant, labels_for_plants
-
-        kaizen_labels = (
-            await labels_for_plant(db, plantId) if plantId
-            else await labels_for_plants(db, sorted({k.plantId for k in rows if k.plantId}))
-        )
         pdf = render_kaizen_register_pdf(
             [
                 {
@@ -941,7 +935,6 @@ async def export_kaizen(
             generated_by_name=user.name or user.email,
             plant_label=plant_label,
             truncated=truncated,
-            labels=kaizen_labels,
         )
         return Response(
             content=pdf,

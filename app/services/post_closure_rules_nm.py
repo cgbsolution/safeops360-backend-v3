@@ -37,6 +37,7 @@ from typing import Any
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.numbering import next_number
 from app.models.equipment import Equipment, Inspection
 from app.models.epc import ContractorCompany
 from app.models.masters import Department
@@ -129,10 +130,9 @@ async def _rule_repeat_pattern(db: AsyncSession, nm: NearMiss) -> dict[str, Any]
         return _entry("rule_repeat_pattern", "Repeat Pattern → Focused Inspection",
                       fired=False, reason="No active equipment to inspect at this plant")
 
-    last_count = (
-        await db.execute(select(func.count()).select_from(Inspection).where(Inspection.plantId == nm.plantId))
-    ).scalar_one()
-    number = f"INSP-{datetime.now(timezone.utc).year}-FOCUSED-NM-{last_count + 1:04d}"
+    number = await next_number(
+        db, column=Inspection.number, stem=f"INSP-{datetime.now(timezone.utc).year}-FOCUSED-NM-"
+    )
     insp = Inspection(
         number=number,
         equipmentId=eq.id,

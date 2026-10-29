@@ -43,6 +43,11 @@ from app.schemas.agent import (
     InvokeAgentRequest,
 )
 from app.services.agents import agent_service
+from app.services.agents.source_access import (
+    SUPPORTED_SOURCE_MODULES,
+    assert_source_access,
+    check_source_access,
+)
 from app.services.permissions import PermissionContext, can
 
 router = APIRouter(tags=["agents"])
@@ -66,7 +71,16 @@ async def invoke_agent(
     """Start an agent invocation. The HTTP response returns immediately
     with the invocation ID; clients poll the GET endpoint."""
     permission_code = agent_service.get_invoke_permission_code(agent_code)
-    permission = await can(db, user.id, permission_code, PermissionContext())
+    if payload.sourceModule not in SUPPORTED_SOURCE_MODULES:
+        # COPILOT conversations are readable here but are not agent inputs.
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unsupported sourceModule {payload.sourceModule!r}")
+    # The caller must be able to open the record the agent will read, and
+    # hold the invoke permission at that record's plant.
+    await assert_source_access(db, user, payload.sourceModule, payload.sourceRecordId)
+    plant_id = await agent_service._resolve_source_plant_id(
+        db, payload.sourceModule, payload.sourceRecordId
+    )
+    permission = await can(db, user.id, permission_code, PermissionContext(plant_id=plant_id))
     if not permission.allowed:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -153,6 +167,9 @@ async def get_invocation_detail(
             permission.reason or "AGENT.AUDIT_VIEW required",
         )
     invocation = await _load_invocation_with_tool_calls(db, invocation_id)
+    # The drawer shows the full input context (names, statements), so it
+    # needs read access to the source record as well.
+    await assert_source_access(db, user, invocation.sourceModule, invocation.sourceRecordId)
     return AgentInvocationDetailOut.model_validate(invocation)
 
 
@@ -208,8 +225,10 @@ async def record_decision(
     invocation = await _load_invocation_with_tool_calls(db, invocation_id)
 
     # Find the agent code so we can reuse the invoke permission as the
-    # gate. The invoker is implicit-OK; other users need the permission.
+    # gate. The invoker is implicit-OK; other users need the permission
+    # and read access to the source record.
     if invocation.invokedById != user.id:
+        await assert_source_access(db, user, invocation.sourceModule, invocation.sourceRecordId)
         agent = await db.get(Agent, invocation.agentId)
         if agent is not None:
             permission_code = agent_service.get_invoke_permission_code(agent.code)
@@ -261,11 +280,21 @@ async def _load_invocation_with_tool_calls(
 async def _authorise_view(
     db: AsyncSession, user: User, invocation: AgentInvocation
 ) -> None:
-    """A caller can view an invocation if they triggered it OR they
-    have AGENT.AUDIT_VIEW. Anyone with the agent's invoke permission
-    can also view (e.g. a co-investigator looking at the same record)."""
+    """A caller can view an invocation if they triggered it, or if they can
+    read the source record AND hold AGENT.AUDIT_VIEW or the agent's invoke
+    permission (e.g. a co-investigator on the same record). Without the
+    source check, the stored result leaked records the user cannot open."""
     if invocation.invokedById == user.id:
         return
+
+    readable, reason = await check_source_access(
+        db, user, invocation.sourceModule, invocation.sourceRecordId
+    )
+    if not readable:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            reason or "You do not have permission to view this invocation",
+        )
 
     audit_view = await can(db, user.id, "AGENT.AUDIT_VIEW", PermissionContext())
     if audit_view.allowed:

@@ -121,69 +121,6 @@ class CamsEngagement(Base, IdMixin):
     sourceEntityId: Mapped[str | None] = mapped_column(String)  # entity this engagement inspects (e.g. FireEquipment.id)
     recurrenceId: Mapped[str | None] = mapped_column(String)
 
-    # ── Periodic-record support (Fire & Life Safety checklists) ──────────────
-    #
-    # A controlled EHS checklist is a *periodic* record: exactly one Daily Fire
-    # Alarm sheet exists for panel P on 19 Aug 2026, and touching that screen
-    # twice must find the same record, not make a second one. `plannedDate`
-    # cannot carry that identity — it is a timestamp, so "same day" is a range
-    # query and two clients racing the first touch both see nothing and both
-    # insert.
-    #
-    # `periodLabel` is the occurrence key, granularity-encoded so one column
-    # serves every cadence:
-    #
-    #     DAILY      "2026-08-19"      MONTHLY  "2026-08"
-    #     QUARTERLY  "2026-Q3"         ANNUAL   "2026"
-    #
-    # Uniqueness is enforced in the database by a PARTIAL unique index
-    # (templateId, sourceEntityId, periodLabel) scoped to rows that set it — see
-    # prisma/apply-firechecklists-ddl.ts. Partial, because every CAMS engagement
-    # predating this build has periodLabel NULL and a plain unique index would
-    # be fine on NULLs but would also silently start constraining ad-hoc audits
-    # the day someone set the column for an unrelated reason.
-    periodLabel: Mapped[str | None] = mapped_column(String)
-
-    # Prepared / Reviewed / Approved — the sign-off block printed at the foot of
-    # every Page Industries checklist. "Prepared by" already exists as
-    # `CamsResponse.completedBy/completedAt` (the person who filled the sheet),
-    # so only the two later stages are new here.
-    #
-    # These are stamps, not signatures: userId + timestamp, the same evidence
-    # every other approval on this platform records. No e-signature capture
-    # exists anywhere in the codebase (checked), so inventing one for this module
-    # alone would have been a second mechanism, not a reused one. Stage ORDER is
-    # enforced by the existing `_TRANSITIONS` state machine, not by these
-    # columns — they record who, the state machine decides whether they may.
-    reviewedBy: Mapped[str | None] = mapped_column(String)
-    reviewedAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    approvedBy: Mapped[str | None] = mapped_column(String)
-    approvedAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-    # ── Captured signatures ──────────────────────────────────────────────────
-    #
-    # A userId and a timestamp record WHO the system believes acted. They do not
-    # record a person putting their name to a statement, and the paper sheet this
-    # reproduces has a "Sign. & Date:" box under each of its three roles — an
-    # export with a blank box next to a name is not the document the auditor was
-    # handed.
-    #
-    # Shape is copied EXACTLY from `ComplianceAudit.signOffs` (WP-41), the
-    # platform's established sign-off record:
-    #
-    #   [{role, userId, name, designation, signatureKind, signatureImage,
-    #     typedName, statement, signedAt}]
-    #
-    # Same JSON shape, same DRAWN/TYPED vocabulary, same `SignatureModal` canvas
-    # on the front end, same `services/signoff.validate_signature` guard. This is
-    # deliberately not a fire-specific signature mechanism: there is one on this
-    # platform and this is a second consumer of it.
-    #
-    # The `reviewedBy`/`approvedBy` columns above stay as the queryable index —
-    # "which sheets has this person approved" must not be a JSON scan — and the
-    # signature is the evidence behind the stamp, not a replacement for it.
-    signOffs: Mapped[list | None] = mapped_column(JSON)
-
     responses: Mapped[list["CamsResponse"]] = relationship(back_populates="engagement", cascade="all, delete-orphan")
     findings: Mapped[list["CamsFinding"]] = relationship(back_populates="engagement", cascade="all, delete-orphan")
 
@@ -201,11 +138,6 @@ class CamsEngagement(Base, IdMixin):
         Index("ix_CamsEngagement_planned", "plannedDate"),
         Index("ix_CamsEngagement_source", "sourceModule"),
         Index("ix_CamsEngagement_auditType", "auditTypeId"),
-        # The grid screens ask "every period of template T for asset A" on every
-        # render — a month of daily rows is 31 of these, a year of the FE sheet
-        # is 12. Without this it is a seq-scan of the whole engagement table per
-        # page view.
-        Index("ix_CamsEngagement_period", "sourceEntityId", "templateId", "periodLabel"),
     )
 
 
@@ -252,26 +184,6 @@ class CamsTemplate(Base, IdMixin):
     ownerId: Mapped[str] = mapped_column(String, nullable=False)
     isGlobal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     siteId: Mapped[str | None] = mapped_column(String)
-
-    # ── Controlled-document provenance ───────────────────────────────────────
-    #
-    # A template that reproduces a client's controlled document has to carry that
-    # document's own identity — number, revision, supersedes, effective/review
-    # dates, source sheet — because the auditor's first question is "which
-    # revision is this?" and the answer must come off the record, not off a
-    # developer's memory of which XLSX was imported.
-    #
-    # `version` above is the platform's edit counter; it is NOT the client's
-    # revision. PIL/EHSD/CL/026-R2 is R2 whether this is the first import or the
-    # fifth re-seed of it, so conflating the two would misreport the document.
-    #
-    # JSON rather than eight columns because the shape is document-family
-    # specific (a Page Industries sheet has "supersedesNo"; an ISO 45001
-    # checklist would not) and nothing queries inside it — it is read whole, by
-    # the screen header and the PDF header. Also carries `layout`, which tells
-    # the renderer how to pivot a set of periodic engagements into the grid the
-    # paper original prints. Empty {} on every pre-existing template.
-    documentMeta: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     sections: Mapped[list["CamsTemplateSection"]] = relationship(
         back_populates="template", cascade="all, delete-orphan"
@@ -374,63 +286,11 @@ class CamsFinding(Base, IdMixin):
     status: Mapped[str] = mapped_column(String, nullable=False, default="OPEN")
     isRepeatFinding: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     repeatOfFindingId: Mapped[str | None] = mapped_column(String)
-
-    # ── Re-observation of an OPEN finding ────────────────────────────────────
-    #
-    # `isRepeatFinding` / `repeatOfFindingId` describe a defect that came BACK
-    # after being closed. These three describe one that never went away: the same
-    # check failing on the same asset day after day while the CAPA is still open.
-    #
-    # That distinction is what lets a routine daily checklist raise CAPAs at all.
-    # Without it, a power lamp dead for three weeks is either 21 CAPAs (a register
-    # nobody reads) or none (a failure nobody acts on). With it, it is one CAPA
-    # that says "observed 21 times, last on 2026-08-24" — which is the sentence a
-    # CAPA owner can act on and an auditor can check.
-    #
-    # Real columns rather than a JSON blob because "which defects recur most" is a
-    # question worth being able to ORDER BY, and because the first attempt at this
-    # wrote the count into a `sourceMetadata` attribute that does not exist on this
-    # model — every write silently did nothing and the count was permanently stuck
-    # at 2. A typed column fails loudly instead.
-    occurrenceCount: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    lastObservedAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # The period labels it was seen in ("2026-08-24", "2026-Q3"), newest last and
-    # capped by the writer — a year of daily observations is 365 labels and the
-    # useful facts are the count, the first and the last.
-    observedPeriods: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     dueDate: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closedBy: Mapped[str | None] = mapped_column(String)
     closedAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     verificationNote: Mapped[str | None] = mapped_column(Text)
     evidenceAttachmentIds: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
-
-    # ── Fire & Life Safety additions (generic on purpose) ─────────────────────
-    #
-    # A fire "Defect" in the build spec IS a CamsFinding — same lifecycle, same
-    # CAPA link, same independence rules. Rather than fork a Defect table, the
-    # two things the spec needs that findings lacked are added here, and both are
-    # useful to every CAMS consumer:
-    #
-    # `requiresCapa` — opt-in hard constraint. Spec §5.4 wants "CRITICAL defect
-    # ⇒ linked CAPA" enforced by the DB, not by the UI, so it cannot repeat the
-    # HIRA gap where a column existed and nothing enforced it. A blanket CHECK on
-    # `severity='CRITICAL_NC' ⇒ capaId IS NOT NULL` would retroactively invalidate
-    # existing CAMS findings and break every audit path that writes a finding
-    # before spawning its CAPA. Instead the fire path sets this flag, and a
-    # DEFERRABLE INITIALLY DEFERRED constraint trigger validates it at COMMIT —
-    # so the spawn-then-link ordering inside one transaction is legal, but a
-    # transaction that ends with an unlinked required-CAPA finding cannot commit.
-    # (Postgres will not accept a deferrable CHECK; a constraint trigger is the
-    # only way to get a deferred assertion.)
-    requiresCapa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-    # `verificationEngagementId` — spec §4.3: a defect cannot go OPEN → CLOSED
-    # without a linked *verification inspection*. `verificationNote` above is
-    # free text and proves nothing; this points at the CamsEngagement that
-    # re-inspected the asset, mirroring the re-approval-on-edit lock decided for
-    # HIRA. Enforced in services/fire_defects.py, not by a DB constraint: a
-    # non-fire finding may legitimately close on documentary evidence alone.
-    verificationEngagementId: Mapped[str | None] = mapped_column(String)
 
     createdAt: Mapped[datetime] = _created()
     createdBy: Mapped[str | None] = mapped_column(String)
@@ -445,9 +305,6 @@ class CamsFinding(Base, IdMixin):
         Index("ix_CamsFinding_clause", "standardClauseRef"),
         Index("ix_CamsFinding_site", "siteId"),
         Index("ix_CamsFinding_repeat", "isRepeatFinding"),
-        # The fire defect board filters by asset; without this the kanban
-        # seq-scans every finding the tenant has ever raised.
-        Index("ix_CamsFinding_assetRef", "areaOrAssetRef"),
     )
 
 

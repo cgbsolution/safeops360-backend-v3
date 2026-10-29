@@ -107,3 +107,90 @@ async def compute(
     )
     cache.put(key, resp)
     return resp
+
+
+def _empty(module: str, reason: str) -> InsightResponse:
+    return InsightResponse(
+        module=module,
+        plant=None,
+        generatedAt=datetime.now(timezone.utc),
+        bar=[],
+        signals=[],
+        recordCount=0,
+        suppressed=True,
+        reason=reason,
+        cached=False,
+    )
+
+
+async def compute_for_plants(
+    db: AsyncSession,
+    module: str,
+    plants: list[str],
+    *,
+    date_from: Any = None,
+    date_to: Any = None,
+) -> InsightResponse:
+    """Insights over exactly `plants` — the multi-plant reader's view.
+
+    `compute()` narrows on a single explicit plant or on nothing, and nothing
+    means every plant on the platform. A reader entitled to a few plants gets a
+    per-plant fan-out merged here. Per-plant cards share a rule id, so they are
+    NOT deduplicated by id (that would drop all but one plant's finding); a
+    colliding id is disambiguated as `<id>@<plant code>`, and that plant's chips
+    linking to it (`?insight=<id>`) are rewritten to match, so click-through
+    still lands on the right card.
+    """
+    if not plants:
+        return _empty(module, "no_accessible_plants")
+    if len(plants) == 1:
+        return await compute(db, module, plant=plants[0], date_from=date_from, date_to=date_to)
+
+    from sqlalchemy import select
+
+    from app.models.plant import Plant
+
+    codes = dict((await db.execute(select(Plant.id, Plant.code).where(Plant.id.in_(plants)))).all())
+    results = [
+        (pid, await compute(db, module, plant=pid, date_from=date_from, date_to=date_to))
+        for pid in plants
+    ]
+
+    id_counts: dict[str, int] = {}
+    for _, res in results:
+        for card in res.bar:
+            id_counts[card.id] = id_counts.get(card.id, 0) + 1
+
+    bar: list[Insight] = []
+    signals: list[Signal] = []
+    for pid, res in results:
+        code = codes.get(pid) or pid
+        renamed: dict[str, str] = {}
+        for card in res.bar:
+            if id_counts[card.id] > 1:
+                new_id = f"{card.id}@{code}"
+                renamed[card.id] = new_id
+                card = card.model_copy(
+                    update={"id": new_id, "headline": f"[{code}] {card.headline}"[:90]}
+                )
+            bar.append(card)
+        for sig in res.signals:
+            href = sig.filterHref or ""
+            if href.startswith("?insight=") and href[len("?insight="):] in renamed:
+                sig = sig.model_copy(
+                    update={"filterHref": f"?insight={renamed[href[len('?insight='):]]}"}
+                )
+            signals.append(sig)
+
+    suppressed = all(res.suppressed for _, res in results)
+    return InsightResponse(
+        module=module,
+        plant=None,
+        generatedAt=datetime.now(timezone.utc),
+        bar=sorted(bar, key=_rank, reverse=True)[:3],
+        signals=signals,
+        recordCount=sum(res.recordCount for _, res in results),
+        suppressed=suppressed,
+        reason="insufficient_records" if suppressed else None,
+        cached=all(res.cached for _, res in results),
+    )

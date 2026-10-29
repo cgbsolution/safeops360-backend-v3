@@ -19,6 +19,7 @@ Adds:
 
 from __future__ import annotations
 
+import asyncio
 import re
 import secrets
 import sys
@@ -56,10 +57,11 @@ from app.schemas.near_miss import (
     NearMissUpdate,
 )
 from app.services import workflow_engine
+from app.services.numbering import next_number
+from app.services.access_scope import build_record_scope
 from app.services.permissions import (
     PermissionContext,
     can,
-    get_accessible_plants,
     get_module_scopes,
 )
 from app.services.storage import (
@@ -158,16 +160,17 @@ async def list_near_misses(
     read_check = await can(db, user.id, "NEAR_MISS.READ", PermissionContext())
     if not read_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, read_check.reason or "Access denied")
-    plants = await get_accessible_plants(db, user.id)
+    # Same rules as GET /{id}: the NEAR_MISS.READ scope — plant, department or
+    # own records — never the any-module plant set.
+    scope = await build_record_scope(db, user.id, "NEAR_MISS.READ")
+    scope_clause = scope.filter(
+        NearMiss.plantId,
+        owner=or_(NearMiss.reporterId == user.id, NearMiss.actionOwnerId == user.id),
+        department_col=NearMiss.departmentId,
+    )
     stmt = select(NearMiss)
-    if plants is None:
-        pass
-    elif not plants:
-        return {"items": [], "total": 0}
-    else:
-        stmt = stmt.where(NearMiss.plantId.in_(plants))
-    if read_check.matched_scope == "OWN_RECORDS":
-        stmt = stmt.where(or_(NearMiss.reporterId == user.id, NearMiss.actionOwnerId == user.id))
+    if scope_clause is not None:
+        stmt = stmt.where(scope_clause)
     # Register tab filter. Applied to the LIST only — statusCounts below is
     # deliberately computed unfiltered so every tab still shows its own total.
     if status_filter:
@@ -232,12 +235,8 @@ async def list_near_misses(
     # scoped query rather than the returned page, so the tab totals stay
     # correct when the list is capped at 200.
     count_stmt = select(NearMiss.status, func.count()).select_from(NearMiss)
-    if plants:
-        count_stmt = count_stmt.where(NearMiss.plantId.in_(plants))
-    if read_check.matched_scope == "OWN_RECORDS":
-        count_stmt = count_stmt.where(
-            or_(NearMiss.reporterId == user.id, NearMiss.actionOwnerId == user.id)
-        )
+    if scope_clause is not None:
+        count_stmt = count_stmt.where(scope_clause)
     status_counts = {
         (s.value if hasattr(s, "value") else str(s)): int(n)
         for s, n in (await db.execute(count_stmt.group_by(NearMiss.status))).all()
@@ -375,13 +374,8 @@ async def create_near_miss(
     if payload.date.timestamp() > datetime.now(timezone.utc).timestamp() + 300:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Near-miss date cannot be in the future.")
 
-    # Generate number per plant
-    last = (
-        await db.execute(
-            select(func.count()).select_from(NearMiss).where(NearMiss.plantId == payload.plantId)
-        )
-    ).scalar_one()
-    number = f"NM-{payload.date.year}-{plant.code}-{last + 1:04d}"
+    # Generate number per plant — highest issued + 1 (see services/numbering)
+    number = await next_number(db, column=NearMiss.number, stem=f"NM-{payload.date.year}-{plant.code}-")
 
     # Compute risk + SLA
     risk_score, risk_level = _compute_risk(payload.riskLikelihood, payload.riskConsequence)
@@ -556,7 +550,7 @@ async def manual_promote_to_incident(
     nm = await db.get(NearMiss, nm_id)
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Near miss not found")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.APPROVE",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -605,7 +599,7 @@ async def delete_near_miss(
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Near miss not found")
 
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.DELETE",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -722,7 +716,7 @@ async def get_near_miss(
     nm = await db.get(NearMiss, nm_id)
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.READ",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -744,7 +738,7 @@ async def update_near_miss(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     if nm.status == NearMissStatus.CLOSED:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot edit a closed near miss.")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.UPDATE",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -892,7 +886,7 @@ async def list_attachments(
     nm = await db.get(NearMiss, nm_id)
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Near miss not found")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.READ",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -930,7 +924,7 @@ async def upload_attachment(
     nm = await db.get(NearMiss, nm_id)
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Near miss not found")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.UPDATE",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -1139,7 +1133,7 @@ async def list_capas(
     nm = await db.get(NearMiss, nm_id)
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Near miss not found")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.READ",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -1326,6 +1320,9 @@ async def _master_labels(
     return out
 
 
+_AI_DRAFT_TIMEOUT_S = 20.0
+
+
 @router.post("/{nm_id}/capa-execution-draft")
 async def ai_capa_execution_draft(
     nm_id: str,
@@ -1348,7 +1345,7 @@ async def ai_capa_execution_draft(
     nm = await db.get(NearMiss, nm_id)
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Near miss not found")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.READ",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -1394,13 +1391,21 @@ async def ai_capa_execution_draft(
         "userTypedSoFar": hint or None,
     }
 
-    drafted = await complete_json(
-        system=_CAPA_EXECUTION_DRAFT_PROMPT,
-        user=_json.dumps(context, default=str, indent=2),
-        max_tokens=600,
-        temperature=0.3,
-    )
-    if drafted is None:
+    # The browser reaches this through the Next.js proxy, which gives up at
+    # 26s; answer before that with the documented soft failure instead of
+    # letting the proxy turn a slow model into a 504.
+    try:
+        drafted = await asyncio.wait_for(
+            complete_json(
+                system=_CAPA_EXECUTION_DRAFT_PROMPT,
+                user=_json.dumps(context, default=str, indent=2),
+                max_tokens=600,
+            ),
+            timeout=_AI_DRAFT_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        return {"ok": False, "reason": "The AI draft took too long — please try again or write the narrative manually."}
+    if not isinstance(drafted, dict):
         return {"ok": False, "reason": "The AI draft could not be generated — please write the narrative manually."}
 
     narrative = str(drafted.get("narrative") or "").strip()
@@ -1427,7 +1432,7 @@ async def list_comments(
     nm = await db.get(NearMiss, nm_id)
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Near miss not found")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.READ",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),
@@ -1469,7 +1474,7 @@ async def add_comment(
     nm = await db.get(NearMiss, nm_id)
     if nm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Near miss not found")
-    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId}
+    record = {"reporterId": nm.reporterId, "actionOwnerId": nm.actionOwnerId, "departmentId": nm.departmentId}
     result = await can(
         db, user.id, "NEAR_MISS.READ",
         PermissionContext(record_id=nm.id, plant_id=nm.plantId, record=record),

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -35,7 +35,7 @@ from app.schemas.observation_severity import (
     SeveritySuggestionOut,
 )
 from app.services import observation_severity as sev
-from app.services.permissions import get_accessible_plants
+from app.services.permissions import PermissionContext, can, get_accessible_plants_for
 
 router = APIRouter(prefix="/api/observations", tags=["observations"])
 
@@ -65,7 +65,18 @@ async def severity_suggestion(
     combination — the form then behaves exactly as it did before this feature
     existed, which is the graceful-degradation requirement of §6.6.
     """
-    await require_permission_with_context("OBSERVATION.CREATE", user, db, plant_id=plantId)
+    # The create form and the edit form both call this; an editor holding
+    # OBSERVATION.UPDATE without CREATE got a 403 and silently no suggestion.
+    allowed = False
+    for code in ("OBSERVATION.CREATE", "OBSERVATION.UPDATE"):
+        if (await can(db, user.id, code, PermissionContext(plant_id=plantId))).allowed:
+            allowed = True
+            break
+    if not allowed:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "OBSERVATION.CREATE or OBSERVATION.UPDATE required",
+        )
 
     result = await sev.resolve(
         db,
@@ -112,7 +123,9 @@ async def severity_calibration(
     await require_permission_with_context("OBSERVATION.READ", user, db, plant_id=None)
 
     # None ⇒ ALL_PLANTS (no filter). Empty list ⇒ no accessible plants ⇒ no rows.
-    accessible = await get_accessible_plants(db, user.id)
+    # Per-permission plant set: the loose get_accessible_plants() returns
+    # "all plants" when the user holds ALL_PLANTS on any other module.
+    accessible = await get_accessible_plants_for(db, user.id, "OBSERVATION.READ")
     since = datetime.now(timezone.utc) - timedelta(days=days)
     sources = tuple(OVERRIDE_SOURCES) if includeAllSources else (OVERRIDE_SOURCE_OBSERVER_FORM,)
 

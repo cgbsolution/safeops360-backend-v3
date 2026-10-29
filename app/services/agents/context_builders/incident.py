@@ -41,6 +41,8 @@ from app.models.epc import ContractorCompany
 from app.models.near_miss import NearMiss
 from app.models.permit import Permit
 from app.models.plant import Area, Plant
+from app.models.user import User
+from app.services.agents.context_builders._redact import Redactor
 
 
 async def build_context(db: AsyncSession, incident_id: str) -> dict[str, Any]:
@@ -146,6 +148,24 @@ async def build_context(db: AsyncSession, incident_id: str) -> dict[str, Any]:
             ).all()
         )
 
+    # ── Names → placeholders before anything leaves the platform ─────
+    # Persons and witnesses linked to a user are known by that user's name;
+    # register those too so free text mentioning them is scrubbed.
+    redact = Redactor()
+    linked_user_ids = {p.userId for p in incident.personsInvolved if p.userId} | {
+        w.witnessUserId for w in incident.witnessStatements if w.witnessUserId
+    }
+    user_names: dict[str, str] = {}
+    if linked_user_ids:
+        user_names = dict(
+            (await db.execute(select(User.id, User.name).where(User.id.in_(linked_user_ids)))).all()
+        )
+    for p in incident.personsInvolved:
+        redact.name(p.externalName or user_names.get(p.userId or ""), "Person")
+    redact.name(incident.injuredPersonName, "Person")
+    for w in incident.witnessStatements:
+        redact.name(w.witnessName or user_names.get(w.witnessUserId or ""), "Witness")
+
     occurred = incident.occurredAt or incident.date
     return {
         "sourceModule": "INCIDENT",
@@ -164,19 +184,17 @@ async def build_context(db: AsyncSession, incident_id: str) -> dict[str, Any]:
         "where": {
             "plantId": incident.plantId,
             "plantName": plant.name if plant else None,
-            "plantType": getattr(plant, "type", None) if plant else None,
-            "areaLabel": getattr(area, "label", None) if area else None,
+            "plantType": plant.unitType if plant else None,
+            "areaLabel": area.name if area else None,
             "departmentName": getattr(department, "name", None) if department else None,
             "location": incident.location,
             "specificLocation": incident.specificLocation,
-            "gpsLatitude": incident.gpsLatitude,
-            "gpsLongitude": incident.gpsLongitude,
             "weatherConditions": incident.weatherConditions,
         },
-        "description": (
+        "description": redact.text(
             incident.initialDescription or incident.description or ""
         ),
-        "immediateAction": incident.immediateAction,
+        "immediateAction": redact.text(incident.immediateAction),
         "activity": {
             "what": incident.activityBeingPerformed,
             "isRoutine": incident.activityIsRoutine,
@@ -186,7 +204,7 @@ async def build_context(db: AsyncSession, incident_id: str) -> dict[str, Any]:
                 "role": p.role,
                 "isContractor": p.isContractor,
                 "contractorCompany": contractor_by_id.get(p.contractorCompanyId or ""),
-                "externalName": p.externalName,
+                "personRef": redact.name(p.externalName or user_names.get(p.userId or ""), "Person"),
                 "userId": p.userId,
                 "isInjured": p.isInjured,
                 "bodyPartAffected": p.bodyPartAffected,
@@ -217,10 +235,14 @@ async def build_context(db: AsyncSession, incident_id: str) -> dict[str, Any]:
         ],
         "witnesses": [
             {
-                "witnessName": w.witnessName,
+                "witnessRef": redact.name(
+                    w.witnessName or user_names.get(w.witnessUserId or ""), "Witness"
+                ),
                 "witnessRole": w.witnessRole,
                 "userId": w.witnessUserId,
-                "statementPreview": (w.statementText or "")[:300] if w.statementText else None,
+                "statementPreview": (
+                    redact.text((w.statementText or "")[:300]) if w.statementText else None
+                ),
                 "takenAt": _iso(w.takenAt),
                 "language": w.language,
             }
@@ -230,7 +252,7 @@ async def build_context(db: AsyncSession, incident_id: str) -> dict[str, Any]:
             {
                 "sequence": t.sequence,
                 "timestamp": _iso(t.timestamp),
-                "description": (t.description or "")[:300],
+                "description": redact.text((t.description or "")[:300]),
                 "source": t.source,
             }
             for t in timeline
@@ -239,7 +261,9 @@ async def build_context(db: AsyncSession, incident_id: str) -> dict[str, Any]:
             {
                 "category": e.category,
                 "title": e.title,
-                "descriptionPreview": (e.description or "")[:200] if e.description else None,
+                "descriptionPreview": (
+                    redact.text((e.description or "")[:200]) if e.description else None
+                ),
                 "collectedAt": _iso(e.collectedAt),
                 "preservedFor": e.preservedFor,
             }
@@ -250,7 +274,9 @@ async def build_context(db: AsyncSession, incident_id: str) -> dict[str, Any]:
                 "documentType": d.documentType,
                 "documentReference": d.documentReference,
                 "complianceFinding": d.complianceFinding,
-                "reviewNotesPreview": (d.reviewNotes or "")[:240] if d.reviewNotes else None,
+                "reviewNotesPreview": (
+                    redact.text((d.reviewNotes or "")[:240]) if d.reviewNotes else None
+                ),
             }
             for d in documents
         ],

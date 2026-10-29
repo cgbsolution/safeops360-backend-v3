@@ -23,6 +23,10 @@ from typing import Any
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import readable_plants, restrict_to_plants
+
+from app.services.agents.tools._enums import INCIDENT_TYPE_ALIASES, coerce_enum
+
 from app.models.incident import (
     Incident,
     IncidentDocumentReview,
@@ -107,12 +111,9 @@ async def handle(
             )
 
     if incident_type_filter:
-        valid_types = {t.value for t in IncidentType}
-        if incident_type_filter not in valid_types:
-            raise ValueError(
-                f"Unknown incidentType {incident_type_filter!r}. "
-                f"Valid: {sorted(valid_types)}"
-            )
+        incident_type_filter = coerce_enum(
+            incident_type_filter, IncidentType, "incidentType", INCIDENT_TYPE_ALIASES
+        ).value
 
     limit = min(int(input.get("limit", 10)), 25)
 
@@ -122,6 +123,8 @@ async def handle(
         .where(Incident.status == IncidentStatus.CLOSED)
         .where(Incident.id != source_record_id)
     )
+
+    stmt = restrict_to_plants(stmt, Incident.plantId, await readable_plants(db, "INCIDENT.READ"))
 
     if incident_type_filter:
         stmt = stmt.where(Incident.type == IncidentType(incident_type_filter))

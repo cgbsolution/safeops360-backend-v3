@@ -70,14 +70,6 @@ class CaptureSubmission(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     mapPinY: Mapped[float | None] = mapped_column(Float)
     equipmentId: Mapped[str | None] = mapped_column(String)
     qrScanned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # A fire-register asset (extinguisher, alarm panel, hydrant) scanned from its
-    # sticker. SEPARATE from `equipmentId`: that holds a Field Capture `Equipment`
-    # id, and `FireEquipment` is a different table with different ids. Loose id,
-    # no FK — same convention as `equipmentId`.
-    fireAssetId: Mapped[str | None] = mapped_column(String, index=True)
-    # {code, allottedSerialNo, location, type, subtype, plantId} at submit time,
-    # so a later re-tag or move doesn't rewrite where the finding was made.
-    fireAssetSnapshot: Mapped[dict | None] = mapped_column(JSON)
 
     # category = two CaptureTaxonomy(kind=HAZARD) levels; snapshot keeps the
     # labels as shown at submit time so history survives taxonomy edits.

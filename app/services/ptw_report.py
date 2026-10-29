@@ -20,9 +20,6 @@ import base64
 import io
 from datetime import datetime
 from typing import Any
-from collections.abc import Mapping
-
-from app.services.display_labels import label
 
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
@@ -190,8 +187,7 @@ class _PtwReport(FPDF):
         self.ln(h)
 
 
-def render_ptw_closeout_pdf(data: dict[str, Any], labels: Mapping[str, str] | None = None) -> bytes:
-    # `labels`: display-label overrides for the permit's plant (falls through to the literals).
+def render_ptw_closeout_pdf(data: dict[str, Any]) -> bytes:
     """`data` is the fully-resolved dict built by build_ptw_report_data()."""
     p = data["permit"]
     # An unexecuted withdrawal is terminal — its record is final even though
@@ -217,7 +213,7 @@ def render_ptw_closeout_pdf(data: dict[str, Any], labels: Mapping[str, str] | No
     pdf.section("1. Permit Certificate")
     pdf.kv("Permit No.", p["number"])
     pdf.kv("Type", p["type"])
-    pdf.kv(label(labels, "ptw.plant_location", "Plant / Location"), f"{p['plantName']} — {p['location']}" + (f" ({p['specificLocation']})" if p.get("specificLocation") else ""))
+    pdf.kv("Plant / Location", f"{p['plantName']} — {p['location']}" + (f" ({p['specificLocation']})" if p.get("specificLocation") else ""))
     pdf.kv("Scope of Work", p["scopeOfWork"])
     pdf.kv("Validity", f"{_fmt_dt(p['validFrom'])}  ->  {_fmt_dt(p['validTo'])}")
     pdf.kv("Originator", p["originatorName"])
@@ -252,7 +248,7 @@ def render_ptw_closeout_pdf(data: dict[str, Any], labels: Mapping[str, str] | No
             pdf.add_page()
         pdf.set_font("Helvetica", "B", 9.5)
         pdf.set_text_color(*NAVY)
-        pdf.cell(120, 6, label(labels, f"ptw.action.{ev['action']}", _ACTION_LABELS.get(ev["action"], ev["action"])))
+        pdf.cell(120, 6, _ACTION_LABELS.get(ev["action"], ev["action"]))
         pdf.set_font("Helvetica", "", 8.5)
         pdf.set_text_color(*GREY)
         pdf.cell(0, 6, _fmt_dt(ev["capturedAt"]), align="R")
@@ -430,7 +426,7 @@ def render_ptw_closeout_pdf(data: dict[str, Any], labels: Mapping[str, str] | No
     return bytes(out)
 
 
-def build_register_xlsx(rows: list[dict[str, Any]], labels: Mapping[str, str] | None = None) -> bytes:
+def build_register_xlsx(rows: list[dict[str, Any]]) -> bytes:
     """Permit register export — one row per permit."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
@@ -442,7 +438,7 @@ def build_register_xlsx(rows: list[dict[str, Any]], labels: Mapping[str, str] | 
 
     headers = [
         "Permit No.", "Type", "Status", "Execution State", "Closure Path",
-        "Outcome", label(labels, "term.plant", "Plant"), "Location",
+        "Outcome", "Plant", "Location",
         "Scope of Work", "Valid From", "Valid To", "Originator", "Issuer",
         "Receiver", "Contractor", "FLRA Required", "Issued At", "Accepted At",
         "Work Completed At", "Handback At", "Closed At", "Closing Remark",

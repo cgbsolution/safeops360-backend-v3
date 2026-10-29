@@ -752,9 +752,10 @@ async def get_entry(
     if entry is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry not found")
     study = await db.get(EaiStudy, entry.studyId)
-    if study:
-        await _require_eai_enabled(db, study.plantId)
-        await require_permission_with_context("EAI.READ", user, db, plant_id=study.plantId)
+    if study is None:  # orphan entry: no plant to authorise against — fail closed
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry not found")
+    await _require_eai_enabled(db, study.plantId)
+    await require_permission_with_context("EAI.READ", user, db, plant_id=study.plantId)
     return entry
 
 
@@ -1128,6 +1129,12 @@ async def list_review_cycles(
     if plantId:
         await _require_eai_enabled(db, plantId)
         await require_permission_with_context("EAI.READ", user, db, plant_id=plantId)
+    else:
+        # No plant given: still needs EAI.READ, and only the plants it covers.
+        await require_permission_with_context("EAI.READ", user, db)
+    from app.services.permissions import get_accessible_plants_for
+
+    readable_plants = await get_accessible_plants_for(db, user.id, "EAI.READ")
     stmt = (
         select(EaiReviewCycle, EaiEntry.activityDescription, EaiEntry.sequenceNumber,
                EaiStudy.number, EaiStudy.title)
@@ -1140,6 +1147,8 @@ async def list_review_cycles(
         stmt = stmt.where(EaiReviewCycle.status == status_)
     if plantId:
         stmt = stmt.where(EaiStudy.plantId == plantId)
+    if readable_plants is not None:
+        stmt = stmt.where(EaiStudy.plantId.in_(readable_plants))
     stmt = stmt.order_by(EaiReviewCycle.scheduledFor.asc())
     rows = (await db.execute(stmt)).all()
     result = []
@@ -1167,11 +1176,11 @@ async def bulk_no_change(
         if cycle is None or cycle.status not in ("SCHEDULED", "IN_PROGRESS"):
             continue
         entry = await db.get(EaiEntry, cycle.entryId)
-        if entry is not None:
-            study = await db.get(EaiStudy, entry.studyId)
-            if study is not None:
-                await _require_eai_enabled(db, study.plantId)
-                await require_permission_with_context("EAI.UPDATE", user, db, plant_id=study.plantId)
+        study = await db.get(EaiStudy, entry.studyId) if entry is not None else None
+        if study is None:  # cannot authorise a cycle with no plant — skip it
+            continue
+        await _require_eai_enabled(db, study.plantId)
+        await require_permission_with_context("EAI.UPDATE", user, db, plant_id=study.plantId)
         cycle.status = "COMPLETED"
         cycle.completedAt = datetime.now(timezone.utc)
         cycle.completedById = user.id

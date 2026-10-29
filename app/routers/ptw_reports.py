@@ -33,7 +33,9 @@ from app.models.permit import (
 )
 from app.models.plant import Plant
 from app.models.user import User
-from app.services.permissions import PermissionContext, can, get_accessible_plants
+from app.services.access_scope import build_record_scope
+from app.services.permissions import PermissionContext, can
+from app.services.ptw_access import check_permit_access, permit_party_clause
 from app.services.ptw_report import build_register_xlsx, render_ptw_closeout_pdf
 
 router = APIRouter(prefix="/api/ptw", tags=["ptw-reports"])
@@ -67,17 +69,18 @@ async def export_register(
     if not read_check.allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, read_check.reason or "Access denied")
 
-    plants = await get_accessible_plants(db, user.id)
     stmt = select(Permit).options(
         selectinload(Permit.suspensions),
         selectinload(Permit.extensions),
         selectinload(Permit.gasTestReadings),
     )
-    if plants is not None:
-        if not plants:
-            stmt = stmt.where(Permit.id.is_(None))  # empty result
-        else:
-            stmt = stmt.where(Permit.plantId.in_(plants))
+    # Same rows as the register (GET /api/ptw): PTW.READ scope incl. department
+    # and own-records grants, plus permits the caller is named on.
+    scope = await build_record_scope(db, user.id, "PTW.READ")
+    stmt = scope.apply(
+        stmt, Permit.plantId, owner=permit_party_clause(user.id),
+        department_col=Permit.departmentId, owner_always=True,
+    )
     if not include_archived:
         stmt = stmt.where(Permit.isArchived.is_(False))
     permits = (
@@ -127,9 +130,7 @@ async def export_register(
             "isArchived": bool(p.isArchived),
         })
 
-    from app.services.display_labels import labels_for_plants
-
-    xlsx = build_register_xlsx(rows, await labels_for_plants(db, sorted({p.plantId for p in permits if p.plantId})))
+    xlsx = build_register_xlsx(rows)
     return StreamingResponse(
         io.BytesIO(xlsx),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -158,20 +159,10 @@ async def closeout_report(
     )
     if permit is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Permit not found")
-    result = await can(
-        db, user.id, "PTW.READ",
-        PermissionContext(
-            record_id=permit.id,
-            plant_id=permit.plantId,
-            record={
-                "originatorId": permit.originatorId,
-                "issuerId": permit.issuerId,
-                "receiverId": permit.receiverId,
-            },
-        ),
-    )
-    if not result.allowed:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, result.reason or "Access denied")
+    # Shared PTW gate: RBAC scope (incl. department) + the named-party read.
+    allowed, reason = await check_permit_access(db, permit, user, "PTW.READ")
+    if not allowed:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, reason or "Access denied")
 
     plant = await db.get(Plant, permit.plantId)
 
@@ -344,9 +335,7 @@ async def closeout_report(
         ],
     }
 
-    from app.services.display_labels import labels_for_plant
-
-    pdf_bytes = render_ptw_closeout_pdf(data, await labels_for_plant(db, permit.plantId))
+    pdf_bytes = render_ptw_closeout_pdf(data)
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",

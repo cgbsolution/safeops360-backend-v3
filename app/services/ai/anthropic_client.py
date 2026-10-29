@@ -30,8 +30,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.ai.redaction import redact_data, redact_payload
 
 _client = None
+
+# Per-request timeout for the agent tool loop. The shared client caps calls at
+# 90s so single-shot calls fail fast, but an agent turn can legitimately write
+# a long answer (HIRA: ~20k tokens of input, a multi-thousand-token analysis);
+# at 90s that turn timed out and was retried, paying for both attempts.
+_TOOL_LOOP_TIMEOUT_S = 300.0
 
 
 def _get_client():
@@ -55,7 +62,7 @@ def _get_client():
 
 
 def is_configured() -> bool:
-    return get_settings().anthropic_api_key is not None
+    return bool(get_settings().anthropic_api_key)
 
 
 async def complete_json(
@@ -63,7 +70,6 @@ async def complete_json(
     system: str,
     user: str,
     max_tokens: int = 1024,
-    temperature: float = 0.2,
     model: str | None = None,
 ) -> dict[str, Any] | None:
     """Synchronous Anthropic call wrapped in async-friendly shape.
@@ -78,20 +84,19 @@ async def complete_json(
         return None
     settings = get_settings()
     used_model = model or settings.anthropic_model
+    # No temperature/top_p/top_k: anthropic SDK 1.x+ removed them from
+    # messages.create (passing one is a TypeError before any request is
+    # sent), and API version 2026-10-21 rejects them on every model.
     try:
         # Run the sync SDK call off the event loop so it never blocks other
         # requests (e.g. the frontend status-poll) while the model thinks.
-        #
-        # `temperature` is accepted for caller compatibility but NOT sent: the
-        # anthropic 1.x SDK removed it from messages.create() (passing it is a
-        # TypeError, which made every AI draft silently return None), and
-        # Opus 4.7+ models reject it at the API anyway.
         msg = await asyncio.to_thread(
             client.messages.create,
             model=used_model,
             max_tokens=max_tokens,
             system=system,
-            messages=[{"role": "user", "content": user}],
+            # PII choke point: every single-shot call's payload is scrubbed here.
+            messages=[{"role": "user", "content": redact_payload(user)}],
         )
     except Exception as e:  # noqa: BLE001
         print(f"[ai] Anthropic call failed (model={used_model}): {e}", file=sys.stderr)
@@ -169,6 +174,10 @@ class ToolLoopResult:
     # should treat this as a soft failure (still has partial output).
     hit_iteration_cap: bool = False
 
+    # stop_reason of the last response ("end_turn", "max_tokens", "refusal",
+    # ...). "max_tokens" means the final answer was cut off.
+    stop_reason: str | None = None
+
 
 class AnthropicNotConfiguredError(RuntimeError):
     """Raised by complete_with_tools() when ANTHROPIC_API_KEY is unset.
@@ -200,7 +209,6 @@ async def complete_with_tools(
     model: str,
     max_tokens: int = 4096,
     max_iterations: int = 8,
-    temperature: float = 0.2,
 ) -> ToolLoopResult:
     """Run a tool-use loop against the Anthropic Messages API.
 
@@ -221,9 +229,6 @@ async def complete_with_tools(
         messages.create() call. Most real agents finish in 2-5
         iterations; 8 is generous. Hitting the cap surfaces as
         hit_iteration_cap=True on the result.
-      temperature: Accepted for compatibility, not forwarded — the
-        anthropic 1.x SDK no longer takes sampling parameters (see
-        complete_json).
 
     Returns:
       ToolLoopResult with the final assistant text, aggregated token
@@ -236,8 +241,11 @@ async def complete_with_tools(
     client = _get_client()
     if client is None:
         raise AnthropicNotConfiguredError("ANTHROPIC_API_KEY is not configured")
+    client = client.with_options(timeout=_TOOL_LOOP_TIMEOUT_S)
 
-    messages: list[dict[str, Any]] = [{"role": "user", "content": initial_user_message}]
+    # PII choke point: the agent context and every tool result below are
+    # scrubbed before they leave the platform (see services/ai/redaction.py).
+    messages: list[dict[str, Any]] = [{"role": "user", "content": redact_payload(initial_user_message)}]
     tool_calls: list[ToolCallRecord] = []
     input_tokens_total = 0
     output_tokens_total = 0
@@ -288,6 +296,7 @@ async def complete_with_tools(
                 raw_last_response=last_response_dump,
                 tool_calls=tool_calls,
                 hit_iteration_cap=False,
+                stop_reason=stop_reason,
             )
 
         # Append the assistant turn verbatim — the API requires the
@@ -315,7 +324,7 @@ async def complete_with_tools(
                     {
                         "type": "tool_result",
                         "tool_use_id": tool_use_id,
-                        "content": json.dumps(output, default=str),
+                        "content": json.dumps(redact_data(output), default=str),
                     }
                 )
             except Exception as e:  # noqa: BLE001
@@ -326,7 +335,7 @@ async def complete_with_tools(
                     {
                         "type": "tool_result",
                         "tool_use_id": tool_use_id,
-                        "content": f"Error executing tool: {e}",
+                        "content": redact_payload(f"Error executing tool: {e}"),
                         "is_error": True,
                     }
                 )

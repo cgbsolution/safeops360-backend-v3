@@ -20,6 +20,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.agents.tools._scope import (
+    MODULE_READ_PERMISSION,
+    plant_is_readable,
+    readable_plants,
+    restrict_to_plants,
+)
+
 from app.models.equipment import Equipment, Inspection
 from app.models.incident import Incident, IncidentEquipment
 from app.models.near_miss import NearMiss
@@ -77,6 +84,11 @@ async def handle(
     equipment = await db.get(Equipment, equipment_id)
     if equipment is None:
         return {"note": f"Equipment {equipment_id!r} not found", "equipment": None}
+    if not await plant_is_readable(
+        db, MODULE_READ_PERMISSION.get(source_module, "INCIDENT.READ"), equipment.plantId
+    ):
+        # Same answer as a missing id: don't confirm records the user can't see.
+        return {"note": f"Equipment {equipment_id!r} not found", "equipment": None}
 
     # Recent inspections (most recent N, completed only)
     insp_stmt = (
@@ -97,6 +109,7 @@ async def handle(
         .order_by(NearMiss.date.desc())
         .limit(10)
     )
+    nm_stmt = restrict_to_plants(nm_stmt, NearMiss.plantId, await readable_plants(db, "NEAR_MISS.READ"))
     near_misses = (await db.execute(nm_stmt)).scalars().all()
 
     # Incidents involving this equipment (via IncidentEquipment join)
@@ -108,6 +121,7 @@ async def handle(
         .order_by(Incident.date.desc())
         .limit(10)
     )
+    inc_stmt = restrict_to_plants(inc_stmt, Incident.plantId, await readable_plants(db, "INCIDENT.READ"))
     incidents = (await db.execute(inc_stmt)).scalars().unique().all()
 
     return {

@@ -12,6 +12,10 @@ filled templates. No model calls, no network egress anywhere in this package.
 
 from __future__ import annotations
 
-from app.services.insights.weekly.engine import compute_weekly, get_current_week_view
+from app.services.insights.weekly.engine import (
+    compute_weekly,
+    compute_weekly_view,
+    get_current_week_view,
+)
 
-__all__ = ["compute_weekly", "get_current_week_view"]
+__all__ = ["compute_weekly", "compute_weekly_view", "get_current_week_view"]

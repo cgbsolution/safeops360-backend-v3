@@ -26,7 +26,6 @@ from app.models.epc import (
 )
 from app.models.user import User
 from app.services.permissions import PermissionContext, can
-from app.services.tenant_partition import get_scoped, partition_for
 
 router = APIRouter(prefix="/api/epc/mobilization", tags=["epc-mobilization"])
 
@@ -119,7 +118,6 @@ def _mob_dict(mob: MobilizationRecord) -> dict:
 
 
 async def _generate_mob_number(db: AsyncSession, site_code: str) -> str:
-    # Counted globally on purpose — mobilizationNumber is unique across partitions.
     year = datetime.now(timezone.utc).year
     count_result = await db.execute(select(func.count(MobilizationRecord.id)))
     count = (count_result.scalar_one() or 0) + 1
@@ -131,7 +129,6 @@ async def _run_pre_checks(
     worker: ContractorWorker,
     company: ContractorCompany,
     site_id: str,
-    part: str,
 ) -> dict:
     """Run automated pre-mobilisation checks. Returns {check_name: {result, detail}} dict."""
     now = datetime.now(timezone.utc)
@@ -189,7 +186,6 @@ async def _run_pre_checks(
     existing_active = (
         await db.execute(
             select(MobilizationRecord).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.contractorWorkerId == worker.id,
                 MobilizationRecord.siteId == site_id,
                 MobilizationRecord.status == "active",
@@ -218,19 +214,15 @@ async def list_mobilizations(
     siteId: str | None = Query(None),
     contractorCompanyId: str | None = Query(None),
     status_filter: str | None = Query(None, alias="status"),
-    workerId: str | None = Query(None, description="One worker's mobilisation history"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    stmt = select(MobilizationRecord).where(MobilizationRecord.tenantId == part)
+    stmt = select(MobilizationRecord)
     if siteId:
         stmt = stmt.where(MobilizationRecord.siteId == siteId)
     if contractorCompanyId:
         stmt = stmt.where(MobilizationRecord.contractorCompanyId == contractorCompanyId)
-    if workerId:
-        stmt = stmt.where(MobilizationRecord.contractorWorkerId == workerId)
     if status_filter:
         stmt = stmt.where(MobilizationRecord.status == status_filter)
     mobs = (
@@ -246,22 +238,21 @@ async def initiate_mobilization(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.CREATE")
-    part = await partition_for(db, user)
 
-    worker = await get_scoped(db, ContractorWorker, body.contractorWorkerId, part)
+    worker = await db.get(ContractorWorker, body.contractorWorkerId)
     if worker is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor worker not found")
 
-    site = await get_scoped(db, ConstructionSite, body.siteId, part)
+    site = await db.get(ConstructionSite, body.siteId)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
-    company = await get_scoped(db, ContractorCompany, worker.contractorCompanyId, part)
+    company = await db.get(ContractorCompany, worker.contractorCompanyId)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
 
     # Run automated checks
-    checks = await _run_pre_checks(db, worker, company, body.siteId, part)
+    checks = await _run_pre_checks(db, worker, company, body.siteId)
 
     # Determine status based on check results
     all_pass = all(c["result"] == "pass" for c in checks.values())
@@ -275,7 +266,6 @@ async def initiate_mobilization(
     mob_number = await _generate_mob_number(db, site.siteCode)
 
     mob = MobilizationRecord(
-        tenantId=part,
         mobilizationNumber=mob_number,
         contractorWorkerId=body.contractorWorkerId,
         contractorCompanyId=worker.contractorCompanyId,
@@ -309,15 +299,13 @@ async def site_roster(
 ) -> dict:
     """Current active worker roster at a site (active mobilizations only)."""
     await _require(db, user, "EPC.READ")
-    part = await partition_for(db, user)
-    site = await get_scoped(db, ConstructionSite, site_id, part)
+    site = await db.get(ConstructionSite, site_id)
     if site is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Construction site not found")
 
     mobs = (
         await db.execute(
             select(MobilizationRecord).where(
-                MobilizationRecord.tenantId == part,
                 MobilizationRecord.siteId == site_id,
                 MobilizationRecord.status == "active",
             )
@@ -329,8 +317,8 @@ async def site_roster(
     roster = []
     blocked_count = 0
     for m in mobs:
-        worker = await get_scoped(db, ContractorWorker, m.contractorWorkerId, part)
-        company = await get_scoped(db, ContractorCompany, m.contractorCompanyId, part)
+        worker = await db.get(ContractorWorker, m.contractorWorkerId)
+        company = await db.get(ContractorCompany, m.contractorCompanyId)
         # Already-mobilised workers are ANNOTATED, not removed. Dropping a
         # flagged worker from the site roster would hide someone who is
         # physically on site from the supervisor who needs to know they are on
@@ -376,7 +364,7 @@ async def get_mobilization(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.READ")
-    mob = await get_scoped(db, MobilizationRecord, mob_id, await partition_for(db, user))
+    mob = await db.get(MobilizationRecord, mob_id)
     if mob is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Mobilization record not found")
     return _mob_dict(mob)
@@ -390,7 +378,7 @@ async def update_mobilization(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.UPDATE")
-    mob = await get_scoped(db, MobilizationRecord, mob_id, await partition_for(db, user))
+    mob = await db.get(MobilizationRecord, mob_id)
     if mob is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Mobilization record not found")
 
@@ -411,7 +399,7 @@ async def approve_mobilization(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.UPDATE")
-    mob = await get_scoped(db, MobilizationRecord, mob_id, await partition_for(db, user))
+    mob = await db.get(MobilizationRecord, mob_id)
     if mob is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Mobilization record not found")
 
@@ -440,7 +428,7 @@ async def demobilise(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.UPDATE")
-    mob = await get_scoped(db, MobilizationRecord, mob_id, await partition_for(db, user))
+    mob = await db.get(MobilizationRecord, mob_id)
     if mob is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Mobilization record not found")
 
@@ -471,7 +459,7 @@ async def suspend_mobilization(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _require(db, user, "EPC.UPDATE")
-    mob = await get_scoped(db, MobilizationRecord, mob_id, await partition_for(db, user))
+    mob = await db.get(MobilizationRecord, mob_id)
     if mob is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Mobilization record not found")
 

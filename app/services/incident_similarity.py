@@ -96,12 +96,22 @@ async def similar_incidents(
     floor: int = MATCH_FLOOR,
     only_closed: bool = True,
     window_months: int = 12,
+    plant_ids: list[str] | None = None,
+    reporter_id: str | None = None,
+    scope_clause: Any = None,
 ) -> list[dict[str, Any]]:
     """Return the top `limit` incidents most similar to `incident`, each with a
     normalised 0-100 `score` (>= `floor`), sorted descending.
 
     `only_closed=True` (the default, used by the AI suggestion) restricts to
     CLOSED incidents that already have structured cause data to learn from.
+
+    `plant_ids` / `reporter_id` limit candidates to what the caller may read:
+    a list of plants (None = every plant; [] = none) and, for own-records
+    readers, only incidents they reported. Without them the matcher returned
+    other plants' incident numbers and root causes to plant-scoped users.
+    `scope_clause` is an extra WHERE clause (e.g. a RecordScope filter that
+    also applies department grants).
     """
     cutoff = _now() - timedelta(days=int(window_months * 30.4))
 
@@ -115,6 +125,14 @@ async def similar_incidents(
     )
     if only_closed:
         stmt = stmt.where(Incident.status == IncidentStatus.CLOSED)
+    if plant_ids is not None:
+        if not plant_ids:
+            return []
+        stmt = stmt.where(Incident.plantId.in_(plant_ids))
+    if reporter_id is not None:
+        stmt = stmt.where(Incident.reporterId == reporter_id)
+    if scope_clause is not None:
+        stmt = stmt.where(scope_clause)
     candidates = (await db.execute(stmt)).scalars().all()
     if not candidates:
         return []
