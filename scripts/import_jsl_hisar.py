@@ -566,11 +566,32 @@ def import_observations(cur, path, plant_id, user_id):
         print(f"    category: {dict(Counter(o['category'] for o in out))}")
 
 
+def grant_access(cur, plant_id, emails):
+    """Give plant-scoped users (e.g. an NW HSE manager) read access to the JSL plant,
+    the same way cross-plant access is granted elsewhere: an extra PLANT-scoped UserRole."""
+    for email in emails:
+        cur.execute('SELECT ur."userId", ur."roleId" FROM "UserRole" ur JOIN "User" u ON u.id=ur."userId" '
+                    'WHERE u.email=%s AND ur."scopeType"=%s', (email, "PLANT"))
+        roles = {rid: uid for uid, rid in cur.fetchall()}
+        if not roles:
+            print(f"  ! {email}: no plant-scoped role found, skipped")
+            continue
+        for role_id, user_id in roles.items():
+            if one(cur, 'SELECT id FROM "UserRole" WHERE "userId"=%s AND "roleId"=%s AND "scopeType"=%s '
+                        'AND "scopeValue"=%s', user_id, role_id, "PLANT", plant_id):
+                continue
+            cur.execute('INSERT INTO "UserRole" (id, "userId", "roleId", "scopeType", "scopeValue") '
+                        'VALUES (%s,%s,%s,%s,%s)', (new_id(), user_id, role_id, "PLANT", plant_id))
+        print(f"  + {email}: access to {PLANT['code']}")
+
+
 def rollback(cur):
     pid = one(cur, 'SELECT id FROM "Plant" WHERE code=%s', PLANT["code"])
     if not pid:
         print("  nothing to remove")
         return
+    cur.execute('DELETE FROM "UserRole" WHERE "scopeType"=%s AND "scopeValue"=%s', ("PLANT", pid))
+    print(f"  - {cur.rowcount} plant access grants")
     cur.execute('DELETE FROM "HiraStudy" WHERE "plantId"=%s', (pid,))
     print(f"  - {cur.rowcount} HIRA studies (entries, hazards, controls cascade)")
     cur.execute('DELETE FROM "Observation" WHERE "plantId"=%s', (pid,))
@@ -591,9 +612,11 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true", help="commit (default: dry run, rolled back)")
     ap.add_argument("--rollback", action="store_true", help="remove everything this script imported")
     ap.add_argument("--replace-hira", action="store_true", help="delete and rebuild the imported HIRA study")
+    ap.add_argument("--grant", nargs="+", metavar="EMAIL", default=[],
+                    help="give these plant-scoped users access to the JSL plant")
     a = ap.parse_args()
-    if not (a.rollback or a.hira or a.observations):
-        ap.error("give --hira and/or --observations, or --rollback")
+    if not (a.rollback or a.hira or a.observations or a.grant):
+        ap.error("give --hira, --observations, --grant, or --rollback")
 
     conn = connect()
     try:
@@ -607,6 +630,8 @@ def main() -> int:
                     import_hira(cur, a.hira, plant_id, user_id, replace=a.replace_hira)
                 if a.observations:
                     import_observations(cur, a.observations, plant_id, user_id)
+                if a.grant:
+                    grant_access(cur, plant_id, a.grant)
         if a.apply:
             conn.commit()
             print("Committed.")

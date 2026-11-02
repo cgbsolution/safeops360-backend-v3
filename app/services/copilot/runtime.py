@@ -19,7 +19,7 @@ SSE events sent to the browser:
   draft_check  {check}
   form_patch   {kind, patch}                    apply to the open observation form / HIRA entry editor
   people       {userIds}                       ids the browser may resolve to names
-  action       {type: navigate|specialist, ...}
+  action       {type: navigate|specialist|record, ...}   record = a HIRA study/entry the copilot saved
   done         {appendMessages, replaceHistory?, usage, turnNumber}
   error        {message}
 """
@@ -117,6 +117,7 @@ async def ensure_copilot_agent(db: AsyncSession, user_id: str) -> tuple[Agent, A
             module=SOURCE_MODULE,
             capabilities={
                 "ptw_drafting": "Fills the New Permit form from a job description and checks it against the rules",
+                "hira_building": "Creates HIRA studies and entries with hazards and controls (saved as DRAFT, as the user)",
                 "record_lookup": "Finds the user's permits, incidents, observations, near misses and CAPAs",
                 "orchestration": "Starts RCA, permit review, triage, HIRA and CAPA specialists",
             },
@@ -124,7 +125,8 @@ async def ensure_copilot_agent(db: AsyncSession, user_id: str) -> tuple[Agent, A
             escalationModelId=None,
             currentAuthorityLevel="L1",
             maxAuthorityLevel="L1",
-            authorityRationale="Drafts and suggests; the user reviews every field and submits.",
+            authorityRationale=("Drafts and suggests; the user submits permits and observations. Saves HIRA drafts "
+                                "at the user's request with the user's own permissions; never approves."),
             availableTools=TOOL_NAMES,
             estimatedTokensPerInvocation=20000,
             estimatedCostPerInvocation=0.06,
@@ -248,6 +250,8 @@ def build_user_message(*, text: str, page: dict[str, Any], draft: dict[str, Any]
         "userPlantId": user_plant_id,
         "ptwFormOpen": draft is not None,
     }
+    if page.get("studyId"):
+        ctx["hiraStudyId"] = page.get("studyId")
     if draft is not None:
         ctx["ptwDraft"] = redact_data(draft)
     if form_kind == "OBSERVATION" and form_draft is not None:

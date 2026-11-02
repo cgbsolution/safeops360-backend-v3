@@ -94,6 +94,9 @@ def normalise_client_form(raw: Any) -> tuple[str | None, dict[str, Any] | None]:
         "existingControls": [c for c in (ctrl(x) for x in (d.get("existingControls") or [])[:40]) if c],
         "recommendedControls": [c for c in (ctrl(x) for x in (d.get("recommendedControls") or [])[:40]) if c],
         "acceptableThreshold": _enum(d.get("acceptableThreshold"), LEVEL_ORDER),
+        # True while the editor holds unsaved edits; the copilot then won't save
+        # over this entry (it would overwrite them).
+        "dirty": d.get("dirty") is True,
     }
 
 

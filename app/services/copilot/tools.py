@@ -20,18 +20,19 @@ import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import AsyncSessionLocal
 from app.models.user import User
 from app.services.agents.tools._scope import readable_plants, restrict_to_plants, tool_scope
-from app.services.copilot import form_drafts, ptw_draft
+from app.services.copilot import form_drafts, hira_builder, ptw_draft
 from app.services.copilot.knowledge import hira_library as hira_kb
 from app.services.copilot.knowledge import observations as obs_kb
 
@@ -59,6 +60,8 @@ class TurnContext:
     form_kind: str | None = None
     form_draft: dict[str, Any] | None = None
     form_patches: int = 0
+    # HIRA records saved this turn (studies, entries, entry edits, submissions).
+    hira_writes: int = 0
 
 
 # ─── Specialist registry ────────────────────────────────────────────────
@@ -130,6 +133,26 @@ def _tool(name: str, description: str, properties: dict[str, Any], required: lis
 _ID = {"type": "string", "maxLength": 64}
 _NULLABLE_STR = {"type": ["string", "null"]}
 
+_HIRA_HAZARDS = {"type": "array", "maxItems": 15, "items": {"type": "object", "properties": {
+    "hazardId": {"type": "string", "maxLength": 64, "description": "From find_hazard_masters."},
+    "consequence": {"type": "string", "maxLength": 1000,
+                    "description": "Who is harmed, how, and how badly, e.g. 'Ladle crane operator struck by swinging load: crush injury, possible fatality'."},
+    "contextualDescription": {"type": "string", "maxLength": 1000, "description": "How the hazard arises in this activity."},
+    "regulationRef": {"type": "string", "maxLength": 120},
+    "regulationSection": {"type": "string", "maxLength": 120}},
+    "required": ["hazardId", "consequence"]}}
+_HIRA_CONTROLS = {"type": "array", "maxItems": 15, "items": {"type": "object", "properties": {
+    "hierarchy": {"type": "string", "enum": list(form_drafts.HIERARCHY)},
+    "description": {"type": "string", "maxLength": 500},
+    "effectiveness": {"type": ["string", "null"], "enum": [*form_drafts.EFFECTIVENESS, None]}},
+    "required": ["hierarchy", "description"]}}
+_HIRA_RECOMMENDED = {"type": "array", "maxItems": 10, "items": {"type": "object", "properties": {
+    "hierarchy": {"type": "string", "enum": list(form_drafts.HIERARCHY)},
+    "description": {"type": "string", "maxLength": 500},
+    "rationale": {"type": "string", "maxLength": 500},
+    "estimatedCostBand": {"type": "string", "enum": list(form_drafts.COST_BANDS)}},
+    "required": ["hierarchy", "description"]}}
+
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     _tool(
         "find_records",
@@ -167,7 +190,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "suggest_navigation",
         "Show the user a button that opens a SafeOps360 page (it does not navigate by itself). "
         "Use '/ptw/new' for the New Permit form, '/observations/new' for the New Observation form, "
-        "or a record href from find_records.",
+        "or a record href from find_records or the HIRA tools.",
         {
             "path": {"type": "string", "pattern": "^/[A-Za-z0-9/_\\-?=&.%]*$", "maxLength": 200},
             "label": {"type": "string", "maxLength": 60},
@@ -194,7 +217,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     ),
     _tool(
         "find_people",
-        "Find people at a plant for permit roles. Returns user ids with designation and department only — names "
+        "Find people at a plant for permit roles or a HIRA team. Returns user ids with designation and department only — names "
         "are never returned; the form shows them to the user. Pass the name the user typed as query. "
         "role=PERMIT_ISSUER lists designated issuers.",
         {
@@ -401,6 +424,159 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "required": ["likelihoodScore", "severityScore"]},
         },
     ),
+    # ── HIRA builder: these SAVE records (as the user, with their permissions) ──
+    _tool(
+        "get_hira_options",
+        "What you need to create a HIRA study: the plants the user can create HIRA at, the chosen plant's "
+        "departments and areas, the active risk matrices with their likelihood and severity scales (score, label, "
+        "meaning), the user's HIRA studies at that plant that are still open for new entries, and the allowed "
+        "values (scope types, review frequencies, team roles, routine, frequency). With studyQuery, also searches "
+        "the user's studies by number or title. Defaults to the user's plant.",
+        {
+            "plantId": _ID,
+            "studyQuery": {"type": "string", "maxLength": 80, "description": "Study number or words from its title."},
+        },
+    ),
+    _tool(
+        "get_hira_study",
+        "One saved HIRA study: header, status, whether it accepts new entries, its matrix scales, and every current "
+        "entry with its hazards, existing controls (with keys), recommended controls (with keys), initial / residual "
+        "/ target risk and what is still missing before it can be submitted. Defaults to the study the user has "
+        "open. Read it before editing an entry, because control keys change after every save.",
+        {"studyId": _ID},
+    ),
+    _tool(
+        "find_hazard_masters",
+        "Search SafeOps360's hazard library (the master list every HIRA entry hazard must come from). Returns "
+        "hazardId, code, name, category, typical harm and whether the hazard needs a permit. Search with plain "
+        "words ('hot metal splash', 'fall from height', 'crane load'), optionally narrowed by category.",
+        {
+            "query": {"type": "string", "maxLength": 120},
+            "category": {"type": "string", "maxLength": 60},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+        },
+    ),
+    _tool(
+        "create_hira_study",
+        "Create and SAVE a new HIRA study (status DRAFT) with the user as team leader. Ids come from "
+        "get_hira_options. riskMatrixId defaults to the default matrix. If an open study with the same title already "
+        "exists at the plant it is returned instead of a duplicate. Approval still goes through people.",
+        {
+            "plantId": _ID,
+            "title": {"type": "string", "minLength": 4, "maxLength": 200,
+                      "description": "e.g. 'SMS — EAF charging and tapping'"},
+            "scopeType": {"type": "string", "enum": list(hira_builder.SCOPE_TYPES)},
+            "departmentId": _ID,
+            "areaId": _ID,
+            "processCode": {"type": "string", "maxLength": 60},
+            "description": {"type": "string", "maxLength": 2000, "description": "What the study covers and its boundaries."},
+            "riskMatrixId": _ID,
+            "reviewFrequency": {"type": "string", "enum": list(hira_builder.REVIEW_FREQUENCIES)},
+            "customReviewMonths": {"type": "integer", "minimum": 1, "maximum": 60},
+            "targetCompletionDate": {"type": "string", "description": "YYYY-MM-DD"},
+            "applicableRegulations": {"type": "array", "maxItems": 10, "items": {"type": "string", "maxLength": 120}},
+            "team": {"type": "array", "maxItems": 12, "items": {"type": "object", "properties": {
+                "userId": {"type": "string", "maxLength": 64},
+                "teamRole": {"type": "string", "enum": list(hira_builder.TEAM_ROLES)}},
+                "required": ["userId"]}, "description": "Team members (ids from find_people)."},
+        },
+        ["plantId", "title"],
+    ),
+    _tool(
+        "create_hira_entry",
+        "Create and SAVE one activity entry in a HIRA study that is DRAFT or IN_PROGRESS, with its hazards, "
+        "existing controls and recommended controls, in one step. Hazard ids come from find_hazard_masters; every "
+        "hazard needs a specific consequence. Likelihood and severity are scores on the study's matrix "
+        "(get_hira_options / get_hira_study) and each needs a one-line rationale. Existing controls are only those "
+        "the user said are in place; the residual risk is then calculated from them. Returns the saved entry. "
+        "Defaults to the study the user has open.",
+        {
+            "studyId": _ID,
+            "activityDescription": {"type": "string", "minLength": 4, "maxLength": 2000},
+            "routine": {"type": "string", "enum": list(hira_builder.ROUTINES)},
+            "frequency": {"type": "string", "enum": list(hira_builder.FREQUENCIES)},
+            "areaId": _ID,
+            "subLocation": {"type": "string", "maxLength": 200},
+            "groupLabel": {"type": "string", "maxLength": 120, "description": "Optional heading to group entries, e.g. 'EAF'."},
+            "typicalDurationMin": {"type": "integer", "minimum": 1, "maximum": 10080},
+            "personsEmployees": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "personsContractors": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "personsVisitors": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "personsPublic": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "affectedPersonGroups": {"type": "string", "maxLength": 300},
+            "equipmentUsed": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 120}},
+            "materialsUsed": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 120}},
+            "energySourcesPresent": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 120}},
+            "initialLikelihood": {"type": "integer", "minimum": 1, "maximum": 10},
+            "initialSeverity": {"type": "integer", "minimum": 1, "maximum": 10},
+            "initialLikelihoodRationale": {"type": "string", "maxLength": 1000},
+            "initialSeverityRationale": {"type": "string", "maxLength": 1000},
+            "residualLikelihoodRationale": {"type": "string", "maxLength": 1000},
+            "residualSeverityRationale": {"type": "string", "maxLength": 1000},
+            "hazards": _HIRA_HAZARDS,
+            "existingControls": _HIRA_CONTROLS,
+            "recommendedControls": _HIRA_RECOMMENDED,
+        },
+        ["activityDescription", "routine", "frequency", "initialLikelihood", "initialSeverity",
+         "initialLikelihoodRationale", "initialSeverityRationale", "hazards"],
+    ),
+    _tool(
+        "update_hira_entry",
+        "SAVE changes to an existing HIRA entry: add, re-word or remove hazards; add, re-rate or remove existing "
+        "controls; add or remove proposed (recommended) controls; change the activity details, the initial "
+        "scores, the score rationales or the target risk. Send only what changes. Keys come from get_hira_study "
+        "or the last result. On an APPROVED / ACTIVE study, or an entry that already has versions, changeReason is "
+        "required and a change to hazards, controls or scores withdraws the approval. Refuses if the user has "
+        "unsaved edits to that entry in the editor. Defaults to the entry the user has open.",
+        {
+            "entryId": _ID,
+            "changeReason": {"type": "string", "maxLength": 500},
+            "activityDescription": {"type": "string", "maxLength": 2000},
+            "routine": {"type": "string", "enum": list(hira_builder.ROUTINES)},
+            "frequency": {"type": "string", "enum": list(hira_builder.FREQUENCIES)},
+            "subLocation": {"type": "string", "maxLength": 200},
+            "affectedPersonGroups": {"type": "string", "maxLength": 300},
+            "personsEmployees": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "personsContractors": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "personsVisitors": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "personsPublic": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "equipmentUsed": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 120}},
+            "materialsUsed": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 120}},
+            "energySourcesPresent": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 120}},
+            "initialLikelihood": {"type": "integer", "minimum": 1, "maximum": 10},
+            "initialSeverity": {"type": "integer", "minimum": 1, "maximum": 10},
+            "initialLikelihoodRationale": {"type": "string", "maxLength": 1000},
+            "initialSeverityRationale": {"type": "string", "maxLength": 1000},
+            "residualLikelihoodRationale": {"type": "string", "maxLength": 1000},
+            "residualSeverityRationale": {"type": "string", "maxLength": 1000},
+            "target": {"type": "object", "properties": {
+                "likelihood": {"type": "integer", "minimum": 1, "maximum": 10},
+                "severity": {"type": "integer", "minimum": 1, "maximum": 10},
+                "rationale": {"type": "string", "maxLength": 600}},
+                "required": ["likelihood", "severity"]},
+            "addHazards": _HIRA_HAZARDS,
+            "updateHazards": {"type": "array", "maxItems": 15, "items": {"type": "object", "properties": {
+                "hazardId": {"type": "string", "maxLength": 64},
+                "consequence": {"type": "string", "maxLength": 1000},
+                "contextualDescription": {"type": "string", "maxLength": 1000}},
+                "required": ["hazardId"]}},
+            "removeHazardIds": {"type": "array", "maxItems": 15, "items": {"type": "string", "maxLength": 64}},
+            "addExistingControls": _HIRA_CONTROLS,
+            "setControlEffectiveness": {"type": "array", "maxItems": 20, "items": {"type": "object", "properties": {
+                "key": {"type": "string", "maxLength": 64},
+                "effectiveness": {"type": "string", "enum": list(form_drafts.EFFECTIVENESS)}},
+                "required": ["key", "effectiveness"]}},
+            "removeExistingControlKeys": {"type": "array", "maxItems": 15, "items": {"type": "string", "maxLength": 64}},
+            "addRecommendedControls": _HIRA_RECOMMENDED,
+            "removeRecommendedControlKeys": {"type": "array", "maxItems": 10, "items": {"type": "string", "maxLength": 64}},
+        },
+    ),
+    _tool(
+        "submit_hira_entry_for_review",
+        "Submit a saved DRAFT HIRA entry for review (status IN_REVIEW), so a reviewer can approve it. Only when "
+        "the user asks. The score rationales must be filled in first. You can never approve an entry.",
+        {"entryId": _ID, "note": {"type": "string", "maxLength": 300}},
+    ),
 ]
 
 TOOL_NAMES = [t["name"] for t in TOOL_DEFINITIONS]
@@ -422,7 +598,14 @@ TOOL_LABELS = {
     "update_observation_draft": "Updating observation form",
     "search_hira_library": "Searching HIRA library",
     "assess_hira_controls": "Calculating risk change",
-    "update_hira_entry_draft": "Updating HIRA entry",
+    "update_hira_entry_draft": "Suggesting in the editor",
+    "get_hira_options": "Loading HIRA setup",
+    "get_hira_study": "Reading HIRA study",
+    "find_hazard_masters": "Searching hazard library",
+    "create_hira_study": "Creating HIRA study",
+    "create_hira_entry": "Saving HIRA entry",
+    "update_hira_entry": "Saving HIRA changes",
+    "submit_hira_entry_for_review": "Submitting for review",
 }
 
 
@@ -728,12 +911,21 @@ async def _get_plant_options(db: AsyncSession, args: dict[str, Any], ctx: TurnCo
 async def _find_people(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
     from app.models.user import Role, UserRole
 
+    from app.services.permissions import get_accessible_plants_for
+
     plant_id = args.get("plantId") or (ctx.draft or {}).get("plantId") or ctx.user_plant_id
     if not plant_id:
         raise ToolError("plantId required (no plant on the draft yet)")
-    accessible = await _accessible_permit_plants(db, ctx)
-    if accessible is not None and plant_id not in accessible:
-        raise ToolError("You cannot raise permits at that plant")
+    # People are picked for permit roles or for a HIRA team, so either right
+    # at the plant is enough.
+    allowed = False
+    for code in ("PTW.CREATE", "HIRA.CREATE"):
+        plants = await get_accessible_plants_for(db, ctx.user_id, code)
+        if plants is None or plant_id in plants:
+            allowed = True
+            break
+    if not allowed:
+        raise ToolError("You cannot raise permits or HIRA studies at that plant")
     limit = max(1, min(int(args.get("limit") or 8), 15))
 
     issuer_ids = select(UserRole.userId).join(Role, Role.id == UserRole.roleId).where(Role.code == "PERMIT_ISSUER")
@@ -1251,6 +1443,676 @@ async def _update_hira_entry_draft(db: AsyncSession, args: dict[str, Any], ctx: 
             "note": "Shown in the editor as unsaved changes; the user reviews and presses Save."}
 
 
+# ─── HIRA builder: saves studies and entries ────────────────────────────
+#
+# These tools write. Each one calls the HIRA router's own endpoint function
+# with the user's account, so the router keeps doing the permission checks,
+# numbering, risk scoring, ALARP, versioning, re-approval and CAPA sync exactly
+# as it does for the screens. Everything a tool call saves is one transaction:
+# if any step fails, nothing is kept. Approval stays with people.
+
+_HIRA_WRITES_PER_TURN = 25
+
+
+def _page_study_id(ctx: TurnContext) -> str | None:
+    if ctx.form_kind == "HIRA_ENTRY" and (ctx.form_draft or {}).get("studyId"):
+        return ctx.form_draft["studyId"]  # type: ignore[index]
+    return (ctx.page or {}).get("studyId")
+
+
+def _page_entry_id(ctx: TurnContext) -> str | None:
+    if ctx.form_kind == "HIRA_ENTRY" and (ctx.form_draft or {}).get("entryId"):
+        return ctx.form_draft["entryId"]  # type: ignore[index]
+    page = ctx.page or {}
+    return page.get("recordId") if page.get("module") == "HIRA" else None
+
+
+def _hira_parse(fn: Callable[[dict[str, Any]], dict[str, Any]], args: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return fn(args)
+    except hira_builder.InputError as e:
+        raise ToolError(f"Nothing was saved: {e}") from e
+
+
+def _hira_write_allowed(ctx: TurnContext) -> None:
+    if ctx.hira_writes >= _HIRA_WRITES_PER_TURN:
+        raise ToolError("That is a lot of saving in one turn. Summarise what was saved and let the user check it "
+                        "before continuing.")
+
+
+def _editor_guard(ctx: TurnContext, entry_id: str) -> None:
+    d = ctx.form_draft or {}
+    if ctx.form_kind == "HIRA_ENTRY" and d.get("entryId") == entry_id and d.get("dirty"):
+        raise ToolError(
+            "Nothing was saved: the user has unsaved edits to this entry in the editor, and saving now would "
+            "overwrite them. Ask them to press Save first, or put your suggestions into the editor with "
+            "update_hira_entry_draft."
+        )
+
+
+@contextmanager
+def _acting_as_user(ctx: TurnContext):
+    """Audit the change as the user, noting it went through the copilot."""
+    from app.core.audit_context import AuditActor, reset_actor, set_actor
+
+    token = set_actor(AuditActor(actor_id=ctx.user_id, actor_type="USER",
+                                 reason="Saved through SafeOps Copilot at the user's request"))
+    try:
+        yield
+    finally:
+        reset_actor(token)
+
+
+async def _commit(db: AsyncSession) -> None:
+    await db.commit()
+    try:
+        from app.services.audit_log import drain_audit
+
+        await drain_audit(db)
+    except Exception:  # noqa: BLE001 — the audit trail must never undo a saved record
+        pass
+
+
+async def _matrix_scales(db: AsyncSession, matrix_id: str) -> tuple[Any, list[Any], list[Any]]:
+    from app.models.hira import RiskMatrix, RiskMatrixLikelihood, RiskMatrixSeverity
+
+    matrix = await db.get(RiskMatrix, matrix_id)
+    if matrix is None:
+        raise ToolError("The study's risk matrix is missing")
+    liks = (await db.execute(select(RiskMatrixLikelihood).where(RiskMatrixLikelihood.matrixId == matrix_id)
+                             .order_by(RiskMatrixLikelihood.score))).scalars().all()
+    sevs = (await db.execute(select(RiskMatrixSeverity).where(RiskMatrixSeverity.matrixId == matrix_id)
+                             .order_by(RiskMatrixSeverity.score))).scalars().all()
+    return matrix, list(liks), list(sevs)
+
+
+def _scales_out(matrix: Any, liks: list[Any], sevs: list[Any]) -> dict[str, Any]:
+    return {
+        "riskMatrixId": matrix.id, "code": matrix.code, "name": matrix.name,
+        "acceptableResidual": matrix.acceptableResidual,
+        "likelihood": [{"score": x.score, "label": x.label, "meaning": _clip(x.description, 160),
+                        "frequency": x.frequencyGuidance} for x in liks],
+        "severity": [{"score": x.score, "label": x.label, "meaning": _clip(x.description, 160)} for x in sevs],
+    }
+
+
+def _score_ids(liks: list[Any], sevs: list[Any], likelihood: int, severity: int) -> tuple[str, str]:
+    lk = next((x for x in liks if x.score == likelihood), None)
+    sv = next((x for x in sevs if x.score == severity), None)
+    if lk is None or sv is None:
+        raise ToolError(
+            f"Nothing was saved: this study's matrix has likelihood {[x.score for x in liks]} and severity "
+            f"{[x.score for x in sevs]}; {likelihood} x {severity} is not on it."
+        )
+    return lk.id, sv.id
+
+
+async def _load_entry(db: AsyncSession, entry_id: str) -> Any:
+    from sqlalchemy.orm import selectinload
+
+    from app.models.hira import HiraEntry, HiraEntryHazard
+
+    stmt = (
+        select(HiraEntry)
+        .where(HiraEntry.id == entry_id)
+        .options(
+            selectinload(HiraEntry.study),
+            selectinload(HiraEntry.hazards).selectinload(HiraEntryHazard.hazard),
+            selectinload(HiraEntry.existingControls),
+            selectinload(HiraEntry.recommendedControls),
+        )
+        .execution_options(populate_existing=True)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+def _forget_children(db: AsyncSession, entry: Any) -> None:
+    """Drop the entry's loaded child lists before a router call replaces them,
+    so the session never holds a list that no longer matches the database."""
+    db.expire(entry, ["hazards", "existingControls", "recommendedControls"])
+
+
+def _risk(l: Any, s: Any, score: Any, level: Any) -> dict[str, Any] | None:
+    return {"likelihood": l, "severity": s, "score": score, "level": level} if level else None
+
+
+def _entry_out(e: Any, *, compact: bool = False) -> dict[str, Any]:
+    from app.routers.hira import _missing_rationales
+
+    residual = _risk(e.residualLikelihoodScore, e.residualSeverityScore, e.residualRiskScore, e.residualRiskLevel)
+    if residual:
+        residual |= {"acceptable": e.residualAcceptable, "alarpRegion": e.residualAlarpRegion,
+                     "alarpStatus": e.alarpStatus, "calculatedFromControls": e.residualAutoCalculated}
+    out: dict[str, Any] = {
+        "entryId": e.id,
+        "sequence": e.sequenceNumber,
+        "href": f"/hira/{e.studyId}/entries/{e.id}",
+        "activity": _clip(e.activityDescription, 300),
+        "status": e.status,
+        "routine": e.routine,
+        "frequency": e.frequency,
+        "initial": _risk(e.initialLikelihoodScore, e.initialSeverityScore, e.initialRiskScore, e.initialRiskLevel),
+        "residual": residual,
+        "target": _risk(e.targetLikelihoodScore, e.targetSeverityScore, e.targetRiskScore, e.targetRiskLevel),
+        "missingBeforeSubmit": _missing_rationales(e),
+        "version": e.versionNumber,
+    }
+    hazards = sorted(e.hazards, key=lambda h: h.sortOrder or 0)
+    if compact:
+        return out | {"hazards": [h.hazard.name if h.hazard else h.hazardId for h in hazards],
+                      "existingControlCount": len(e.existingControls),
+                      "recommendedControlCount": len(e.recommendedControls)}
+    return out | {
+        "hazards": [{"hazardId": h.hazardId, "name": h.hazard.name if h.hazard else None,
+                     "category": h.hazard.category if h.hazard else None, "consequence": _clip(h.consequence, 200),
+                     "needsPermit": bool(h.hazard and h.hazard.requiresPermit)} for h in hazards],
+        "existingControls": [{"key": c.id, "hierarchy": c.hierarchy, "description": _clip(c.description, 160),
+                              "effectiveness": c.effectiveness}
+                             for c in sorted(e.existingControls, key=lambda c: c.sortOrder or 0)],
+        "recommendedControls": [{"key": c.id, "hierarchy": c.hierarchy, "description": _clip(c.description, 160),
+                                 "status": c.status} for c in e.recommendedControls],
+    }
+
+
+async def _record_action(ctx: TurnContext, verb: str, kind: str, record_id: str, number: str | None,
+                         title: str | None, href: str) -> None:
+    await ctx.emit("action", {"type": "record", "verb": verb, "module": "HIRA", "kind": kind, "recordId": record_id,
+                              "number": number, "title": _clip(title, 120), "href": href})
+
+
+async def _get_hira_options(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    from sqlalchemy.orm import selectinload
+
+    from app.models.hira import HiraEntry, HiraStudy, RiskMatrix
+    from app.models.masters import Department
+    from app.models.plant import Area, Plant
+    from app.routers.hira import _hira_read_scope, _scoped
+    from app.services.permissions import get_accessible_plants_for
+
+    user = await _load_user(db, ctx)
+    accessible = await get_accessible_plants_for(db, ctx.user_id, "HIRA.CREATE")
+    if accessible == []:
+        raise ToolError("The user does not hold HIRA.CREATE at any plant, so they cannot start a HIRA study. "
+                        "An administrator can grant it.")
+    plant_stmt = select(Plant).order_by(Plant.name)
+    if accessible is not None:
+        plant_stmt = plant_stmt.where(Plant.id.in_(accessible))
+    plants = (await db.execute(plant_stmt.limit(40))).scalars().all()
+    ids = {p.id for p in plants}
+    plant_id = args.get("plantId") or (ctx.user_plant_id if ctx.user_plant_id in ids else None) \
+        or (plants[0].id if len(plants) == 1 else None)
+    if args.get("plantId") and accessible is not None and plant_id not in accessible:
+        raise ToolError("The user cannot create HIRA studies at that plant")
+
+    matrices = (await db.execute(
+        select(RiskMatrix).where(RiskMatrix.isActive.is_(True))
+        .options(selectinload(RiskMatrix.likelihoods), selectinload(RiskMatrix.severities))
+        .order_by(RiskMatrix.isDefault.desc(), RiskMatrix.name)
+    )).scalars().all()
+    out: dict[str, Any] = {
+        "plants": [{"plantId": p.id, "code": p.code, "name": p.name} for p in plants],
+        "riskMatrices": [
+            {"isDefault": m.isDefault, **_scales_out(m, sorted(m.likelihoods, key=lambda x: x.score),
+                                                     sorted(m.severities, key=lambda x: x.score))}
+            for m in matrices
+        ],
+        "allowed": {
+            "scopeType": list(hira_builder.SCOPE_TYPES), "reviewFrequency": list(hira_builder.REVIEW_FREQUENCIES),
+            "teamRole": list(hira_builder.TEAM_ROLES), "routine": list(hira_builder.ROUTINES),
+            "frequency": list(hira_builder.FREQUENCIES),
+        },
+    }
+    _scope, clause = await _hira_read_scope(db, user)
+
+    async def studies(stmt: Any) -> list[dict[str, Any]]:
+        rows = (await db.execute(_scoped(stmt, clause).order_by(HiraStudy.createdAt.desc()).limit(15))).scalars().all()
+        counts: dict[str, int] = {}
+        if rows:
+            counts = dict((await db.execute(
+                select(HiraEntry.studyId, func.count(HiraEntry.id))
+                .where(HiraEntry.studyId.in_([r.id for r in rows]), HiraEntry.isCurrentVersion.is_(True))
+                .group_by(HiraEntry.studyId))).all())
+        return [{"studyId": r.id, "number": r.number, "title": r.title, "status": r.status, "href": f"/hira/{r.id}",
+                 "entries": counts.get(r.id, 0), "acceptsNewEntries": r.status in hira_builder.OPEN_STUDY_STATUSES}
+                for r in rows]
+
+    if plant_id:
+        plant = await db.get(Plant, plant_id)
+        if plant is None:
+            raise ToolError("Plant not found")
+        areas = (await db.execute(select(Area).where(Area.plantId == plant_id).order_by(Area.name))).scalars().all()
+        deps = (await db.execute(select(Department).where(Department.plantId == plant_id, Department.active.is_(True))
+                                 .order_by(Department.name))).scalars().all()
+        out["plant"] = {"plantId": plant.id, "code": plant.code, "name": plant.name}
+        out["areas"] = [{"areaId": a.id, "name": a.name} for a in areas[:150]]
+        out["departments"] = [{"departmentId": d.id, "name": d.name} for d in deps[:80]]
+        out["openStudies"] = await studies(select(HiraStudy).where(
+            HiraStudy.plantId == plant_id, HiraStudy.status.in_(hira_builder.OPEN_STUDY_STATUSES)))
+    else:
+        out["note"] = "No plant chosen yet: pick one of these plants and call again with plantId."
+    if q := str(args.get("studyQuery") or "").strip():
+        like = f"%{q}%"
+        out["matchingStudies"] = await studies(select(HiraStudy).where(
+            or_(HiraStudy.number.ilike(like), HiraStudy.title.ilike(like))))
+    return out
+
+
+async def _get_hira_study(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    from sqlalchemy.orm import selectinload
+
+    from app.models.hira import HiraEntry, HiraEntryHazard, HiraStudy
+    from app.routers.hira import _study_ctx
+    from app.services.permissions import can
+
+    study_id = args.get("studyId") or _page_study_id(ctx)
+    if not study_id:
+        raise ToolError("No study chosen. Pass studyId (get_hira_options lists the user's studies), or ask the user "
+                        "to open the study.")
+    study = (await db.execute(select(HiraStudy).where(HiraStudy.id == study_id).options(
+        selectinload(HiraStudy.plant), selectinload(HiraStudy.area), selectinload(HiraStudy.department),
+        selectinload(HiraStudy.team)))).scalar_one_or_none()
+    if study is None:
+        raise ToolError("No HIRA study with that id")
+    user = await _load_user(db, ctx)
+    check = await can(db, user.id, "HIRA.READ", _study_ctx(study))
+    if not check.allowed:
+        raise ToolError(check.reason or "The user cannot read this study")
+    can_edit = (await can(db, user.id, "HIRA.UPDATE", _study_ctx(study))).allowed
+    matrix, liks, sevs = await _matrix_scales(db, study.riskMatrixId)
+    entries = (await db.execute(
+        select(HiraEntry).where(HiraEntry.studyId == study.id, HiraEntry.isCurrentVersion.is_(True))
+        .options(selectinload(HiraEntry.hazards).selectinload(HiraEntryHazard.hazard),
+                 selectinload(HiraEntry.existingControls), selectinload(HiraEntry.recommendedControls))
+        .order_by(HiraEntry.sequenceNumber).limit(80)
+    )).scalars().all()
+    detail = len(entries) <= 20
+    return {
+        "studyId": study.id,
+        "number": study.number,
+        "title": study.title,
+        "status": study.status,
+        "href": f"/hira/{study.id}",
+        "plant": study.plant.name if study.plant else None,
+        "plantId": study.plantId,
+        "area": study.area.name if study.area else None,
+        "areaId": study.areaId,
+        "department": study.department.name if study.department else None,
+        "scopeType": study.scopeType,
+        "description": _clip(study.description, 400),
+        "teamSize": len(study.team or []) + 1,
+        "userIsTeamLeader": study.teamLeaderId == user.id,
+        "userCanEdit": can_edit,
+        "acceptsNewEntries": study.status in hira_builder.OPEN_STUDY_STATUSES,
+        "editsNeedChangeReason": study.status in hira_builder.LOCKED_STUDY_STATUSES,
+        "matrix": _scales_out(matrix, liks, sevs),
+        "entryCount": len(entries),
+        "entries": [_entry_out(e, compact=not detail) for e in entries],
+        "note": None if detail else "Large study: entries are summarised. Ask about one entry to see its controls.",
+    }
+
+
+_HAZARD_STOPWORDS = {"the", "and", "for", "with", "from", "near", "into", "while", "during", "work", "working"}
+
+
+async def _find_hazard_masters(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    from app.models.hira import HiraHazard
+    from app.services.permissions import PermissionContext, can
+
+    check = await can(db, ctx.user_id, "HIRA.READ", PermissionContext())
+    if not check.allowed:
+        raise ToolError(check.reason or "The user cannot read the HIRA hazard library")
+    query = str(args.get("query") or "").strip().lower()
+    category = str(args.get("category") or "").strip()
+    limit = max(1, min(int(args.get("limit") or 10), 20))
+    words = [w for w in re.findall(r"[a-z0-9]+", query) if len(w) >= 3 and w not in _HAZARD_STOPWORDS][:8]
+    if not words and not category:
+        raise ToolError("Give words to search for (e.g. 'molten metal splash'), or a category.")
+    stmt = select(HiraHazard).where(HiraHazard.isActive.is_(True))
+    if category:
+        stmt = stmt.where(HiraHazard.category.ilike(category))
+    if words:
+        stmt = stmt.where(or_(*[c.ilike(f"%{w}%") for w in words
+                                for c in (HiraHazard.name, HiraHazard.description, HiraHazard.code)]))
+    rows = (await db.execute(stmt.limit(250))).scalars().all()
+
+    def rank(h: Any) -> int:
+        name, desc = (h.name or "").lower(), (h.description or "").lower()
+        return sum(3 * (w in name) + (w in desc) for w in words)
+
+    rows = sorted(rows, key=lambda h: (-rank(h), h.name or ""))[:limit]
+    out: dict[str, Any] = {
+        "query": query or None,
+        "count": len(rows),
+        "hazards": [{
+            "hazardId": h.id, "code": h.code, "name": h.name, "category": h.category, "subcategory": h.subcategory,
+            "description": _clip(h.description, 160), "typicalHarm": (h.typicalHarmPotential or [])[:4],
+            "needsPermit": bool(h.requiresPermit), "permitTypes": h.permitTypes or [],
+            "citation": h.factoriesActSection or h.isStandard or h.oshaStandard or h.isoReference,
+        } for h in rows],
+    }
+    if not rows:
+        cats = (await db.execute(select(HiraHazard.category).where(HiraHazard.isActive.is_(True)).distinct())).scalars().all()
+        out["categories"] = sorted(c for c in cats if c)
+        out["note"] = "No match. Try other words (the hazard, not the task), or one of these categories."
+    return out
+
+
+async def _create_hira_study(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    from app.models.hira import HiraStudy, RiskMatrix
+    from app.models.masters import Department
+    from app.models.plant import Area, Plant
+    from app.routers.hira import create_study
+    from app.schemas.hira import HiraStudyCreate, HiraStudyTeamMemberCreate
+
+    _hira_write_allowed(ctx)
+    p = _hira_parse(hira_builder.parse_study, args)
+    user = await _load_user(db, ctx)
+    plant = await db.get(Plant, p["plantId"])
+    if plant is None:
+        raise ToolError("Nothing was saved: unknown plantId (use one from get_hira_options)")
+    if p["areaId"]:
+        area = await db.get(Area, p["areaId"])
+        if area is None or area.plantId != plant.id:
+            raise ToolError("Nothing was saved: areaId is not an area of that plant")
+    if p["departmentId"]:
+        dept = await db.get(Department, p["departmentId"])
+        if dept is None or dept.plantId != plant.id:
+            raise ToolError("Nothing was saved: departmentId is not a department of that plant")
+    if p["scopeType"] == "AREA" and not p["areaId"]:
+        raise ToolError("Nothing was saved: an AREA study needs areaId")
+    if p["scopeType"] == "DEPARTMENT" and not p["departmentId"]:
+        raise ToolError("Nothing was saved: a DEPARTMENT study needs departmentId")
+    if p["riskMatrixId"]:
+        matrix = await db.get(RiskMatrix, p["riskMatrixId"])
+        if matrix is None or not matrix.isActive:
+            raise ToolError("Nothing was saved: riskMatrixId is not an active matrix")
+    else:
+        matrix = (await db.execute(select(RiskMatrix).where(RiskMatrix.isActive.is_(True))
+                                   .order_by(RiskMatrix.isDefault.desc(), RiskMatrix.name).limit(1))).scalar_one_or_none()
+        if matrix is None:
+            raise ToolError("No active risk matrix is configured; an administrator must set one up first.")
+    team = [t for t in p["team"] if t["userId"] != user.id]
+    if team:
+        found = set((await db.execute(select(User.id).where(User.id.in_([t["userId"] for t in team])))).scalars())
+        missing = [t["userId"] for t in team if t["userId"] not in found]
+        if missing:
+            raise ToolError(f"Nothing was saved: unknown team userIds {', '.join(missing)} (use find_people)")
+
+    dup = (await db.execute(select(HiraStudy).where(
+        HiraStudy.plantId == plant.id, func.lower(HiraStudy.title) == p["title"].lower(),
+        HiraStudy.status.in_(hira_builder.OPEN_STUDY_STATUSES)).limit(1))).scalar_one_or_none()
+    if dup is not None:
+        return {"created": False, "studyId": dup.id, "number": dup.number, "status": dup.status,
+                "href": f"/hira/{dup.id}",
+                "note": "An open study with this title already exists at this plant, so no new one was made. "
+                        "Add entries to it, or use a different title if the user wants a separate study."}
+
+    payload = HiraStudyCreate(
+        plantId=plant.id, departmentId=p["departmentId"], areaId=p["areaId"], scopeType=p["scopeType"],
+        processCode=p["processCode"], title=p["title"], description=p["description"], riskMatrixId=matrix.id,
+        teamLeaderId=user.id, team=[HiraStudyTeamMemberCreate(**t) for t in team],
+        targetCompletionDate=p["targetCompletionDate"], reviewFrequency=p["reviewFrequency"],
+        customReviewMonths=p["customReviewMonths"], applicableRegulations=p["applicableRegulations"],
+    )
+    with _acting_as_user(ctx):
+        study = await create_study(payload=payload, user=user, db=db)
+        await _commit(db)
+    ctx.hira_writes += 1
+    href = f"/hira/{study.id}"
+    await _record_action(ctx, "created", "study", study.id, study.number, study.title, href)
+    _matrix, liks, sevs = await _matrix_scales(db, matrix.id)
+    return {
+        "created": True, "studyId": study.id, "number": study.number, "status": study.status, "href": href,
+        "teamLeader": "the user", "teamMembers": len(team), "matrix": _scales_out(matrix, liks, sevs),
+        "next": "Add the activities with create_hira_entry (studyId above).",
+    }
+
+
+async def _create_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    from app.models.hira import HiraEntry, HiraHazard, HiraStudy
+    from app.models.plant import Area
+    from app.routers.hira import create_entry, replace_existing_controls, replace_recommended_controls
+    from app.schemas.hira import (
+        HiraEntryControlReplaceItem,
+        HiraEntryControlReplaceRequest,
+        HiraEntryCreate,
+        HiraEntryHazardCreate,
+        HiraEntryRecommendedControlReplaceItem,
+        HiraEntryRecommendedControlReplaceRequest,
+    )
+
+    _hira_write_allowed(ctx)
+    p = _hira_parse(hira_builder.parse_new_entry, args)
+    study_id = args.get("studyId") or _page_study_id(ctx)
+    if not study_id:
+        raise ToolError("Nothing was saved: which study? Pass studyId (from create_hira_study or get_hira_options).")
+    study = await db.get(HiraStudy, study_id)
+    if study is None:
+        raise ToolError("Nothing was saved: no HIRA study with that id")
+    if study.status not in hira_builder.OPEN_STUDY_STATUSES:
+        raise ToolError(f"Nothing was saved: study {study.number} is {study.status}. New entries need a DRAFT or "
+                        "IN_PROGRESS study; an approved study is revised through a review cycle.")
+    area_id = p["areaId"] or study.areaId
+    if p["areaId"]:
+        area = await db.get(Area, p["areaId"])
+        if area is None or area.plantId != study.plantId:
+            raise ToolError("Nothing was saved: areaId is not an area of the study's plant")
+    hazard_ids = [h["hazardId"] for h in p["hazards"]]
+    known = set((await db.execute(select(HiraHazard.id).where(HiraHazard.id.in_(hazard_ids),
+                                                               HiraHazard.isActive.is_(True)))).scalars())
+    unknown = [h for h in hazard_ids if h not in known]
+    if unknown:
+        raise ToolError(f"Nothing was saved: unknown hazardIds {', '.join(unknown)} (use find_hazard_masters)")
+    _matrix, liks, sevs = await _matrix_scales(db, study.riskMatrixId)
+    l_id, s_id = _score_ids(liks, sevs, p["initialLikelihood"], p["initialSeverity"])
+    dup = (await db.execute(select(HiraEntry).where(
+        HiraEntry.studyId == study.id, HiraEntry.isCurrentVersion.is_(True),
+        func.lower(HiraEntry.activityDescription) == p["activityDescription"].lower()).limit(1))).scalar_one_or_none()
+    if dup is not None:
+        return {"created": False, "entryId": dup.id, "href": f"/hira/{study.id}/entries/{dup.id}",
+                "note": "This study already has an entry with exactly this activity, so no duplicate was made. "
+                        "Use update_hira_entry to add hazards or controls to it."}
+
+    user = await _load_user(db, ctx)
+    payload = HiraEntryCreate(
+        groupLabel=p["groupLabel"], activityDescription=p["activityDescription"], areaId=area_id,
+        subLocation=p["subLocation"], routine=p["routine"], frequency=p["frequency"],
+        typicalDurationMin=p["typicalDurationMin"], personsEmployees=p["personsEmployees"],
+        personsContractors=p["personsContractors"], personsVisitors=p["personsVisitors"],
+        personsPublic=p["personsPublic"], affectedPersonGroups=p["affectedPersonGroups"],
+        equipmentUsed=p["equipmentUsed"], materialsUsed=p["materialsUsed"],
+        energySourcesPresent=p["energySourcesPresent"], initialLikelihoodId=l_id, initialSeverityId=s_id,
+        initialLikelihoodRationale=p["initialLikelihoodRationale"],
+        initialSeverityRationale=p["initialSeverityRationale"],
+        hazards=[HiraEntryHazardCreate(**h) for h in p["hazards"]],
+    )
+    with _acting_as_user(ctx):
+        created = await create_entry(study_id=study.id, payload=payload, user=user, db=db)
+        entry = await db.get(HiraEntry, created.id)
+        # New entries take their residual from the controls, as the editor does.
+        entry.residualAutoCalculated = True
+        entry.residualLikelihoodRationale = p["residualLikelihoodRationale"]
+        entry.residualSeverityRationale = p["residualSeverityRationale"]
+        _forget_children(db, entry)
+        if p["existingControls"]:
+            await replace_existing_controls(
+                entry_id=entry.id,
+                payload=HiraEntryControlReplaceRequest(controls=[
+                    HiraEntryControlReplaceItem(**c, sortOrder=i) for i, c in enumerate(p["existingControls"])]),
+                change_reason=None, skip_version=True, user=user, db=db)
+        if p["recommendedControls"]:
+            await replace_recommended_controls(
+                entry_id=entry.id,
+                payload=HiraEntryRecommendedControlReplaceRequest(controls=[
+                    HiraEntryRecommendedControlReplaceItem(**c) for c in p["recommendedControls"]]),
+                change_reason=None, skip_version=True, user=user, db=db)
+        await db.flush()
+        await _commit(db)
+    ctx.hira_writes += 1
+    saved = await _load_entry(db, created.id)
+    out = _entry_out(saved)
+    await _record_action(ctx, "created", "entry", saved.id, f"{study.number} · entry #{saved.sequenceNumber}",
+                         saved.activityDescription, out["href"])
+    return {"created": True, "study": study.number, **out,
+            "note": "Saved as DRAFT. The residual is calculated from the existing controls."}
+
+
+async def _update_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    from app.models.hira import HiraHazard
+    from app.routers.hira import (
+        replace_entry_hazards,
+        replace_existing_controls,
+        replace_recommended_controls,
+        update_entry,
+    )
+    from app.schemas.hira import (
+        HiraEntryControlReplaceItem,
+        HiraEntryControlReplaceRequest,
+        HiraEntryHazardReplaceItem,
+        HiraEntryRecommendedControlReplaceItem,
+        HiraEntryRecommendedControlReplaceRequest,
+        HiraEntryUpdate,
+    )
+
+    _hira_write_allowed(ctx)
+    u = _hira_parse(hira_builder.parse_entry_update, args)
+    entry_id = args.get("entryId") or _page_entry_id(ctx)
+    if not entry_id:
+        raise ToolError("Nothing was saved: which entry? Pass entryId (from get_hira_study).")
+    _editor_guard(ctx, entry_id)
+    entry = await _load_entry(db, entry_id)
+    if entry is None:
+        raise ToolError("Nothing was saved: no HIRA entry with that id")
+    if not entry.isCurrentVersion:
+        raise ToolError("Nothing was saved: that is an old version of the entry; use the current one from get_hira_study")
+    study = entry.study
+    if study.status in ("SUPERSEDED", "ARCHIVED"):
+        raise ToolError(f"Nothing was saved: study {study.number} is {study.status} and can't be changed")
+    versioned_entry = study.status in hira_builder.LOCKED_STUDY_STATUSES or entry.versionNumber > 1
+    reason = u["changeReason"]
+    if versioned_entry and not reason:
+        raise ToolError(
+            "Nothing was saved: this entry is on an approved/active study or already has versions, so each change "
+            "files a new version and needs a reason. Ask the user for a one-line change reason and pass "
+            "changeReason. Changing hazards, controls or scores will also send it back for re-approval."
+        )
+
+    # Work out every list first, so a bad key fails before anything is written.
+    hazards = controls = recommended = None
+    try:
+        if hira_builder.touches_hazards(u):
+            hazards = hira_builder.merge_hazards(
+                [{"hazardId": h.hazardId, "consequence": h.consequence, "contextualDescription": h.contextualDescription,
+                  "regulationRef": h.regulationRef, "regulationSection": h.regulationSection}
+                 for h in sorted(entry.hazards, key=lambda h: h.sortOrder or 0)],
+                u["addHazards"], u["updateHazards"], u["removeHazardIds"])
+        if hira_builder.touches_controls(u):
+            controls = hira_builder.merge_existing_controls(
+                [{k: getattr(c, k, None) for k in ("id", "controlId", "hierarchy", "description", "effectiveness",
+                                                   "verificationMethod", "verificationFreq", "responsibleRole",
+                                                   "evidenceAttached", "documentReference")}
+                 for c in sorted(entry.existingControls, key=lambda c: c.sortOrder or 0)],
+                u["addExistingControls"], u["setControlEffectiveness"], u["removeExistingControlKeys"])
+        if hira_builder.touches_recommended(u):
+            recommended = hira_builder.merge_recommended(
+                [{k: getattr(c, k, None) for k in ("id", "hierarchy", "description", "rationale",
+                                                   "targetLikelihoodReduction", "targetSeverityReduction",
+                                                   "estimatedCostBand", "proposedImplementationDate", "responsibleId",
+                                                   "status", "capaId", "evidenceAttached", "documentReference")}
+                 for c in entry.recommendedControls],
+                u["addRecommendedControls"], u["removeRecommendedControlKeys"])
+    except hira_builder.InputError as e:
+        raise ToolError(f"Nothing was saved: {e}") from e
+    if u["addHazards"]:
+        new_ids = [h["hazardId"] for h in u["addHazards"]]
+        known = set((await db.execute(select(HiraHazard.id).where(HiraHazard.id.in_(new_ids),
+                                                                   HiraHazard.isActive.is_(True)))).scalars())
+        unknown = [h for h in new_ids if h not in known]
+        if unknown:
+            raise ToolError(f"Nothing was saved: unknown hazardIds {', '.join(unknown)} (use find_hazard_masters)")
+
+    patch = dict(u["fields"])
+    if u["initial"]:
+        _m, liks, sevs = await _matrix_scales(db, study.riskMatrixId)
+        patch["initialLikelihoodId"], patch["initialSeverityId"] = _score_ids(liks, sevs, *u["initial"])
+    if u["target"]:
+        _m, liks, sevs = await _matrix_scales(db, study.riskMatrixId)
+        patch["targetLikelihoodId"], patch["targetSeverityId"] = _score_ids(
+            liks, sevs, u["target"]["likelihood"], u["target"]["severity"])
+        if u["target"]["rationale"]:
+            patch["targetRationale"] = u["target"]["rationale"]
+    if controls is not None and entry.residualAutoCalculated is None and entry.residualLikelihoodScore is None:
+        # Not yet assessed: let the controls drive the residual, as the editor does.
+        patch["residualAutoCalculated"] = True
+
+    user = await _load_user(db, ctx)
+    saved: list[str] = []
+    with _acting_as_user(ctx):
+        # One logical save files at most one version, like the editor's Save.
+        versioned = False
+        if patch:
+            _forget_children(db, entry)
+            await update_entry(entry_id=entry.id, payload=HiraEntryUpdate(**patch), change_reason=reason,
+                               change_trigger=None, user=user, db=db)
+            versioned = versioned_entry
+            saved.append("details")
+        if hazards is not None:
+            _forget_children(db, entry)
+            await replace_entry_hazards(entry_id=entry.id, payload=[HiraEntryHazardReplaceItem(**h) for h in hazards],
+                                        change_reason=reason, skip_version=versioned, db=db, user=user)
+            versioned = versioned or versioned_entry
+            saved.append("hazards")
+        if controls is not None:
+            _forget_children(db, entry)
+            await replace_existing_controls(
+                entry_id=entry.id,
+                payload=HiraEntryControlReplaceRequest(controls=[HiraEntryControlReplaceItem(**c) for c in controls]),
+                change_reason=reason, skip_version=versioned, user=user, db=db)
+            versioned = versioned or study.status in hira_builder.LOCKED_STUDY_STATUSES
+            saved.append("existing controls")
+        if recommended is not None:
+            _forget_children(db, entry)
+            await replace_recommended_controls(
+                entry_id=entry.id,
+                payload=HiraEntryRecommendedControlReplaceRequest(controls=[
+                    HiraEntryRecommendedControlReplaceItem(**c) for c in recommended]),
+                change_reason=reason, skip_version=versioned, user=user, db=db)
+            saved.append("recommended controls")
+        entry.updatedAt = datetime.now(timezone.utc)
+        await db.flush()
+        await _commit(db)
+    ctx.hira_writes += 1
+    fresh = await _load_entry(db, entry_id)
+    out = _entry_out(fresh)
+    await _record_action(ctx, "updated", "entry", fresh.id, f"{study.number} · entry #{fresh.sequenceNumber}",
+                         fresh.activityDescription, out["href"])
+    return {"saved": saved, **out,
+            "note": "Back to PENDING_REAPPROVAL: a reviewer must approve it again."
+            if fresh.status == "PENDING_REAPPROVAL" else None}
+
+
+async def _submit_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    from app.routers.hira import submit_entry_for_review
+    from app.schemas.hira import HiraEntryTransitionRequest
+
+    _hira_write_allowed(ctx)
+    entry_id = args.get("entryId") or _page_entry_id(ctx)
+    if not entry_id:
+        raise ToolError("Which entry? Pass entryId (from get_hira_study).")
+    _editor_guard(ctx, entry_id)
+    user = await _load_user(db, ctx)
+    with _acting_as_user(ctx):
+        await submit_entry_for_review(entry_id=entry_id, payload=HiraEntryTransitionRequest(reason=_clip(args.get("note"), 300)),
+                                      db=db, user=user)
+        await _commit(db)
+    ctx.hira_writes += 1
+    fresh = await _load_entry(db, entry_id)
+    out = _entry_out(fresh, compact=True)
+    await _record_action(ctx, "submitted", "entry", fresh.id, f"{fresh.study.number} · entry #{fresh.sequenceNumber}",
+                         fresh.activityDescription, out["href"])
+    return {"submitted": True, **out, "note": "Now IN_REVIEW. A reviewer with HIRA approval rights approves it."}
+
+
 _HANDLERS: dict[str, Callable[[AsyncSession, dict[str, Any], TurnContext], Awaitable[dict[str, Any]]]] = {
     "find_records": _find_records,
     "run_specialist_agent": _run_specialist,
@@ -1268,6 +2130,13 @@ _HANDLERS: dict[str, Callable[[AsyncSession, dict[str, Any], TurnContext], Await
     "search_hira_library": _search_hira_library,
     "assess_hira_controls": _assess_hira_controls,
     "update_hira_entry_draft": _update_hira_entry_draft,
+    "get_hira_options": _get_hira_options,
+    "get_hira_study": _get_hira_study,
+    "find_hazard_masters": _find_hazard_masters,
+    "create_hira_study": _create_hira_study,
+    "create_hira_entry": _create_hira_entry,
+    "update_hira_entry": _update_hira_entry,
+    "submit_hira_entry_for_review": _submit_hira_entry,
 }
 
 assert set(_HANDLERS) == set(TOOL_NAMES), "every tool needs a handler"

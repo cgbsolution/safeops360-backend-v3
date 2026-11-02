@@ -39,6 +39,8 @@ class PageContext(BaseModel):
     module: str | None = Field(default=None, max_length=40)
     recordId: str | None = Field(default=None, max_length=64)
     recordLabel: str | None = Field(default=None, max_length=120)
+    # The HIRA study the user has open (its page, or one of its entries).
+    studyId: str | None = Field(default=None, max_length=64)
 
 
 class CopilotTurnRequest(BaseModel):

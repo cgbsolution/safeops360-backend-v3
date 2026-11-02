@@ -160,21 +160,20 @@ ROLE_GRANTS: dict[str, list[dict[str, Any]]] = {
         {"module": "AUDIT_COMPLIANCE", "actions": ["UPDATE"], "scope": "OWN_RECORDS"},
     ],
     "HSE_MANAGER": [
-        # View / edit / delete of raised records are elevated to ALL_PLANTS so HSE
-        # leadership can act on any originator's record group-wide (any plant).
-        # The workflow verbs (approve/execute/verify/close) + create/export stay
-        # OWN_PLANT — cross-plant workflow ownership sits with CORPORATE_HSE.
+        # Every HSE_MANAGER grant is ALL_PLANTS (widened 2026-11-02) so HSE
+        # managers can see and act on every plant, incl. full HIRA authority.
         {"module": m, "actions": ["READ", "UPDATE", "DELETE"], "scope": "ALL_PLANTS"} for m in ["OBSERVATION", "NEAR_MISS", "INCIDENT", "PTW", "FLRA"]
     ] + [
-        {"module": m, "actions": ["CREATE", "APPROVE", "EXECUTE", "VERIFY", "CLOSE", "EXPORT"], "scope": "OWN_PLANT"} for m in ["OBSERVATION", "NEAR_MISS", "INCIDENT", "PTW", "FLRA"]
+        {"module": m, "actions": ["CREATE", "APPROVE", "EXECUTE", "VERIFY", "CLOSE", "EXPORT"], "scope": "ALL_PLANTS"} for m in ["OBSERVATION", "NEAR_MISS", "INCIDENT", "PTW", "FLRA"]
     ] + [
-        {"module": "TRAINING", "actions": ["CREATE", "READ", "UPDATE", "APPROVE", "EXPORT"], "scope": "OWN_PLANT"},
-        {"module": "INSPECTION", "actions": list(OPERATIONAL_ACTIONS), "scope": "OWN_PLANT"},
-        {"module": "MANHOURS", "actions": ["CREATE", "READ", "UPDATE", "EXPORT"], "scope": "OWN_PLANT"},
-        {"module": "SKILL_MATRIX", "actions": ["READ", "COMPETENCY_CONFIGURE", "ROLE_DEF_CONFIGURE", "ASSESS", "SUSPEND", "CROSS_PERSON_VIEW", "VERSION_VIEW"], "scope": "OWN_PLANT"},
-        {"module": "PPE", "actions": list(OPERATIONAL_ACTIONS) + ["ISSUE", "INSPECT", "CATALOG_MANAGE", "RETIRE_APPROVE", "RECALL_MANAGE"], "scope": "OWN_PLANT"},
-        {"module": "EPC", "actions": ["CREATE", "READ", "UPDATE", "MOBILIZATION_APPROVE", "GATE_OVERRIDE", "INDUCTION_CONDUCT", "PREQUALIFY"], "scope": "OWN_PLANT"},
-        {"module": "AUDIT_COMPLIANCE", "actions": ["CREATE", "READ", "UPDATE", "APPROVE", "EXECUTE", "VERIFY", "CLOSE", "EXPORT"], "scope": "OWN_PLANT"},
+        {"module": "TRAINING", "actions": ["CREATE", "READ", "UPDATE", "APPROVE", "EXPORT"], "scope": "ALL_PLANTS"},
+        {"module": "INSPECTION", "actions": list(OPERATIONAL_ACTIONS), "scope": "ALL_PLANTS"},
+        {"module": "MANHOURS", "actions": ["CREATE", "READ", "UPDATE", "EXPORT"], "scope": "ALL_PLANTS"},
+        {"module": "SKILL_MATRIX", "actions": ["READ", "COMPETENCY_CONFIGURE", "ROLE_DEF_CONFIGURE", "ASSESS", "SUSPEND", "CROSS_PERSON_VIEW", "VERSION_VIEW"], "scope": "ALL_PLANTS"},
+        {"module": "PPE", "actions": list(OPERATIONAL_ACTIONS) + ["ISSUE", "INSPECT", "CATALOG_MANAGE", "RETIRE_APPROVE", "RECALL_MANAGE"], "scope": "ALL_PLANTS"},
+        {"module": "EPC", "actions": ["CREATE", "READ", "UPDATE", "MOBILIZATION_APPROVE", "GATE_OVERRIDE", "INDUCTION_CONDUCT", "PREQUALIFY"], "scope": "ALL_PLANTS"},
+        {"module": "AUDIT_COMPLIANCE", "actions": ["CREATE", "READ", "UPDATE", "APPROVE", "EXECUTE", "VERIFY", "CLOSE", "EXPORT"], "scope": "ALL_PLANTS"},
+        {"module": "HIRA", "actions": ["CREATE", "READ", "UPDATE", "APPROVE", "EXECUTE", "VERIFY", "CLOSE", "DELETE", "EXPORT", "LIBRARY_MANAGE", "MATRIX_CONFIGURE", "THRESHOLDS_CONFIGURE", "REVIEW_TRIGGER", "VERSION_VIEW", "OVERRIDE_UNACCEPTABLE"], "scope": "ALL_PLANTS"},
     ],
     "PLANT_HEAD": [
         {"module": m, "actions": list(OPERATIONAL_ACTIONS), "scope": "OWN_PLANT"} for m in ["OBSERVATION", "NEAR_MISS", "INCIDENT"]
