@@ -395,6 +395,18 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     ),
     _tool(
+        "review_hira_entry",
+        "Review one HIRA entry (activity) the way an HSE auditor would: what is wrong, what to correct in the "
+        "residual risk, and what to improve. Checks the saved entry (initial vs residual, matrix verdict and ALARP, "
+        "control hierarchy, verification, recommended controls, review date) and, for entries imported from a "
+        "client workbook, the source sheet row (SV = LH x CN and GT = SP x SV x DE arithmetic, the plant's "
+        "acceptability rule, missing or mis-numbered QSD/25/F control-strategy rows, legal references, "
+        "consequence/hazard mismatches, under-rated severity). Returns findings (error / warning / suggestion / "
+        "info, each with the sheet row and a concrete fix), the residual as saved vs what the controls justify, "
+        "options that would make it acceptable, and good-practice control ideas. Defaults to the open entry.",
+        {"entryId": {**_ID, "description": "Defaults to the HIRA entry open on the page."}},
+    ),
+    _tool(
         "update_hira_entry_draft",
         "Add suggestions to the HIRA entry editor the user has open; the editor updates live and the user reviews "
         "and saves. addRecommendedControls: proposed further controls (with rationale). addExistingControls: only "
@@ -598,6 +610,7 @@ TOOL_LABELS = {
     "update_observation_draft": "Updating observation form",
     "search_hira_library": "Searching HIRA library",
     "assess_hira_controls": "Calculating risk change",
+    "review_hira_entry": "Reviewing this activity",
     "update_hira_entry_draft": "Suggesting in the editor",
     "get_hira_options": "Loading HIRA setup",
     "get_hira_study": "Reading HIRA study",
@@ -2113,6 +2126,25 @@ async def _submit_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnCo
     return {"submitted": True, **out, "note": "Now IN_REVIEW. A reviewer with HIRA approval rights approves it."}
 
 
+async def _review_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    from fastapi import HTTPException
+
+    from app.services.agents.source_access import assert_source_access
+    from app.services.copilot.hira_review import review_entry
+
+    entry_id = args.get("entryId") or _page_entry_id(ctx)
+    if not entry_id:
+        raise ToolError("No HIRA entry is open. Ask the user to open the activity (HIRA → study → entry).")
+    try:
+        await assert_source_access(db, await _load_user(db, ctx), "HIRA", entry_id)
+    except HTTPException as exc:
+        raise ToolError(str(exc.detail)) from exc
+    try:
+        return await review_entry(db, entry_id)
+    except LookupError as exc:
+        raise ToolError(str(exc)) from exc
+
+
 _HANDLERS: dict[str, Callable[[AsyncSession, dict[str, Any], TurnContext], Awaitable[dict[str, Any]]]] = {
     "find_records": _find_records,
     "run_specialist_agent": _run_specialist,
@@ -2129,6 +2161,7 @@ _HANDLERS: dict[str, Callable[[AsyncSession, dict[str, Any], TurnContext], Await
     "update_observation_draft": _update_observation_draft,
     "search_hira_library": _search_hira_library,
     "assess_hira_controls": _assess_hira_controls,
+    "review_hira_entry": _review_hira_entry,
     "update_hira_entry_draft": _update_hira_entry_draft,
     "get_hira_options": _get_hira_options,
     "get_hira_study": _get_hira_study,

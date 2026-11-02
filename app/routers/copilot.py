@@ -67,6 +67,25 @@ async def copilot_status(user: User = Depends(get_current_user)) -> dict[str, An
     }
 
 
+@router.get("/hira-review/{entry_id}")
+async def hira_entry_review(
+    entry_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """The copilot's review of one HIRA entry: what is wrong, what to correct in
+    the residual risk, and what to improve. Deterministic (no AI call), so the
+    entry page can show it as soon as the activity is opened."""
+    from app.services.agents.source_access import assert_source_access
+    from app.services.copilot.hira_review import review_entry
+
+    await assert_source_access(db, user, "HIRA", entry_id)
+    try:
+        return await review_entry(db, entry_id)
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+
 @router.post("/chat")
 async def copilot_chat(
     payload: CopilotTurnRequest,
