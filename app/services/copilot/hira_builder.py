@@ -124,13 +124,22 @@ def parse_hazards(v: Any, key: str = "hazards") -> list[dict[str, Any]]:
         if not consequence or len(consequence) < MIN_CONSEQUENCE:
             raise InputError(f"{key}[{i}]: consequence is required — who is harmed, how, and how badly "
                              f"(at least {MIN_CONSEQUENCE} characters)")
-        out.append({
+        item = {
             "hazardId": hid,
             "consequence": consequence,
             "contextualDescription": _s(h.get("contextualDescription"), 1000),
             "regulationRef": _s(h.get("regulationRef"), 120),
             "regulationSection": _s(h.get("regulationSection"), 120),
-        })
+        }
+        # Calibration v2: each hazard may carry its own rating (1-5); the router
+        # schemas ignore these keys, the calibration layer reads them.
+        lk = _int(h.get("likelihood"), f"{key}[{i}].likelihood", 1, 5)
+        sv = _int(h.get("severity"), f"{key}[{i}].severity", 1, 5)
+        if lk is not None:
+            item["likelihood"] = lk
+        if sv is not None:
+            item["severity"] = sv
+        out.append(item)
     return out
 
 

@@ -139,7 +139,11 @@ _HIRA_HAZARDS = {"type": "array", "maxItems": 15, "items": {"type": "object", "p
                     "description": "Who is harmed, how, and how badly, e.g. 'Ladle crane operator struck by swinging load: crush injury, possible fatality'."},
     "contextualDescription": {"type": "string", "maxLength": 1000, "description": "How the hazard arises in this activity."},
     "regulationRef": {"type": "string", "maxLength": 120},
-    "regulationSection": {"type": "string", "maxLength": 120}},
+    "regulationSection": {"type": "string", "maxLength": 120},
+    "likelihood": {"type": "integer", "minimum": 1, "maximum": 5,
+                   "description": "This hazard's own likelihood (1-5) with no controls. Rate each hazard separately."},
+    "severity": {"type": "integer", "minimum": 1, "maximum": 5,
+                 "description": "This hazard's credible worst-case severity (1-5)."}},
     "required": ["hazardId", "consequence"]}}
 _HIRA_CONTROLS = {"type": "array", "maxItems": 15, "items": {"type": "object", "properties": {
     "hierarchy": {"type": "string", "enum": list(form_drafts.HIERARCHY)},
@@ -528,6 +532,8 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "hazards": _HIRA_HAZARDS,
             "existingControls": _HIRA_CONTROLS,
             "recommendedControls": _HIRA_RECOMMENDED,
+            "expandHazards": {"type": "boolean", "description": "Keep more than 5 hazards for a routine activity "
+                                                                "(only when the user asks for the full list)."},
         },
         ["activityDescription", "routine", "frequency", "initialLikelihood", "initialSeverity",
          "initialLikelihoodRationale", "initialSeverityRationale", "hazards"],
@@ -1916,6 +1922,16 @@ async def _create_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnCo
     unknown = [h for h in hazard_ids if h not in known]
     if unknown:
         raise ToolError(f"Nothing was saved: unknown hazardIds {', '.join(unknown)} (use find_hazard_masters)")
+    # HIRA calibration v2 (flag per plant): ON -> per-hazard ratings capped by
+    # evidence and the credible worst case, at most 5 hazards, capped and
+    # de-duplicated recommendations, and no residual from an empty control list.
+    # SHADOW -> saved as before, v1 and v2 logged side by side.
+    from app.services.hira_calibration import service as calibration
+
+    cal = await calibration.calibrate_copilot_draft(db, study=study, area_id=area_id, parsed=p,
+                                                    expand=bool(args.get("expandHazards")), user_id=ctx.user_id)
+    if cal and cal["mode"] == "ON":
+        p = cal["parsed"]
     _matrix, liks, sevs = await _matrix_scales(db, study.riskMatrixId)
     l_id, s_id = _score_ids(liks, sevs, p["initialLikelihood"], p["initialSeverity"])
     dup = (await db.execute(select(HiraEntry).where(
@@ -1943,6 +1959,7 @@ async def _create_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnCo
         created = await create_entry(study_id=study.id, payload=payload, user=user, db=db)
         entry = await db.get(HiraEntry, created.id)
         # New entries take their residual from the controls, as the editor does.
+        # (v2 ON with no controls: the residual stays empty = "inherent only".)
         entry.residualAutoCalculated = True
         entry.residualLikelihoodRationale = p["residualLikelihoodRationale"]
         entry.residualSeverityRationale = p["residualSeverityRationale"]
@@ -1960,14 +1977,23 @@ async def _create_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnCo
                     HiraEntryRecommendedControlReplaceItem(**c) for c in p["recommendedControls"]]),
                 change_reason=None, skip_version=True, user=user, db=db)
         await db.flush()
+        if cal and cal["mode"] == "ON":
+            await calibration.save_hazard_ratings(db, entry.id, cal["hazardRatings"])
         await _commit(db)
     ctx.hira_writes += 1
     saved = await _load_entry(db, created.id)
     out = _entry_out(saved)
     await _record_action(ctx, "created", "entry", saved.id, f"{study.number} · entry #{saved.sequenceNumber}",
                          saved.activityDescription, out["href"])
-    return {"created": True, "study": study.number, **out,
-            "note": "Saved as DRAFT. The residual is calculated from the existing controls."}
+    result = {"created": True, "study": study.number, **out,
+              "note": "Saved as DRAFT. The residual is calculated from the existing controls."}
+    if cal and cal["mode"] == "ON":
+        result["calibration"] = cal["summary"]
+        result["note"] = ("Saved as DRAFT, rated per hazard by the plant's risk rules. "
+                          + ("Inherent only: no existing controls were given, so no residual is shown yet - ask the "
+                             "user which controls are already in place. " if not p["existingControls"] else "")
+                          + "Tell the user what calibration changed (calibration.notes).")
+    return result
 
 
 async def _update_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
@@ -2130,7 +2156,7 @@ async def _review_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnCo
     from fastapi import HTTPException
 
     from app.services.agents.source_access import assert_source_access
-    from app.services.copilot.hira_review import review_entry
+    from app.services.hira_calibration import service as calibration
 
     entry_id = args.get("entryId") or _page_entry_id(ctx)
     if not entry_id:
@@ -2140,7 +2166,8 @@ async def _review_hira_entry(db: AsyncSession, args: dict[str, Any], ctx: TurnCo
     except HTTPException as exc:
         raise ToolError(str(exc.detail)) from exc
     try:
-        return await review_entry(db, entry_id)
+        # v1, or the calibrated v2 review when the plant's flag is ON (same as the entry page).
+        return await calibration.review(db, entry_id, user_id=ctx.user_id)
     except LookupError as exc:
         raise ToolError(str(exc)) from exc
 

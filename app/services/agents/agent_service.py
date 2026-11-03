@@ -341,6 +341,14 @@ async def run_invocation(
         parsed = _parse_final_response(loop_result.final_text)
         invocation.agentReasoning = parsed["reasoning"]
         invocation.agentSuggestion = await _label_hira_hazards(db, agent.code, parsed["suggestion"])
+        if agent.code == "HIRA_ASSISTANT" and invocation.sourceModule == "HIRA":
+            # HIRA calibration v2 (flag per plant): ON -> code decides the
+            # ratings, residual and capped recommendations; SHADOW -> logged only.
+            from app.services.hira_calibration.service import calibrate_assistant_output
+
+            invocation.agentSuggestion = await calibrate_assistant_output(
+                db, entry_id=invocation.sourceRecordId, suggestion=invocation.agentSuggestion,
+                context=context, user_id=invocation.invokedById)
         invocation.agentConfidence = parsed["confidence"]
         invocation.rawApiResponse = loop_result.raw_last_response
 

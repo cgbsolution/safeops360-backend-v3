@@ -124,6 +124,13 @@ async def build_context(db: AsyncSession, record_id: str) -> dict[str, Any]:
     likelihood_scale = (
         sorted(((l.score, l.label) for l in matrix.likelihoods), key=lambda x: x[0]) if matrix else None
     )
+    # HIRA calibration v2 (flag ON for the plant): likelihood is anchored to
+    # recorded evidence, so the HA-07 "routine daily -> Likely" floor is off.
+    from app.services.hira_calibration import config as cal_config
+
+    cal_cfg, cal_mode, _ = await cal_config.load(db, study.plantId if study else None)
+    if cal_mode == "ON":
+        likelihood_scale = []
 
     # ── Layer A — deterministic rules (the mandatory floor) ──────────────
     layer_a = await evaluate_layer_a(
@@ -316,6 +323,26 @@ async def build_context(db: AsyncSession, record_id: str) -> dict[str, Any]:
                          "differently.",
             }
             if matrix
+            else None
+        ),
+        "calibration_rules": (
+            {
+                "_note": "These plant rules decide the final numbers. Propose per-hazard likelihood and severity "
+                         "with a rationale; do not state residual scores or bands (code computes them).",
+                "likelihoodAnchors": cal_cfg["likelihood"]["anchors"],
+                "likelihoodEvidence": "L4 needs a recorded incident / near miss on this activity or area in the "
+                                      f"last {cal_cfg['likelihood']['evidenceWindowMonths']} months, or a documented "
+                                      "control failure; L5 needs 2+ events in 12 months. Daily exposure alone "
+                                      "justifies at most L3.",
+                "severity": "Credible worst case, not the theoretical maximum: cuts, dust and manual handling "
+                            "S1-S3; dropped crane loads over people and falls into bins S4-S5.",
+                "controlCredit": "Admin and PPE never lower severity; PPE earns no credit for S4+ hazards; baseline "
+                                 "PPE (helmet, shoes, hi-vis, basic gloves) earns none and is never recommended.",
+                "caps": f"At most {cal_cfg['assistant']['maxHazardsRoutine']} credible hazards for a routine "
+                        "activity, each with specific 'how it manifests' text; at most 1 recommendation per hazard "
+                        "and 3 per LOW/MODERATE entry (5 if HIGH/CRITICAL); propose existing plant controls first.",
+            }
+            if cal_mode == "ON"
             else None
         ),
         "layer_a_rules_findings": layer_a.to_prompt_dict(),
