@@ -830,34 +830,11 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
 
     source = {"meta": {**{k: meta.get(k) for k in ("file", "form24", "form25", "dept", "revision", "date", "leader",
                                                     "team", "non_managerial", "abbreviations", "footnote", "author",
-                                                    "lastModifiedBy", "created", "modified")},
+                                                    "lastModifiedBy", "created", "modified", "approval24", "approval25", "revision25")},
                        "significantScore": SIGNIFICANT, "significantScoreCell": meta.get("significantScoreCell"),
                        "matrix": MATRIX_CODE, "imported": NOW.isoformat(timespec="seconds")},
               "studies": {}}
     n_entries = n_haz = n_ctl = n_reg = 0
-    desc_common = (
-        f"Imported from the client workbook {meta.get('file')}: tab 'HIRA ' = {meta.get('form24')}; "
-        f"tab 'Controls' = {meta.get('form25')} (strategy for meeting unacceptable risks). "
-        f"Location/Dept: {meta.get('dept')}. HIRA Revision No. {meta.get('revision')}, date {meta.get('date')}.\n"
-        f"Team leader: {leader_name}\nHIRA team (managerial): {meta.get('team')}\n"
-        f"Non-managerial workers: {meta.get('non_managerial')}\n"
-        f"{meta.get('abbreviations')}\n"
-        f"Plant method: SV = LH x CN, GT = SP x SV x DE; significant score (sheet) = "
-        f"{meta.get('significantScoreCell')}; not acceptable when GT > 3.33 or any legal/domino/chronic/emergency "
-        f"concern is Y. SafeOps rates it on the matrix {MATRIX_CODE}: likelihood = SP x LH x DE, severity = CN, "
-        f"so the risk score equals GT (where the sheet's own SV or GT is typed inconsistently, the score follows "
-        f"the factors and the entry rationale says so).\n"
-        f"Previous Score (GT) column: '*' = {(meta.get('footnote') or '').lstrip('* ')} (first assessed in this revision).\n"
-        f"Controls tab: {meta.get('revision25')}.\n"
-        f"Approval blocks in the workbook - HIRA tab: {meta.get('approval24')}; Controls tab: "
-        f"{meta.get('approval25')} - all names and signatures left blank.\n"
-        f"Workbook author {meta.get('author')}, created {(meta.get('created') or '')[:10]}, last modified "
-        f"{(meta.get('modified') or '')[:10]} by {meta.get('lastModifiedBy')}.\n"
-        f"Not in the workbook (set by the import): frequency (DAILY for R, OCCASIONAL for NR), review cycle "
-        f"(annual), persons exposed (0 = not recorded). Hazard masters are SafeOps classifications of the sheet "
-        f"text; where the library has no exact master the nearest is used (heat radiation -> UV radiation, animal "
-        f"bite -> biological agent, communication failure / human behaviour / mobile phone -> behavioural)."
-    )
 
     for sec in sections:
         code = STUDY_CODES.get(section_key(sec), re.sub(r"[^A-Z]", "", sec.upper())[:6])
@@ -1040,12 +1017,10 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
         study = dict(
             id=study_id, number=number, plantId=plant_id, departmentId=dept_id, areaId=areas[area_name[sec]],
             scopeType="AREA", title=title,
+            # One plain line only; workbook details stay in the copilot source JSON
+            # and the verification workbook, not on the HIRA page.
             description=f"{sec} of the {meta.get('dept')} steel melt shop: {len(snos)} activities, S.No 1-{max(snos)}"
-                        + (f" (no S.No {', '.join(map(str, missing))} in the workbook)" if missing else "") + ".\n"
-                        + ("This block has no heading in the workbook: its rows follow the AFS area with S.No "
-                           "restarting at 1 and activity 'All Activities'; the study name was given by the import.\n"
-                           if section_key(sec) == "general all" else "")
-                        + desc_common,
+                        + (f" (no S.No {', '.join(map(str, missing))} in the workbook)" if missing else "") + ".",
             riskMatrixId=matrix_id, teamLeaderId=leader_id, status="ACTIVE",
             initiatedAt=eff, completedAt=eff, approvedAt=None, approvedById=None, effectiveFrom=eff,
             nextScheduledReviewDate=eff + dt.timedelta(days=365), reviewFrequency="ANNUAL",
