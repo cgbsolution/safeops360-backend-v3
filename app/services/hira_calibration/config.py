@@ -205,13 +205,23 @@ def deep_merge(base: dict[str, Any], over: dict[str, Any] | None) -> dict[str, A
     return out
 
 
+# HIRA types (round 3, K). Calibration rules run for TASK_BASED only; the
+# others get structural completeness checks and a neutral banner.
+HIRA_TYPES = ("TASK_BASED", "HAZOP_PHA", "FMEA", "FIRE_EXPLOSION_STUDY", "MOC_RISK", "EMERGENCY_SCENARIO",
+              "OCC_HEALTH", "OTHER")
+CALIBRATED_TYPES = ("TASK_BASED",)
+
+
 @dataclass(frozen=True)
 class MatrixRule:
-    """What the study's matrix says about the plant's own acceptance rule."""
+    """What the study's matrix says about the plant's own acceptance rule.
+    `matrix` is the study matrix through the adapter (matrix.MatrixConfig);
+    None means the built-in config for `code`."""
 
     code: str | None
     likelihood_scale: str  # FREQUENCY | PLANT_INDEX
     moderate_not_acceptable: bool
+    matrix: Any = None
 
 
 def matrix_rule(matrix: Any, cfg: dict[str, Any], likelihood_labels: list[str] | None = None) -> MatrixRule:
@@ -260,6 +270,16 @@ async def table_exists(db: Any, name: str) -> bool:
     return bool(n)
 
 
+def with_matrix(cfg: dict[str, Any], rule: MatrixRule) -> dict[str, Any]:
+    """The config with the study matrix attached (under "_matrix"), so every
+    rating in one evaluation reads its band from the same matrix."""
+    if cfg.get("_matrix") is not None:
+        return cfg
+    from app.services.hira_calibration import matrix as mx  # noqa: PLC0415
+
+    return {**cfg, "_matrix": rule.matrix if rule.matrix is not None else mx.builtin(rule.code, cfg)}
+
+
 async def load(db: Any, plant_id: str | None) -> tuple[dict[str, Any], str, dict[str, Any]]:
     """(effective config, mode, version info) for a plant. Mode defaults to OFF."""
     from sqlalchemy import or_, select  # noqa: PLC0415
@@ -305,6 +325,9 @@ async def load(db: Any, plant_id: str | None) -> tuple[dict[str, Any], str, dict
 
 
 __all__ = [
+    "CALIBRATED_TYPES",
+    "HIRA_TYPES",
+    "with_matrix",
     "DEFAULT_CONFIG",
     "ENGINE_VERSION",
     "FLAG",

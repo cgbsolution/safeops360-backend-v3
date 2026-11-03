@@ -50,6 +50,11 @@ def band(score_: int, cfg: dict[str, Any]) -> str:
 
 
 def rate(l: int, s: int, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Rating on the normalised 1-5 scale. With a study matrix attached (the
+    adapter, cfg["_matrix"]) the band comes from that matrix's cell map."""
+    m = cfg.get("_matrix")
+    if m is not None:
+        return m.rate(l, s)
     sc = score(l, s)
     return {"likelihood": int(l), "severity": int(s), "score": sc, "level": band(sc, cfg)}
 

@@ -23,7 +23,10 @@ from sqlalchemy.orm import selectinload
 
 from app.services.hira_calibration import review_v2 as rv
 from app.services.hira_calibration import risk_engine as eng
-from app.services.hira_calibration.config import MatrixRule, matrix_rule, table_exists
+from app.services.hira_calibration import matrix as mx
+from app.services.hira_calibration.config import HIRA_TYPES, MatrixRule, matrix_rule, table_exists
+
+BUILTIN_MATRICES = ("STD_5X5", "JSL_QSD24_GT")
 
 OPEN_CAPA_STATES = (
     "DRAFT",
@@ -77,11 +80,62 @@ async def _matrix(db: AsyncSession, matrix_id: str | None) -> tuple[Any, list[st
         return None, []
     m = (
         await db.execute(
-            select(RiskMatrix).where(RiskMatrix.id == matrix_id).options(selectinload(RiskMatrix.likelihoods))
+            select(RiskMatrix)
+            .where(RiskMatrix.id == matrix_id)
+            .options(
+                selectinload(RiskMatrix.likelihoods),
+                selectinload(RiskMatrix.severities),
+                selectinload(RiskMatrix.cells),
+            )
         )
     ).scalar_one_or_none()
     labels = [l.label for l in sorted(m.likelihoods, key=lambda x: x.score)] if m else []
     return m, labels
+
+
+def _rule(matrix: Any, cfg: dict[str, Any], labels: list[str]) -> MatrixRule:
+    """The plant rule plus the study matrix through the adapter: the agreed
+    built-in configs for STD_5X5 / JSL_QSD24_GT, the stored cell map for any
+    other matrix (e.g. a 3x3)."""
+    rule = matrix_rule(matrix, cfg, labels)
+    code = getattr(matrix, "code", None)
+    adapter = None
+    if matrix is not None and code not in BUILTIN_MATRICES and getattr(matrix, "cells", None):
+        try:
+            adapter = mx.from_db(
+                matrix,
+                list(matrix.cells),
+                list(matrix.likelihoods),
+                list(matrix.severities),
+                scoring_mode="plantIndex" if rule.likelihood_scale == "PLANT_INDEX" else "product",
+            )
+        except ValueError:
+            adapter = None  # an incomplete cell map: fall back to the agreed thresholds
+    return MatrixRule(rule.code, rule.likelihood_scale, rule.moderate_not_acceptable, adapter)
+
+
+_TYPE_COL: dict[str, Any] = {"ready": None, "at": 0.0}
+
+
+async def _hira_type(db: AsyncSession, study: Any, entry: Any) -> str:
+    """HiraStudy.hiraType once the round-3 DDL has added it; until then a study
+    with the activity / hazard / controls structure is TASK_BASED, else OTHER."""
+    if _TYPE_COL["ready"] is None or time.monotonic() - _TYPE_COL["at"] > 300:
+        n = (
+            await db.execute(
+                text(
+                    "SELECT count(*) FROM information_schema.columns WHERE table_name = 'HiraStudy' "
+                    "AND column_name = 'hiraType'"
+                )
+            )
+        ).scalar()
+        _TYPE_COL.update(ready=bool(n), at=time.monotonic())
+    if _TYPE_COL["ready"] and study is not None:
+        v = (await db.execute(text('SELECT "hiraType" FROM "HiraStudy" WHERE id = :i'), {"i": study.id})).scalar()
+        if v in HIRA_TYPES:
+            return v
+    structured = bool((entry.activityDescription or "").strip()) and bool(entry.hazards or entry.existingControls)
+    return "TASK_BASED" if structured else "OTHER"
 
 
 def _event_families(text_: str, category: str | None) -> set[str]:
@@ -204,7 +258,7 @@ async def build(db: AsyncSession, entry_id: str, cfg: dict[str, Any]) -> dict[st
     ready = await calibration_schema_ready(db)
 
     matrix, labels = await _matrix(db, study.riskMatrixId if study else None)
-    rule: MatrixRule = matrix_rule(matrix, cfg, labels)
+    rule: MatrixRule = _rule(matrix, cfg, labels)
 
     # per-hazard ratings and control links (new columns, only once the DDL is in)
     hz_extra: dict[str, dict[str, Any]] = {}
@@ -353,6 +407,7 @@ async def build(db: AsyncSession, entry_id: str, cfg: dict[str, Any]) -> dict[st
         ),
         hazard_regulations=regs,
         today=date.today(),
+        hira_type=await _hira_type(db, study, e),
     )
 
     # ── statutory register: equipment this entry names ──
@@ -598,7 +653,7 @@ async def build_for_draft(
 
     now = datetime.now(UTC)
     matrix, labels = await _matrix(db, study.riskMatrixId)
-    rule = matrix_rule(matrix, cfg, labels)
+    rule = _rule(matrix, cfg, labels)
     evidence = await _evidence(
         db,
         plant_id=study.plantId,

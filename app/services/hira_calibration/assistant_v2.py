@@ -22,7 +22,7 @@ from typing import Any
 from app.services.hira_calibration import recommend as rec
 from app.services.hira_calibration import review_v2 as rv
 from app.services.hira_calibration import risk_engine as eng
-from app.services.hira_calibration.config import MatrixRule
+from app.services.hira_calibration.config import MatrixRule, with_matrix
 
 GENERIC_HAZARD = re.compile(
     r"^\s*(machine|machinery|tool|equipment|mechanical|general|other|misc\w*)(\s*(/|or|and)\s*\w+)?\s*(hazard|failure"
@@ -53,6 +53,7 @@ def calibrate_draft(
     likelihood, severity, likelihoodRationale?, severityRationale?, relevance?}], "existingControls":
     [{hierarchy, description, effectiveness?, hazardKeys?}], "recommendedControls": [{hierarchy, description,
     costBand?, hazardKeys?}]}. Residual fields in the draft are ignored."""
+    cfg = with_matrix(cfg, rule)
     routine = (draft.get("routine") or "ROUTINE").upper()
     notes: list[str] = []
     hazards_in = [h for h in draft.get("hazards") or [] if h.get("key") or h.get("name")]

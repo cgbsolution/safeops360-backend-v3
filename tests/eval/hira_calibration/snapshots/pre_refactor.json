@@ -1,0 +1,7915 @@
+{
+ "bench1Stored": {
+  "controlsProfile": "real",
+  "evidenceFamilies": [],
+  "expected": {
+   "inherentBand": "CRITICAL",
+   "residualBand": "HIGH"
+  },
+  "expectedMatch": {
+   "inherent": true,
+   "residual": true
+  },
+  "final": {
+   "entryResidual": {
+    "level": "HIGH",
+    "likelihood": 2,
+    "score": 8,
+    "severity": 4
+   },
+   "hazards": [
+    {
+     "key": "h1",
+     "missing": [],
+     "name": "Crane / lifting operations",
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 1,
+      "score": 5,
+      "severity": 5
+     },
+     "route": null,
+     "state": "TOLERABLE_ALARP"
+    },
+    {
+     "key": "h2",
+     "missing": [],
+     "name": "Swinging load",
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 1,
+      "score": 5,
+      "severity": 5
+     },
+     "route": null,
+     "state": "TOLERABLE_ALARP"
+    },
+    {
+     "key": "h3",
+     "missing": [],
+     "name": "Fall from bin top",
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 1,
+      "score": 5,
+      "severity": 5
+     },
+     "route": null,
+     "state": "TOLERABLE_ALARP"
+    },
+    {
+     "key": "h4",
+     "missing": [],
+     "name": "Falling object",
+     "residual": {
+      "level": "HIGH",
+      "likelihood": 2,
+      "score": 8,
+      "severity": 4
+     },
+     "route": "CONTROLS",
+     "state": "NOT_ACCEPTABLE"
+    },
+    {
+     "key": "h5",
+     "missing": [],
+     "name": "Sharp edge",
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 2,
+      "score": 6,
+      "severity": 3
+     },
+     "route": null,
+     "state": "TOLERABLE_ALARP"
+    },
+    {
+     "key": "h6",
+     "missing": [],
+     "name": "Manual handling",
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 2,
+      "score": 6,
+      "severity": 3
+     },
+     "route": null,
+     "state": "TOLERABLE_ALARP"
+    },
+    {
+     "key": "h7",
+     "missing": [],
+     "name": "Airborne dust",
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 2,
+      "score": 6,
+      "severity": 3
+     },
+     "route": null,
+     "state": "TOLERABLE_ALARP"
+    }
+   ],
+   "label": "NOT_REACHED (CONTROLS)",
+   "override": false,
+   "reached": false,
+   "status": "OPEN"
+  },
+  "frequency": "DAILY",
+  "id": "BENCH-1/stored",
+  "matrix": "STD_5X5",
+  "mode": "STORED",
+  "pass2": {
+   "blockerDetails": [],
+   "blockers": [],
+   "newBlockers": [],
+   "pass3Blockers": [],
+   "pass3NewBlockers": [],
+   "recommendations": 0,
+   "status": "OPEN"
+  },
+  "reconstructionMatchesCalibrateDraft": null,
+  "routine": "ROUTINE",
+  "title": "Bag-to-bin feeding by crane",
+  "v1": {
+   "inherent": {
+    "level": "CRITICAL",
+    "likelihood": 4,
+    "score": 20,
+    "severity": 5
+   },
+   "recommendations": 8,
+   "residual": {
+    "level": "HIGH",
+    "likelihood": 3,
+    "score": 12,
+    "severity": 4
+   },
+   "residualSource": "v1 control model"
+  },
+  "v2": {
+   "blockers": [
+    "HAZARD_NOT_ACCEPTABLE"
+   ],
+   "controlsJustify": [
+    "Crane / lifting operations: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1 (provisional)).",
+    "Swinging load: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1 (provisional)).",
+    "Fall from bin top: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1 (provisional)).",
+    "Falling object: L3 x S4 = HIGH (12) -> L2 x S4 = HIGH (8) (Administrative L-1 (provisional)).",
+    "Sharp edge: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Administrative L-1 (provisional)).",
+    "Manual handling: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Administrative L-1 (provisional)).",
+    "Airborne dust: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Administrative L-1 (provisional))."
+   ],
+   "criticalResidualHazards": [],
+   "droppedHazards": [],
+   "entryLevelForCap": "HIGH",
+   "existingControlProposals": 0,
+   "findings": [
+    "HAZARD_NOT_ACCEPTABLE",
+    "ALARP_RECORD",
+    "CONTROLS_PROVISIONAL",
+    "LIKELIHOOD_UNSUPPORTED",
+    "NO_FURTHER_CONTROL",
+    "BASELINE_RECORDED",
+    "ESTIMATED_PER_HAZARD",
+    "REGULATION_SUGGESTED"
+   ],
+   "hazards": [
+    {
+     "code": "MECH-008",
+     "family": "LIFTING",
+     "inherent": {
+      "level": "CRITICAL",
+      "likelihood": 3,
+      "score": 15,
+      "severity": 5
+     },
+     "key": "h1",
+     "likelihoodReason": "Capped at L3: no recorded events in the last 24 months. Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on this activity or area, or a documented control failure (overdue statutory exam, failed inspection).",
+     "name": "Crane / lifting operations",
+     "proposed": {
+      "likelihood": null,
+      "severity": null
+     },
+     "residual": {
+      "level": "HIGH",
+      "likelihood": 2,
+      "score": 10,
+      "severity": 5
+     },
+     "severityFinding": null,
+     "tolerability": {
+      "missing": [],
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     }
+    },
+    {
+     "code": "VEH-010",
+     "family": "LIFTING",
+     "inherent": {
+      "level": "CRITICAL",
+      "likelihood": 3,
+      "score": 15,
+      "severity": 5
+     },
+     "key": "h2",
+     "likelihoodReason": "Capped at L3: no recorded events in the last 24 months. Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on this activity or area, or a documented control failure (overdue statutory exam, failed inspection).",
+     "name": "Swinging load",
+     "proposed": {
+      "likelihood": null,
+      "severity": null
+     },
+     "residual": {
+      "level": "HIGH",
+      "likelihood": 2,
+      "score": 10,
+      "severity": 5
+     },
+     "severityFinding": null,
+     "tolerability": {
+      "missing": [],
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     }
+    },
+    {
+     "code": "WAH-003",
+     "family": "HEIGHT",
+     "inherent": {
+      "level": "CRITICAL",
+      "likelihood": 3,
+      "score": 15,
+      "severity": 5
+     },
+     "key": "h3",
+     "likelihoodReason": "Capped at L3: no recorded events in the last 24 months. Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on this activity or area, or a documented control failure (overdue statutory exam, failed inspection).",
+     "name": "Fall from bin top",
+     "proposed": {
+      "likelihood": null,
+      "severity": null
+     },
+     "residual": {
+      "level": "HIGH",
+      "likelihood": 2,
+      "score": 10,
+      "severity": 5
+     },
+     "severityFinding": null,
+     "tolerability": {
+      "missing": [],
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     }
+    },
+    {
+     "code": "MECH_FALLING_OBJECT",
+     "family": "FALLING_OBJECT",
+     "inherent": {
+      "level": "HIGH",
+      "likelihood": 3,
+      "score": 12,
+      "severity": 4
+     },
+     "key": "h4",
+     "likelihoodReason": "Capped at L3: no recorded events in the last 24 months. Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on this activity or area, or a documented control failure (overdue statutory exam, failed inspection).",
+     "name": "Falling object",
+     "proposed": {
+      "likelihood": null,
+      "severity": null
+     },
+     "residual": {
+      "level": "HIGH",
+      "likelihood": 2,
+      "score": 8,
+      "severity": 4
+     },
+     "severityFinding": "OVERSTATED",
+     "tolerability": {
+      "missing": [],
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     }
+    },
+    {
+     "code": "MECH_SHARP_EDGE",
+     "family": "SHARP",
+     "inherent": {
+      "level": "HIGH",
+      "likelihood": 3,
+      "score": 9,
+      "severity": 3
+     },
+     "key": "h5",
+     "likelihoodReason": "Capped at L3: no recorded events in the last 24 months. Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on this activity or area, or a documented control failure (overdue statutory exam, failed inspection).",
+     "name": "Sharp edge",
+     "proposed": {
+      "likelihood": null,
+      "severity": null
+     },
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 2,
+      "score": 6,
+      "severity": 3
+     },
+     "severityFinding": "OVERSTATED",
+     "tolerability": {
+      "missing": [
+       "reviewDateSet"
+      ],
+      "route": "ALARP_CHECKLIST",
+      "state": "NOT_ACCEPTABLE"
+     }
+    },
+    {
+     "code": "MECH_HEAVY_LIFTING",
+     "family": "MANUAL_HANDLING",
+     "inherent": {
+      "level": "HIGH",
+      "likelihood": 3,
+      "score": 9,
+      "severity": 3
+     },
+     "key": "h6",
+     "likelihoodReason": "Capped at L3: no recorded events in the last 24 months. Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on this activity or area, or a documented control failure (overdue statutory exam, failed inspection).",
+     "name": "Manual handling",
+     "proposed": {
+      "likelihood": null,
+      "severity": null
+     },
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 2,
+      "score": 6,
+      "severity": 3
+     },
+     "severityFinding": "OVERSTATED",
+     "tolerability": {
+      "missing": [
+       "reviewDateSet"
+      ],
+      "route": "ALARP_CHECKLIST",
+      "state": "NOT_ACCEPTABLE"
+     }
+    },
+    {
+     "code": "ENV_DUST_AIRBORNE",
+     "family": "DUST",
+     "inherent": {
+      "level": "HIGH",
+      "likelihood": 3,
+      "score": 9,
+      "severity": 3
+     },
+     "key": "h7",
+     "likelihoodReason": "Capped at L3: no recorded events in the last 24 months. Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on this activity or area, or a documented control failure (overdue statutory exam, failed inspection).",
+     "name": "Airborne dust",
+     "proposed": {
+      "likelihood": null,
+      "severity": null
+     },
+     "residual": {
+      "level": "MODERATE",
+      "likelihood": 2,
+      "score": 6,
+      "severity": 3
+     },
+     "severityFinding": "OVERSTATED",
+     "tolerability": {
+      "missing": [
+       "reviewDateSet"
+      ],
+      "route": "ALARP_CHECKLIST",
+      "state": "NOT_ACCEPTABLE"
+     }
+    }
+   ],
+   "inherent": {
+    "level": "CRITICAL",
+    "likelihood": 3,
+    "score": 15,
+    "severity": 5
+   },
+   "inherentOnly": false,
+   "linkedCapas": [],
+   "recommendationCap": 5,
+   "recommendations": [
+    {
+     "costBand": "MEDIUM",
+     "description": "Fixed guard rails with toe boards around the platform and a lockable grid cover over the opening",
+     "hierarchy": "ENGINEERING",
+     "id": "HT-ENG-1",
+     "kind": "CAPA",
+     "residualAfter": {
+      "level": "MODERATE",
+      "likelihood": 1,
+      "score": 5,
+      "severity": 5
+     },
+     "source": "catalogue",
+     "studyLevel": false,
+     "targets": [
+      "h3"
+     ]
+    },
+    {
+     "costBand": "MEDIUM",
+     "description": "Hard-barricaded exclusion zone under the crane travel path, with an interlocked or chained access point so no one can stand under a suspended load",
+     "hierarchy": "ENGINEERING",
+     "id": "LIFT-ENG-1",
+     "kind": "CAPA",
+     "residualAfter": {
+      "level": "MODERATE",
+      "likelihood": 1,
+      "score": 5,
+      "severity": 5
+     },
+     "source": "catalogue",
+     "studyLevel": false,
+     "targets": [
+      "h1",
+      "h2"
+     ]
+    }
+   ],
+   "residual": {
+    "level": "HIGH",
+    "likelihood": 2,
+    "score": 10,
+    "severity": 5
+   },
+   "residualLabel": null,
+   "status": "OPEN"
+  }
+ },
+ "rows": [
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "HIGH"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Crane / lifting operations",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Fall from bin top",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Swinging load",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Falling object",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h7",
+      "missing": [],
+      "name": "Airborne dust",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "BENCH-1",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Bag-to-bin feeding by crane",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 8,
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Crane / lifting operations: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1 (provisional)).",
+     "Fall from bin top: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1 (provisional)).",
+     "Swinging load: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1 (provisional)).",
+     "Falling object: L3 x S4 = HIGH (12) -> L2 x S4 = HIGH (8) (Administrative L-1 (provisional)).",
+     "Airborne dust: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Administrative L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [
+     "Manual handling",
+     "Sharp edge"
+    ],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "MECH-008",
+      "family": "LIFTING",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Crane / lifting operations",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "WAH-003",
+      "family": "HEIGHT",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Fall from bin top",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "VEH-010",
+      "family": "LIFTING",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Swinging load",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_FALLING_OBJECT",
+      "family": "FALLING_OBJECT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Falling object",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_DUST_AIRBORNE",
+      "family": "DUST",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h7",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Airborne dust",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 3,
+     "score": 15,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Fixed guard rails with toe boards around the platform and a lockable grid cover over the opening",
+      "hierarchy": "ENGINEERING",
+      "id": "HT-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Hard-barricaded exclusion zone under the crane travel path, with an interlocked or chained access point so no one can stand under a suspended load",
+      "hierarchy": "ENGINEERING",
+      "id": "LIFT-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1",
+       "h2"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Overload limit switch on EOT crane",
+      "hierarchy": "ENGINEERING",
+      "id": "llm:overload limit switch on eot crane",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "assistant",
+      "studyLevel": false,
+      "targets": [
+       "h4"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "MODERATE",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Crane / lifting equipment failure - dropped load",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": "OVERRIDE",
+      "state": "NOT_ACCEPTABLE"
+     }
+    ],
+    "label": "OVERRIDE",
+    "override": true,
+    "reached": true,
+    "status": "OVERRIDE_PENDING"
+   },
+   "frequency": "DAILY",
+   "id": "BENCH-6",
+   "matrix": "JSL_QSD24_GT",
+   "mode": "STORED",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OVERRIDE_PENDING"
+   },
+   "reconstructionMatchesCalibrateDraft": null,
+   "routine": "ROUTINE",
+   "title": "Placement of the bucket/bags at the top of the bin (JSL S.No 6)",
+   "v1": {
+    "inherent": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 2,
+     "severity": 2
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "ALARP_ENGINEERING"
+    ],
+    "controlsJustify": [
+     "Crane / lifting equipment failure - dropped load: L2 x S3 = MODERATE (6) as rated (the sheet rating already includes the listed controls; no further credit)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "MODERATE",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_ENGINEERING",
+     "ALARP_RECORD",
+     "SEVERITY_UNDERSTATED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "MECH-008",
+      "family": "LIFTING",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h1",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Crane / lifting equipment failure - dropped load",
+      "proposed": {
+       "likelihood": null,
+       "severity": null
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": "UNDERSTATED",
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "engineeringInPlaceOrPlanned"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 3,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Hard-barricaded exclusion zone under the crane travel path, with an interlocked or chained access point so no one can stand under a suspended load",
+      "hierarchy": "ENGINEERING",
+      "id": "LIFT-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "MODERATE",
+    "residualBand": "LOW"
+   },
+   "expectedMatch": {
+    "inherent": false,
+    "residual": false
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Damaged extension board",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Prolonged sitting at the workstation",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Trailing cables and open drawers",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 2,
+       "severity": 2
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "LOW-01",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "RESOLVED"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Office data entry and document handling",
+   "v1": {
+    "inherent": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "recommendations": 4,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 1,
+     "severity": 1
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [],
+    "controlsJustify": [
+     "Damaged extension board: L2 x S4 = HIGH (8) -> L2 x S3 = MODERATE (6) (Engineering S-1).",
+     "Prolonged sitting at the workstation: L3 x S2 = MODERATE (6) -> L2 x S2 = MODERATE (4) (Engineering L-1).",
+     "Trailing cables and open drawers: L2 x S2 = MODERATE (4) -> L1 x S2 = LOW (2) (Administrative L-1)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "MODERATE",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_RECORD",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "ELEC-001",
+      "family": "ELECTRICAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Damaged extension board",
+      "proposed": {
+       "likelihood": 2,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ERGO_AWKWARD_POSTURE",
+      "family": "MANUAL_HANDLING",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 3,
+       "score": 6,
+       "severity": 2
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Prolonged sitting at the workstation",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 2
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "key": "h2",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Trailing cables and open drawers",
+      "proposed": {
+       "likelihood": 2,
+       "severity": 2
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 2,
+       "severity": 2
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 3,
+    "recommendations": [],
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "baseline only",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "TODO(HSE lead)",
+    "residualBand": "NOT_ASSESSED"
+   },
+   "expectedMatch": {
+    "inherent": null,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Lifting full scrap bins",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Oily / wet floor and scattered scale",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Scale dust from dry sweeping",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Sharp scrap ends",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "LOW-02",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "INHERENT_ONLY"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Shop-floor housekeeping (contract crew)",
+   "v1": {
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 4,
+     "score": 12,
+     "severity": 3
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 4,
+     "score": 8,
+     "severity": 2
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "NO_CONTROLS"
+    ],
+    "controlsJustify": [
+     "Lifting full scrap bins: inherent L3 x S3 = HIGH (9); residual not assessed (no controls recorded).",
+     "Oily / wet floor and scattered scale: inherent L3 x S3 = HIGH (9); residual not assessed (no controls recorded).",
+     "Scale dust from dry sweeping: inherent L3 x S3 = HIGH (9); residual not assessed (no controls recorded).",
+     "Sharp scrap ends: inherent L3 x S3 = HIGH (9); residual not assessed (no controls recorded)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "NO_CONTROLS",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "MECH_HEAVY_LIFTING",
+      "family": "MANUAL_HANDLING",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Lifting full scrap bins",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 3
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Oily / wet floor and scattered scale",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "ENV_DUST_AIRBORNE",
+      "family": "DUST",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Scale dust from dry sweeping",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "MECH_SHARP_EDGE",
+      "family": "SHARP",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Sharp scrap ends",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 9,
+     "severity": 3
+    },
+    "inherentOnly": true,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "LOW",
+      "description": "Replace the open knife with a safety cutter (shrouded or retractable blade)",
+      "hierarchy": "SUBSTITUTION",
+      "id": "SH-SUB-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h2"
+      ]
+     },
+     {
+      "costBand": "LOW",
+      "description": "Fit-tested FFP2 / N95 respirator during the dusty task",
+      "hierarchy": "PPE",
+      "id": "DU-PPE-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     },
+     {
+      "costBand": "LOW",
+      "description": "Weight limit and team-lift rule for manual loads, written into the work instruction",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "MH-ADM-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h4"
+      ]
+     },
+     {
+      "costBand": "LOW",
+      "description": "Housekeeping schedule with spillage clean-up and floor marking",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "ST-ADM-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1"
+      ]
+     }
+    ],
+    "residual": null,
+    "residualLabel": "Inherent only. Existing controls not captured",
+    "status": "INHERENT_ONLY"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "HIGH",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": false
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 3,
+     "score": 6,
+     "severity": 2
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Crossing internal roads",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Walking under crane bays",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Broken trench covers on walkways",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 3,
+       "score": 6,
+       "severity": 2
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Compressor house and mill noise",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "LOW-03",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Routine safety walk-through by the shift in-charge",
+   "v1": {
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "recommendations": 5,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "ALARP_ENGINEERING",
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Crossing internal roads: L3 x S4 = HIGH (12) -> L2 x S4 = HIGH (8) (Engineering L-1 (provisional)).",
+     "Walking under crane bays: L2 x S4 = HIGH (8) -> L1 x S4 = MODERATE (4) (Administrative L-1 (provisional)).",
+     "Broken trench covers on walkways: L3 x S2 = MODERATE (6) -> L3 x S2 = MODERATE (6) (no credit).",
+     "Compressor house and mill noise: L3 x S2 = MODERATE (6) -> L2 x S2 = MODERATE (4) (Ppe L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_ENGINEERING",
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "RATE_EFFECTIVENESS",
+     "BASELINE_RECORDED"
+    ],
+    "hazards": [
+     {
+      "code": "TRANSPORT_VEHICLE_COLLISION",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Crossing internal roads",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_FALLING_OBJECT",
+      "family": "FALLING_OBJECT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Walking under crane bays",
+      "proposed": {
+       "likelihood": 2,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "engineeringInPlaceOrPlanned",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 3,
+       "score": 6,
+       "severity": 2
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Broken trench covers on walkways",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 2
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 3,
+       "score": 6,
+       "severity": 2
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "NOISE_HIGH_EXPOSURE",
+      "family": "NOISE",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 3,
+       "score": 6,
+       "severity": 2
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Compressor house and mill noise",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 2
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "LOW",
+      "description": "Speed limit and banksman for reversing in congested bays",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "VE-ADM-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1"
+      ]
+     },
+     {
+      "costBand": "LOW",
+      "description": "Toe boards / mesh at the platform edge and a barricaded drop zone below",
+      "hierarchy": "ENGINEERING",
+      "id": "FO-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h2"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "HIGH",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 1,
+     "score": 4,
+     "severity": 4
+    },
+    "hazards": [
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Climbing to the top rack",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Items falling from upper racks",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Manual handling of cartons",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Packing waste in aisles",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 2,
+       "severity": 2
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "LOW-04",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "RESOLVED"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Stores: issue of consumables",
+   "v1": {
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "recommendations": 4,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 2,
+     "severity": 2
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [],
+    "controlsJustify": [
+     "Climbing to the top rack: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Items falling from upper racks: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Manual handling of cartons: L3 x S3 = HIGH (9) -> L1 x S3 = LOW (3) (Engineering L-1 (provisional); Administrative L-1 (provisional)).",
+     "Packing waste in aisles: L2 x S2 = MODERATE (4) -> L1 x S2 = LOW (2) (Administrative L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "MODERATE",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "WAH-001",
+      "family": "HEIGHT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Climbing to the top rack",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_FALLING_OBJECT",
+      "family": "FALLING_OBJECT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Items falling from upper racks",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_HEAVY_LIFTING",
+      "family": "MANUAL_HANDLING",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Manual handling of cartons",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 3
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "key": "h4",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Packing waste in aisles",
+      "proposed": {
+       "likelihood": 2,
+       "severity": 2
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 2,
+       "severity": 2
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 3,
+    "recommendations": [],
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 1,
+     "score": 4,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "TODO(HSE lead)",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": null,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "LPG leak from cylinder or hose",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Hot oil and vessels",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Knife work",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Wet greasy floor",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "LOW-05",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "RESOLVED"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Canteen cooking (LPG-fired kitchen)",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [],
+    "controlsJustify": [
+     "LPG leak from cylinder or hose: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Hot oil and vessels: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional)).",
+     "Knife work: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional)).",
+     "Wet greasy floor: L3 x S3 = HIGH (9) -> L1 x S3 = LOW (3) (Administrative L-1 (provisional); Ppe L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "MODERATE",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "FIRE_LPG_LEAK",
+      "family": "FIRE_EXPLOSION",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "LPG leak from cylinder or hose",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "THERMAL_HOT_SURFACE",
+      "family": "THERMAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Hot oil and vessels",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_SHARP_EDGE",
+      "family": "SHARP",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Knife work",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Wet greasy floor",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 3,
+     "score": 15,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 3,
+    "recommendations": [],
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "HIGH",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": false,
+    "residual": false
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Truck movement at the gate",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Outdoor duty in summer heat",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Climbing onto the truck footboard",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "CONTINUOUS",
+   "id": "LOW-06",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Main gate security duty and vehicle checking",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 5,
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Truck movement at the gate: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1 (provisional); Administrative L-1 (provisional)).",
+     "Outdoor duty in summer heat: L3 x S4 = HIGH (12) -> L2 x S4 = HIGH (8) (Engineering L-1 (provisional)).",
+     "Climbing onto the truck footboard: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "BASELINE_RECORDED"
+    ],
+    "hazards": [
+     {
+      "code": "VEH-001",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Truck movement at the gate",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_HEAT_STRESS",
+      "family": "HEAT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Outdoor duty in summer heat",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Climbing onto the truck footboard",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 3,
+     "score": 15,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "LOW",
+      "description": "Work-rest cycle, drinking water and shaded rest area",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "HE-ADM-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h2"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "TODO(HSE lead)",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": null,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 1,
+     "score": 4,
+     "severity": 4
+    },
+    "hazards": [
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Grinder wheel contact",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Pedestal grinder fragments and sparks",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Hacksaw and file work",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Standing bench work",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 2,
+       "severity": 2
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "LOW-07",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "RESOLVED"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Tool room bench work and pedestal grinder",
+   "v1": {
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "recommendations": 4,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 2,
+     "severity": 2
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [],
+    "controlsJustify": [
+     "Grinder wheel contact: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Pedestal grinder fragments and sparks: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Hacksaw and file work: L3 x S3 = HIGH (9) -> L1 x S3 = LOW (3) (Administrative L-1 (provisional); Ppe L-1 (provisional)).",
+     "Standing bench work: L2 x S2 = MODERATE (4) -> L1 x S2 = LOW (2) (Administrative L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "MODERATE",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "MECH_UNGUARDED_ROTATING",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Grinder wheel contact",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_PROJECTILE",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Pedestal grinder fragments and sparks",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_SHARP_EDGE",
+      "family": "SHARP",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Hacksaw and file work",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 3
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ERGO_AWKWARD_POSTURE",
+      "family": "MANUAL_HANDLING",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 4,
+       "severity": 2
+      },
+      "key": "h4",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Standing bench work",
+      "proposed": {
+       "likelihood": 2,
+       "severity": 2
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 2,
+       "severity": 2
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 3,
+    "recommendations": [],
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 1,
+     "score": 4,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "none",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "HIGH",
+    "residualBand": "NOT_ASSESSED"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Outdoor work in summer",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Stones thrown by the brush-cutter",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Brush-cutter noise",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Sickle and hedge shears",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "WEEKLY",
+   "id": "LOW-08",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "INHERENT_ONLY"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Garden maintenance (horticulture contractor)",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "residualSource": "residual = initial (no controls)"
+   },
+   "v2": {
+    "blockers": [
+     "NO_CONTROLS"
+    ],
+    "controlsJustify": [
+     "Outdoor work in summer: inherent L2 x S4 = HIGH (8); residual not assessed (no controls recorded).",
+     "Stones thrown by the brush-cutter: inherent L2 x S4 = HIGH (8); residual not assessed (no controls recorded).",
+     "Brush-cutter noise: inherent L2 x S3 = MODERATE (6); residual not assessed (no controls recorded).",
+     "Sickle and hedge shears: inherent L2 x S3 = MODERATE (6); residual not assessed (no controls recorded)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "NO_CONTROLS",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "ENV_HEAT_STRESS",
+      "family": "HEAT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Outdoor work in summer",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "MECH_PROJECTILE",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h1",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Stones thrown by the brush-cutter",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "NOISE_HIGH_EXPOSURE",
+      "family": "NOISE",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h2",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Brush-cutter noise",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "MECH_SHARP_EDGE",
+      "family": "SHARP",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Sickle and hedge shears",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "inherentOnly": true,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Spot cooling / man-coolers at hot workstations",
+      "hierarchy": "ENGINEERING",
+      "id": "HE-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Fixed or interlocked guards on rotating parts and nip points",
+      "hierarchy": "ENGINEERING",
+      "id": "MA-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1"
+      ]
+     }
+    ],
+    "residual": null,
+    "residualLabel": "Inherent only. Existing controls not captured",
+    "status": "INHERENT_ONLY"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [
+    "MOLTEN"
+   ],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Molten steel splash at tapping",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Ladle transfer car movement",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Radiant heat below the furnace",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Arc furnace noise",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h5",
+      "missing": [],
+      "name": "Furnace fumes at tapping",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "HH-01",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "EAF tapping into the ladle",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 7,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Molten steel splash at tapping: L4 x S5 = CRITICAL (20) -> L2 x S5 = HIGH (10) (Engineering L-1; Administrative L-1).",
+     "Ladle transfer car movement: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Engineering L-1 (provisional)).",
+     "Radiant heat below the furnace: L3 x S4 = HIGH (12) -> L2 x S4 = HIGH (8) (Administrative L-1).",
+     "Arc furnace noise: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional)).",
+     "Furnace fumes at tapping: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "FIRE_MOLTEN_METAL",
+      "family": "MOLTEN",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 4,
+       "score": 20,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L4 supported: NM-2026-0412: slag splash over the ladle rim during heat 6614 tapping, no injury.",
+      "name": "Molten steel splash at tapping",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_MOBILE_EQUIPMENT",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Ladle transfer car movement",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_HEAT_STRESS",
+      "family": "HEAT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Radiant heat below the furnace",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "NOISE_HIGH_EXPOSURE",
+      "family": "NOISE",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Arc furnace noise",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_DUST_AIRBORNE",
+      "family": "DUST",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h5",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Furnace fumes at tapping",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "LOW",
+      "description": "Speed limit and banksman for reversing in congested bays",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "VE-ADM-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h2"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Splash shields at the tapping / pouring point",
+      "hierarchy": "ENGINEERING",
+      "id": "MO-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Spot cooling / man-coolers at hot workstations",
+      "hierarchy": "ENGINEERING",
+      "id": "HE-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Ladle drop / hook or brake failure",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": "OVERRIDE",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Steel splash at the turret",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": "OVERRIDE",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Swinging ladle during long travel",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": "OVERRIDE",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Radiant heat in the crane cabin",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     }
+    ],
+    "label": "NOT_REACHED (CONTROLS)",
+    "override": true,
+    "reached": false,
+    "status": "OPEN"
+   },
+   "frequency": "DAILY",
+   "id": "HH-02",
+   "matrix": "JSL_QSD24_GT",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Hot metal ladle handling by EOT crane (JSL)",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Ladle drop / hook or brake failure: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1; Administrative L-1).",
+     "Steel splash at the turret: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1).",
+     "Swinging ladle during long travel: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1; Administrative L-1).",
+     "Radiant heat in the crane cabin: L3 x S4 = HIGH (12) -> L2 x S4 = HIGH (8) (Engineering L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "NO_FURTHER_CONTROL",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "MECH-008",
+      "family": "LIFTING",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Ladle drop / hook or brake failure",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "FIRE_MOLTEN_METAL",
+      "family": "MOLTEN",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h3",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Steel splash at the turret",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "VEH-010",
+      "family": "LIFTING",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Swinging ladle during long travel",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_HEAT_STRESS",
+      "family": "HEAT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h4",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Radiant heat in the crane cabin",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 3,
+     "score": 15,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Splash shields at the tapping / pouring point",
+      "hierarchy": "ENGINEERING",
+      "id": "MO-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "TODO(HSE lead)",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": null,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 1,
+     "score": 5,
+     "severity": 5
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Entanglement at the tail pulley",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Unexpected energisation",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Belt lifting with jacks",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Carrying idler rolls",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     },
+     {
+      "key": "h5",
+      "missing": [],
+      "name": "Coal spillage on the gallery",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "MONTHLY",
+   "id": "HH-03",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "RESOLVED"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "NON_ROUTINE",
+   "title": "Belt conveyor idler replacement under LOTO",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 7,
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 1,
+     "score": 4,
+     "severity": 4
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [],
+    "controlsJustify": [
+     "Entanglement at the tail pulley: L2 x S5 = HIGH (10) -> L1 x S5 = MODERATE (5) (Engineering L-1).",
+     "Unexpected energisation: L2 x S5 = HIGH (10) -> L1 x S5 = MODERATE (5) (Engineering L-1).",
+     "Belt lifting with jacks: L2 x S4 = HIGH (8) -> L1 x S4 = MODERATE (4) (Engineering L-1).",
+     "Carrying idler rolls: L2 x S3 = MODERATE (6) -> L1 x S3 = LOW (3) (Administrative L-1 (provisional)).",
+     "Coal spillage on the gallery: L2 x S3 = MODERATE (6) -> L1 x S3 = LOW (3) (Administrative L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "MODERATE",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "MECH_UNGUARDED_ROTATING",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Entanglement at the tail pulley",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ELEC-003",
+      "family": "ELECTRICAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Unexpected energisation",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_PINCH_POINT",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Belt lifting with jacks",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_HEAVY_LIFTING",
+      "family": "MANUAL_HANDLING",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Carrying idler rolls",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h5",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Coal spillage on the gallery",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 3,
+    "recommendations": [],
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 1,
+     "score": 5,
+     "severity": 5
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "HIGH"
+   },
+   "expectedMatch": {
+    "inherent": false,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "hazards": [
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Descent through the top manhole",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Oxygen deficiency",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h5",
+      "missing": [],
+      "name": "Portable lighting in a wet tank",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Toxic acid vapour and H2S",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Residual acid sludge",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     }
+    ],
+    "label": "NOT_REACHED (CONTROLS)",
+    "override": false,
+    "reached": false,
+    "status": "OPEN"
+   },
+   "frequency": "QUARTERLY",
+   "id": "HH-04",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "NON_ROUTINE",
+   "title": "Confined space entry into an acid storage tank",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 7,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "ALARP_ENGINEERING",
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Descent through the top manhole: L2 x S5 = HIGH (10) -> L2 x S5 = HIGH (10) (no credit).",
+     "Oxygen deficiency: L2 x S5 = HIGH (10) -> L1 x S5 = MODERATE (5) (Administrative L-1).",
+     "Portable lighting in a wet tank: L2 x S5 = HIGH (10) -> L1 x S5 = MODERATE (5) (Engineering L-1).",
+     "Toxic acid vapour and H2S: L2 x S5 = HIGH (10) -> L1 x S5 = MODERATE (5) (Administrative L-1).",
+     "Residual acid sludge: L2 x S4 = HIGH (8) -> L2 x S4 = HIGH (8) (no credit)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_ENGINEERING",
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "RATE_EFFECTIVENESS",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "WAH-005",
+      "family": "HEIGHT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h4",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Descent through the top manhole",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "CONFINED_OXYGEN_DEFICIENCY",
+      "family": "CONFINED_SPACE",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Oxygen deficiency",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "engineeringInPlaceOrPlanned",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ELEC-007",
+      "family": "ELECTRICAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h5",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Portable lighting in a wet tank",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "CONFINED_TOXIC_ATMOSPHERE",
+      "family": "CONFINED_SPACE",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Toxic acid vapour and H2S",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "engineeringInPlaceOrPlanned",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "CHEM_CORROSIVE_CONTACT",
+      "family": "CHEMICAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Residual acid sludge",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Permanent lifeline / anchor points with full body harness fall arrest",
+      "hierarchy": "ENGINEERING",
+      "id": "HT-ENG-2",
+      "kind": "IMPROVEMENT_NOTE",
+      "residualAfter": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h4"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Substitute with a less hazardous chemical where the process allows",
+      "hierarchy": "SUBSTITUTION",
+      "id": "CH-SUB-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Forced ventilation with continuous multi-gas monitoring during entry",
+      "hierarchy": "ENGINEERING",
+      "id": "CS-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1",
+       "h2"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "baseline only",
+   "evidenceFamilies": [
+    "HEIGHT"
+   ],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "hazards": [
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Fall from the roof edge",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Fall through a fragile sheet",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h5",
+      "missing": [],
+      "name": "Asbestos fibres from old sheets",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Hot roof surface in summer",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Sheets and tools dropped on the bay below",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     },
+     {
+      "key": "h6",
+      "missing": [],
+      "name": "Cut sheet edges",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "NOT_REACHED (CONTROLS)",
+    "override": false,
+    "reached": false,
+    "status": "OPEN"
+   },
+   "frequency": "OCCASIONAL",
+   "id": "HH-05",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "NON_ROUTINE",
+   "title": "Fragile roof sheet replacement (contractor)",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 8,
+    "residual": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 16,
+     "severity": 4
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "NO_CONTROLS"
+    ],
+    "controlsJustify": [
+     "Fall from the roof edge: inherent L4 x S5 = CRITICAL (20); residual not assessed (no controls recorded).",
+     "Fall through a fragile sheet: inherent L4 x S5 = CRITICAL (20); residual not assessed (no controls recorded).",
+     "Asbestos fibres from old sheets: inherent L2 x S5 = HIGH (10); residual not assessed (no controls recorded).",
+     "Hot roof surface in summer: inherent L2 x S4 = HIGH (8); residual not assessed (no controls recorded).",
+     "Sheets and tools dropped on the bay below: inherent L2 x S4 = HIGH (8); residual not assessed (no controls recorded).",
+     "Cut sheet edges: inherent L2 x S3 = MODERATE (6); residual not assessed (no controls recorded)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "CRITICAL",
+    "existingControlProposals": 1,
+    "findings": [
+     "NO_CONTROLS",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "HEIGHT_FALL_OVER_2M",
+      "family": "HEIGHT",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 4,
+       "score": 20,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L4 supported: IR-2025-031: contractor fell through a skylight sheet at the RMHS shed (fracture, lost-time injury).",
+      "name": "Fall from the roof edge",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "HEIGHT_FRAGILE_ROOF",
+      "family": "HEIGHT",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 4,
+       "score": 20,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L4 supported: IR-2025-031: contractor fell through a skylight sheet at the RMHS shed (fracture, lost-time injury).",
+      "name": "Fall through a fragile sheet",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "ENV_DUST_AIRBORNE",
+      "family": "DUST",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h5",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Asbestos fibres from old sheets",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "ENV_HEAT_STRESS",
+      "family": "HEAT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h4",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Hot roof surface in summer",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "MECH_FALLING_OBJECT",
+      "family": "FALLING_OBJECT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Sheets and tools dropped on the bay below",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "MECH_SHARP_EDGE",
+      "family": "SHARP",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h6",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Cut sheet edges",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "inherentOnly": true,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Fixed guard rails with toe boards around the platform and a lockable grid cover over the opening",
+      "hierarchy": "ENGINEERING",
+      "id": "HT-ENG-1",
+      "kind": "IMPROVEMENT_NOTE",
+      "residualAfter": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h2",
+       "h1"
+      ]
+     },
+     {
+      "costBand": "HIGH",
+      "description": "Local exhaust ventilation (LEV) hood at the discharge point",
+      "hierarchy": "ENGINEERING",
+      "id": "DU-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h5"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Spot cooling / man-coolers at hot workstations",
+      "hierarchy": "ENGINEERING",
+      "id": "HE-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h4"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Safety net below the work area",
+      "hierarchy": "ENGINEERING",
+      "id": "llm:safety net below the work area",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "source": "assistant",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     }
+    ],
+    "residual": null,
+    "residualLabel": "Inherent only. Existing controls not captured",
+    "status": "INHERENT_ONLY"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [
+    "VEHICLE"
+   ],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "HIGH"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Forklift - pedestrian collision",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Forklift overturn on the ramp",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Truck moves during loading",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Load sliding off the forks",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     }
+    ],
+    "label": "NOT_REACHED (CONTROLS)",
+    "override": false,
+    "reached": false,
+    "status": "OPEN"
+   },
+   "frequency": "CONTINUOUS",
+   "id": "HH-06",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Forklift loading of coil packets into trucks",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 1,
+     "score": 4,
+     "severity": 4
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Forklift - pedestrian collision: L4 x S5 = CRITICAL (20) -> L2 x S5 = HIGH (10) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Forklift overturn on the ramp: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Truck moves during loading: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Load sliding off the forks: L3 x S4 = HIGH (12) -> L3 x S4 = HIGH (12) (no credit)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "RATE_EFFECTIVENESS",
+     "BASELINE_RECORDED"
+    ],
+    "hazards": [
+     {
+      "code": "TRANSPORT_VEHICLE_COLLISION",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 4,
+       "score": 20,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L4 supported: NM-2026-0233: forklift reversed within 1 m of a helper at dispatch bay 2; NM-2025-0871: forklift brushed a truck driver's leg at dispatch (first aid).",
+      "name": "Forklift - pedestrian collision",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_MOBILE_EQUIPMENT",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (NM-2026-0233: forklift reversed within 1 m of a helper at dispatch bay 2; NM-2025-0871: forklift brushed a truck driver's leg at dispatch (first aid)).",
+      "name": "Forklift overturn on the ramp",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "VEH-003",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (NM-2026-0233: forklift reversed within 1 m of a helper at dispatch bay 2; NM-2025-0871: forklift brushed a truck driver's leg at dispatch (first aid)).",
+      "name": "Truck moves during loading",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_FALLING_OBJECT",
+      "family": "FALLING_OBJECT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Load sliding off the forks",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [
+     "CAPA-2026-118"
+    ],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Load backrest extension on the forklift and loads secured / stretch-wrapped before travel",
+      "hierarchy": "ENGINEERING",
+      "id": "FO-ENG-2",
+      "kind": "IMPROVEMENT_NOTE",
+      "residualAfter": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Reversing camera / proximity sensor and blue-spot lights",
+      "hierarchy": "ENGINEERING",
+      "id": "VE-ENG-2",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "HIGH",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": false
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Flywheel and belt drive",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Hand in the die area",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Press impact noise",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h5",
+      "missing": [],
+      "name": "Repetitive feeding",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Sharp blank edges",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "CONTINUOUS",
+   "id": "HH-07",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Mechanical power press operation",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Flywheel and belt drive: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-2).",
+     "Hand in the die area: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-2).",
+     "Press impact noise: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional)).",
+     "Repetitive feeding: L3 x S3 = HIGH (9) -> L3 x S3 = HIGH (9) (no credit).",
+     "Sharp blank edges: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "RATE_EFFECTIVENESS",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "MECH_UNGUARDED_ROTATING",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Flywheel and belt drive",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH-002",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Hand in the die area",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "NOISE_HIGH_EXPOSURE",
+      "family": "NOISE",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Press impact noise",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ERGO_AWKWARD_POSTURE",
+      "family": "MANUAL_HANDLING",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h5",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Repetitive feeding",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_SHARP_EDGE",
+      "family": "SHARP",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Sharp blank edges",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "LOW",
+      "description": "Weight limit and team-lift rule for manual loads, written into the work instruction",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "MH-ADM-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h5"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 9,
+     "severity": 3
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "TODO(HSE lead)",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": null,
+    "residual": false
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Damaged grinder cable",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Disc burst",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Kickback",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Sparks igniting combustibles",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h6",
+      "missing": [],
+      "name": "Grinding dust",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "HH-08",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Angle grinding of weld joints",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 7,
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Damaged grinder cable: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1 (provisional); Administrative L-1).",
+     "Disc burst: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-1 (provisional); Administrative L-1).",
+     "Kickback: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-1 (provisional); Administrative L-1).",
+     "Sparks igniting combustibles: L3 x S4 = HIGH (12) -> L2 x S4 = HIGH (8) (Administrative L-1).",
+     "Grinding dust: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Administrative L-1)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [
+     "Grinding noise"
+    ],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "ELEC-005",
+      "family": "ELECTRICAL",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Damaged grinder cable",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_PROJECTILE",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Disc burst",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_UNGUARDED_ROTATING",
+      "family": "MACHINERY",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Kickback",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "FIRE_HOT_WORK_IGNITION",
+      "family": "FIRE_EXPLOSION",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Sparks igniting combustibles",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_DUST_AIRBORNE",
+      "family": "DUST",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h6",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Grinding dust",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 3,
+     "score": 15,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "LOW",
+      "description": "Flashback arrestors on gas cutting sets",
+      "hierarchy": "ENGINEERING",
+      "id": "FE-ENG-2",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h4"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": false,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Arc flash",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Contact with a live busbar",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Open cable trench behind the panel",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "MONTHLY",
+   "id": "HH-09",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "RESOLVED"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "NON_ROUTINE",
+   "title": "LT MCC panel maintenance",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 5,
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [],
+    "controlsJustify": [
+     "Arc flash: L2 x S5 = HIGH (10) -> L1 x S5 = MODERATE (5) (Engineering L-1 (provisional)).",
+     "Contact with a live busbar: L2 x S5 = HIGH (10) -> L1 x S5 = MODERATE (5) (Engineering L-1 (provisional)).",
+     "Open cable trench behind the panel: L2 x S3 = MODERATE (6) -> L2 x S3 = MODERATE (6) (no credit)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "MODERATE",
+    "existingControlProposals": 1,
+    "findings": [
+     "ALARP_RECORD",
+     "RATE_EFFECTIVENESS",
+     "BASELINE_RECORDED"
+    ],
+    "hazards": [
+     {
+      "code": "ELEC_HV_ARC_FLASH",
+      "family": "ELECTRICAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Arc flash",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ELEC_LIVE_PARTS_LV",
+      "family": "ELECTRICAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Contact with a live busbar",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h3",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Open cable trench behind the panel",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 3,
+    "recommendations": [],
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "HIGH",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": true
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Acid fumes above the tank",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Acid splash during transfer",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Acid-wet floor",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Handling acid carboys",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "DAILY",
+   "id": "HH-10",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "RESOLVED"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "HCl handling at the pickling tank",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 5,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [],
+    "controlsJustify": [
+     "Acid fumes above the tank: L3 x S4 = HIGH (12) -> L1 x S3 = LOW (3) (Engineering S-1; Engineering L-1; Administrative L-1 (provisional)).",
+     "Acid splash during transfer: L3 x S4 = HIGH (12) -> L1 x S3 = LOW (3) (Engineering S-1; Engineering L-1; Administrative L-1 (provisional)).",
+     "Acid-wet floor: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1).",
+     "Handling acid carboys: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "MODERATE",
+    "existingControlProposals": 0,
+    "findings": [
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "CHEM_TOXIC_INHALATION",
+      "family": "CHEMICAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Acid fumes above the tank",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     },
+     {
+      "code": "CHEM_CORROSIVE_CONTACT",
+      "family": "CHEMICAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Acid splash during transfer",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PHYS_SLIP_TRIP",
+      "family": "SLIP_TRIP",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Acid-wet floor",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_HEAVY_LIFTING",
+      "family": "MANUAL_HANDLING",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Handling acid carboys",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 3,
+    "recommendations": [],
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [
+    "FIRE_EXPLOSION"
+   ],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Hose leak or flashback",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Ignition of combustibles in scrap",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h5",
+      "missing": [],
+      "name": "Cut sections falling",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Fumes from coated scrap",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Hot slag and cut pieces",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "NOT_REACHED (CONTROLS)",
+    "override": false,
+    "reached": false,
+    "status": "OPEN"
+   },
+   "frequency": "DAILY",
+   "id": "HH-11",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Gas cutting of scrap",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Hose leak or flashback: L4 x S5 = CRITICAL (20) -> L2 x S5 = HIGH (10) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Ignition of combustibles in scrap: L4 x S4 = CRITICAL (16) -> L2 x S4 = HIGH (8) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Cut sections falling: L3 x S4 = HIGH (12) -> L3 x S4 = HIGH (12) (no credit).",
+     "Fumes from coated scrap: L3 x S3 = HIGH (9) -> L3 x S3 = HIGH (9) (no credit).",
+     "Hot slag and cut pieces: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "NO_FURTHER_CONTROL",
+     "RATE_EFFECTIVENESS",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "FIRE_LPG_LEAK",
+      "family": "FIRE_EXPLOSION",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 4,
+       "score": 20,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L4 supported: Safety audit SA-2026-09 (Aug 2026): flashback arrestor missing at the torch end on 2 of 6 cutting sets.",
+      "name": "Hose leak or flashback",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "FIRE_HOT_WORK_IGNITION",
+      "family": "FIRE_EXPLOSION",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 4,
+       "score": 16,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L4 supported: Safety audit SA-2026-09 (Aug 2026): flashback arrestor missing at the torch end on 2 of 6 cutting sets.",
+      "name": "Ignition of combustibles in scrap",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_FALLING_OBJECT",
+      "family": "FALLING_OBJECT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h5",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Cut sections falling",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_DUST_AIRBORNE",
+      "family": "DUST",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Fumes from coated scrap",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "THERMAL_HOT_SURFACE",
+      "family": "THERMAL",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Hot slag and cut pieces",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "LOW",
+      "description": "No one below during the task: drop zone cordoned and signed",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "FO-ADM-1",
+      "kind": "IMPROVEMENT_NOTE",
+      "residualAfter": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h5"
+      ]
+     },
+     {
+      "costBand": "LOW",
+      "description": "Fit-tested FFP2 / N95 respirator during the dusty task",
+      "hierarchy": "PPE",
+      "id": "DU-PPE-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h4"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "none",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": false,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Fall from the scaffold during erection",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Scaffold collapse",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Dropped tubes and clamps",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Handling 6 m tubes",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "TOLERABLE_ALARP",
+    "override": false,
+    "reached": true,
+    "status": "RESOLVED"
+   },
+   "frequency": "OCCASIONAL",
+   "id": "HH-12",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "RESOLVED"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "NON_ROUTINE",
+   "title": "Scaffold erection for vessel maintenance",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 7,
+    "residual": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "residualSource": "residual = initial (no controls)"
+   },
+   "v2": {
+    "blockers": [
+     "NO_CONTROLS"
+    ],
+    "controlsJustify": [
+     "Fall from the scaffold during erection: inherent L2 x S5 = HIGH (10); residual not assessed (no controls recorded).",
+     "Scaffold collapse: inherent L2 x S5 = HIGH (10); residual not assessed (no controls recorded).",
+     "Dropped tubes and clamps: inherent L2 x S4 = HIGH (8); residual not assessed (no controls recorded).",
+     "Handling 6 m tubes: inherent L2 x S3 = MODERATE (6); residual not assessed (no controls recorded)."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 2,
+    "findings": [
+     "NO_CONTROLS",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "WAH-002",
+      "family": "HEIGHT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Fall from the scaffold during erection",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "WAH-008",
+      "family": "HEIGHT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Scaffold collapse",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "MECH_FALLING_OBJECT",
+      "family": "FALLING_OBJECT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Dropped tubes and clamps",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     },
+     {
+      "code": "MECH_HEAVY_LIFTING",
+      "family": "MANUAL_HANDLING",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Handling 6 m tubes",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 3
+      },
+      "residual": null,
+      "severityFinding": null,
+      "tolerability": null
+     }
+    ],
+    "inherent": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "inherentOnly": true,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Permanent lifeline / anchor points with full body harness fall arrest",
+      "hierarchy": "ENGINEERING",
+      "id": "HT-ENG-2",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1",
+       "h2"
+      ]
+     },
+     {
+      "costBand": "LOW",
+      "description": "Toe boards / mesh at the platform edge and a barricaded drop zone below",
+      "hierarchy": "ENGINEERING",
+      "id": "FO-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     }
+    ],
+    "residual": null,
+    "residualLabel": "Inherent only. Existing controls not captured",
+    "status": "INHERENT_ONLY"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [
+    "PRESSURE"
+   ],
+   "expected": {
+    "inherentBand": "TODO(HSE lead)",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": null,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "hazards": [
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Hydraulic oil injection",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h1",
+      "missing": [
+       "statutoryCurrent"
+      ],
+      "name": "Air receiver rupture",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": "ALARP_CHECKLIST",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Compressor house noise",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Hot discharge pipes",
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "route": null,
+      "state": "ACCEPTABLE"
+     }
+    ],
+    "label": "NOT_REACHED (ALARP_CHECKLIST, CONTROLS)",
+    "override": false,
+    "reached": false,
+    "status": "OPEN"
+   },
+   "frequency": "MONTHLY",
+   "id": "HH-13",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "NON_ROUTINE",
+   "title": "Air compressor and hydraulic power pack maintenance",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 16,
+     "severity": 4
+    },
+    "recommendations": 6,
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Hydraulic oil injection: L4 x S4 = CRITICAL (16) -> L3 x S4 = HIGH (12) (Administrative L-1 (provisional)).",
+     "Air receiver rupture: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1 (provisional)).",
+     "Compressor house noise: L2 x S3 = MODERATE (6) -> L1 x S3 = LOW (3) (Administrative L-1 (provisional)).",
+     "Hot discharge pipes: L2 x S3 = MODERATE (6) -> L1 x S3 = LOW (3) (Administrative L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "CONTROLS_PROVISIONAL",
+     "BASELINE_RECORDED",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "PRESS_HYDRAULIC_INJECTION",
+      "family": "PRESSURE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 4,
+       "score": 16,
+       "severity": 4
+      },
+      "key": "h2",
+      "likelihoodReason": "L4 supported: Air receiver AR-2 statutory hydraulic test overdue since 15 Jul 2026.",
+      "name": "Hydraulic oil injection",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "PRESS_VESSEL_RUPTURE",
+      "family": "PRESSURE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L3: Once in 1-5 years (Air receiver AR-2 statutory hydraulic test overdue since 15 Jul 2026).",
+      "name": "Air receiver rupture",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "NOISE_HIGH_EXPOSURE",
+      "family": "NOISE",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h3",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Compressor house noise",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     },
+     {
+      "code": "THERMAL_HOT_SURFACE",
+      "family": "THERMAL",
+      "inherent": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L2: Once in 5-10 years (no recorded events in the last 24 months).",
+      "name": "Hot discharge pipes",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "LOW",
+       "likelihood": 1,
+       "score": 3,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": null,
+       "state": "ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 16,
+     "severity": 4
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "LOW",
+      "description": "Burst sleeves / shields on high-pressure hydraulic hoses and fittings",
+      "hierarchy": "ENGINEERING",
+      "id": "PR-ENG-2",
+      "kind": "IMPROVEMENT_NOTE",
+      "residualAfter": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h2"
+      ]
+     },
+     {
+      "costBand": "MEDIUM",
+      "description": "Whip-check restraints on hydraulic hoses",
+      "hierarchy": "ENGINEERING",
+      "id": "llm:whip-check restraints on hydraulic hoses",
+      "kind": "IMPROVEMENT_NOTE",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "assistant",
+      "studyLevel": false,
+      "targets": [
+       "h1"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "TODO(HSE lead)"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": null
+   },
+   "final": {
+    "entryResidual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 8,
+     "severity": 4
+    },
+    "hazards": [
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Slag explosion on wet ground",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": "OVERRIDE",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Slag pot carrier movement",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": "OVERRIDE",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Radiant heat at the dump",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Slag dust",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": "OVERRIDE",
+      "state": "NOT_ACCEPTABLE"
+     }
+    ],
+    "label": "NOT_REACHED (CONTROLS)",
+    "override": true,
+    "reached": false,
+    "status": "OPEN"
+   },
+   "frequency": "DAILY",
+   "id": "HH-14",
+   "matrix": "JSL_QSD24_GT",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Slag pot handling and dumping (JSL)",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 5,
+    "residual": {
+     "level": "MODERATE",
+     "likelihood": 2,
+     "score": 6,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Slag explosion on wet ground: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1; Administrative L-1 (provisional)).",
+     "Slag pot carrier movement: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Engineering L-1).",
+     "Radiant heat at the dump: L3 x S4 = HIGH (12) -> L3 x S4 = HIGH (12) (no credit).",
+     "Slag dust: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [],
+    "droppedHazards": [],
+    "entryLevelForCap": "HIGH",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "RATE_EFFECTIVENESS",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "FIRE_MOLTEN_METAL",
+      "family": "MOLTEN",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Slag explosion on wet ground",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "eliminationConsidered",
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "MECH_MOBILE_EQUIPMENT",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Slag pot carrier movement",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_HEAT_STRESS",
+      "family": "HEAT",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "key": "h3",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Radiant heat at the dump",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 4
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 12,
+       "severity": 4
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_DUST_AIRBORNE",
+      "family": "DUST",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "Plant index scale (not a frequency scale): the evidence cap does not apply.",
+      "name": "Slag dust",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 3,
+     "score": 15,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Spot cooling / man-coolers at hot workstations",
+      "hierarchy": "ENGINEERING",
+      "id": "HE-ENG-1",
+      "kind": "IMPROVEMENT_NOTE",
+      "residualAfter": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 8,
+       "severity": 4
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     },
+     {
+      "costBand": "LOW",
+      "description": "Speed limit and banksman for reversing in congested bays",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "VE-ADM-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "HIGH",
+     "likelihood": 3,
+     "score": 12,
+     "severity": 4
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  },
+  {
+   "controlsProfile": "real",
+   "evidenceFamilies": [
+    "VEHICLE"
+   ],
+   "expected": {
+    "inherentBand": "CRITICAL",
+    "residualBand": "MODERATE"
+   },
+   "expectedMatch": {
+    "inherent": true,
+    "residual": false
+   },
+   "final": {
+    "entryResidual": {
+     "level": "HIGH",
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
+    },
+    "hazards": [
+     {
+      "key": "h1",
+      "missing": [],
+      "name": "Reversing tipper",
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "route": "CONTROLS",
+      "state": "NOT_ACCEPTABLE"
+     },
+     {
+      "key": "h3",
+      "missing": [],
+      "name": "Fall into the hopper",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h2",
+      "missing": [],
+      "name": "Tipper topples at the hopper edge",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     },
+     {
+      "key": "h4",
+      "missing": [],
+      "name": "Coal dust",
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "route": null,
+      "state": "TOLERABLE_ALARP"
+     }
+    ],
+    "label": "NOT_REACHED (CONTROLS)",
+    "override": false,
+    "reached": false,
+    "status": "OPEN"
+   },
+   "frequency": "CONTINUOUS",
+   "id": "HH-15",
+   "matrix": "STD_5X5",
+   "mode": "DRAFT",
+   "pass2": {
+    "blockerDetails": [],
+    "blockers": [],
+    "newBlockers": [],
+    "pass3Blockers": [],
+    "pass3NewBlockers": [],
+    "recommendations": 0,
+    "status": "OPEN"
+   },
+   "reconstructionMatchesCalibrateDraft": true,
+   "routine": "ROUTINE",
+   "title": "Tipper unloading at the RMHS ground hopper",
+   "v1": {
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "recommendations": 5,
+    "residual": {
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
+     "severity": 3
+    },
+    "residualSource": "v1 control model"
+   },
+   "v2": {
+    "blockers": [
+     "HAZARD_NOT_ACCEPTABLE"
+    ],
+    "controlsJustify": [
+     "Reversing tipper: L4 x S5 = CRITICAL (20) -> L3 x S5 = CRITICAL (15) (Administrative L-1 (provisional)).",
+     "Fall into the hopper: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Engineering L-1).",
+     "Tipper topples at the hopper edge: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Administrative L-1 (provisional)).",
+     "Coal dust: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional))."
+    ],
+    "criticalResidualHazards": [
+     {
+      "evidence": true,
+      "family": "VEHICLE",
+      "key": "h1",
+      "name": "Reversing tipper",
+      "rating": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      }
+     }
+    ],
+    "droppedHazards": [],
+    "entryLevelForCap": "CRITICAL",
+    "existingControlProposals": 0,
+    "findings": [
+     "HAZARD_NOT_ACCEPTABLE",
+     "ALARP_RECORD",
+     "CONTROLS_PROVISIONAL",
+     "REGULATION_SUGGESTED"
+    ],
+    "hazards": [
+     {
+      "code": "TRANSPORT_VEHICLE_COLLISION",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 4,
+       "score": 20,
+       "severity": 5
+      },
+      "key": "h1",
+      "likelihoodReason": "L4 supported: NM-2026-0310: tipper reversed without a banksman near hopper 2.",
+      "name": "Reversing tipper",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "WAH-006",
+      "family": "HEIGHT",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h3",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Fall into the hopper",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "VEH-004",
+      "family": "VEHICLE",
+      "inherent": {
+       "level": "CRITICAL",
+       "likelihood": 3,
+       "score": 15,
+       "severity": 5
+      },
+      "key": "h2",
+      "likelihoodReason": "L3: Once in 1-5 years (NM-2026-0310: tipper reversed without a banksman near hopper 2).",
+      "name": "Tipper topples at the hopper edge",
+      "proposed": {
+       "likelihood": 3,
+       "severity": 5
+      },
+      "residual": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [],
+       "route": "CONTROLS",
+       "state": "NOT_ACCEPTABLE"
+      }
+     },
+     {
+      "code": "ENV_DUST_AIRBORNE",
+      "family": "DUST",
+      "inherent": {
+       "level": "HIGH",
+       "likelihood": 3,
+       "score": 9,
+       "severity": 3
+      },
+      "key": "h4",
+      "likelihoodReason": "L3: Once in 1-5 years (no recorded events in the last 24 months).",
+      "name": "Coal dust",
+      "proposed": {
+       "likelihood": 4,
+       "severity": 3
+      },
+      "residual": {
+       "level": "MODERATE",
+       "likelihood": 2,
+       "score": 6,
+       "severity": 3
+      },
+      "severityFinding": null,
+      "tolerability": {
+       "missing": [
+        "reviewDateSet"
+       ],
+       "route": "ALARP_CHECKLIST",
+       "state": "NOT_ACCEPTABLE"
+      }
+     }
+    ],
+    "inherent": {
+     "level": "CRITICAL",
+     "likelihood": 4,
+     "score": 20,
+     "severity": 5
+    },
+    "inherentOnly": false,
+    "linkedCapas": [],
+    "recommendationCap": 5,
+    "recommendations": [
+     {
+      "costBand": "MEDIUM",
+      "description": "Physically segregated pedestrian walkway with barriers",
+      "hierarchy": "ENGINEERING",
+      "id": "VE-ENG-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "HIGH",
+       "likelihood": 2,
+       "score": 10,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h1",
+       "h2"
+      ]
+     },
+     {
+      "costBand": "LOW",
+      "description": "Work-at-height permit for any work outside the guarded platform",
+      "hierarchy": "ADMINISTRATIVE",
+      "id": "HT-ADM-1",
+      "kind": "CAPA",
+      "residualAfter": {
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 5,
+       "severity": 5
+      },
+      "source": "catalogue",
+      "studyLevel": false,
+      "targets": [
+       "h3"
+      ]
+     }
+    ],
+    "residual": {
+     "level": "CRITICAL",
+     "likelihood": 3,
+     "score": 15,
+     "severity": 5
+    },
+    "residualLabel": null,
+    "status": "OPEN"
+   }
+  }
+ ]
+}

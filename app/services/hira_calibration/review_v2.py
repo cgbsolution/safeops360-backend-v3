@@ -24,7 +24,7 @@ from typing import Any
 
 from app.services.hira_calibration import recommend as rec
 from app.services.hira_calibration import risk_engine as eng
-from app.services.hira_calibration.config import ENGINE_VERSION, MatrixRule
+from app.services.hira_calibration.config import CALIBRATED_TYPES, ENGINE_VERSION, MatrixRule, with_matrix
 
 BLOCKER, ADVISORY, INFO = "BLOCKER", "ADVISORY", "INFO"
 
@@ -83,6 +83,7 @@ class EntryInput:
     override_active: bool = False
     hazard_regulations: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
     today: date = field(default_factory=date.today)
+    hira_type: str = "TASK_BASED"
 
 
 @dataclass
@@ -153,6 +154,9 @@ def evaluate(
     extra_candidates: list[rec.Candidate] | None = None,
 ) -> dict[str, Any]:
     plant = plant or PlantData()
+    if entry.hira_type not in CALIBRATED_TYPES:
+        return structural_review(entry)
+    cfg = with_matrix(cfg, rule)
     findings: list[dict[str, Any]] = []
     basis_with_controls = entry.rating_basis == "WITH_CONTROLS"
     real_controls = eng.has_real_controls(entry.controls, cfg)
@@ -244,7 +248,7 @@ def evaluate(
         L, S = lcal["value"], scal["value"]
         inherent = eng.rate(L, S, cfg)
         credible_s = scal["credibleMin"]
-        collapsed = inherent["score"] <= cfg["thresholds"]["lowMax"]
+        collapsed = inherent["level"] == "LOW"
 
         residual = None
         credits: list[dict[str, Any]] = []
@@ -817,6 +821,43 @@ def evaluate(
     }
 
 
+NOT_CALIBRATED_BANNER = "Calibrated rules are not applied to this study type."
+
+
+def structural_review(entry: EntryInput) -> dict[str, Any]:
+    """A non task-based study (HAZOP / FMEA / MOC ...): completeness checks only.
+    No rating is changed, no recommendation is capped or generated."""
+    findings = []
+    if not entry.hazards:
+        findings.append(_finding("STRUCT_NO_HAZARDS", ADVISORY, "No hazards recorded",
+                                 "The study has no hazards / deviations listed.", "List them before review."))
+    unrated = [h.name for h in entry.hazards if not (h.likelihood and h.severity)] if entry.hazards else []
+    if entry.hazards and unrated and not (entry.entry_l and entry.entry_s):
+        findings.append(_finding("STRUCT_NOT_RATED", ADVISORY, "Ratings missing",
+                                 ", ".join(unrated[:4]), "Rate them with the study's own method."))
+    missing_consequence = [h.name for h in entry.hazards if not (h.consequence or "").strip()]
+    if missing_consequence:
+        findings.append(_finding("STRUCT_NO_CONSEQUENCE", ADVISORY, "Consequence missing",
+                                 ", ".join(missing_consequence[:4]), "Describe who is harmed, how and how badly."))
+    if not [c for c in entry.controls if not c.planned]:
+        findings.append(_finding("STRUCT_NO_CONTROLS", INFO, "No safeguards / controls recorded", "", None))
+    return {
+        "engineVersion": ENGINE_VERSION, "entryId": entry.entry_id, "label": entry.label,
+        "activity": entry.activity, "hiraType": entry.hira_type, "calibrated": False,
+        "scope": {"calibrated": False, "hiraType": entry.hira_type, "banner": NOT_CALIBRATED_BANNER},
+        "ratingBasis": entry.rating_basis,
+        "entry": {"inherent": None, "residual": None, "drivers": [], "inherentOnly": False,
+                  "status": "NOT_CALIBRATED", "residualLabel": None},
+        "hazards": [], "controlsJustify": [], "findings": findings, "shownFindings": findings[:3],
+        "counts": {k: sum(1 for f in findings if f["class"] == k) for k in (BLOCKER, ADVISORY, INFO)},
+        "canSubmit": True, "recommendations": [], "recommendationCap": 0, "linkedCapas": [],
+        "uncoveredHazards": [], "skippedCandidates": [], "existingControlProposals": [],
+        "suggestedDefaults": {"controlEffectiveness": [], "recommendedDefaults": [], "nextReviewDue": None,
+                              "alarpRecord": None, "hazardRatings": [], "regulations": []},
+        "alarpDraft": None,
+    }
+
+
 def blocker_codes(result: dict[str, Any]) -> set[str]:
     return {f["code"] for f in result["findings"] if f["class"] == BLOCKER}
 
@@ -899,6 +940,8 @@ def apply_suggestions(entry: EntryInput, result: dict[str, Any], *, implement: b
 
 
 __all__ = [
+    "NOT_CALIBRATED_BANNER",
+    "structural_review",
     "ADVISORY",
     "BLOCKER",
     "DEFAULT_REGULATION_MAP",
