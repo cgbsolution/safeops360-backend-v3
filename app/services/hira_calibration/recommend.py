@@ -82,6 +82,20 @@ CATALOG: list[tuple[str, str, str, str, str]] = [
         "Work-at-height permit for any work outside the guarded platform",
     ),
     (
+        "HT-ENG-3",
+        "HEIGHT",
+        "ENGINEERING",
+        "LOW",
+        "Crawling boards / roof ladders, and covers over fragile sheets and skylights",
+    ),
+    (
+        "HT-ENG-4",
+        "HEIGHT",
+        "ENGINEERING",
+        "MEDIUM",
+        "Safety net or birdcage scaffold under the fragile-roof work area",
+    ),
+    (
         "DU-ENG-1",
         "DUST",
         "ENGINEERING",
@@ -332,20 +346,50 @@ CATALOG += [
 
 # A catalogue item is offered only when the hazard text names its setting.
 REQUIRES: dict[str, tuple[str, ...]] = {
-    "FO-ENG-1": ("platform", "height", "edge", "scaffold", "bin", "overhead", "roof", "opening", "above", "stack",
-                 "rack", "mezzanine"),
+    "FO-ENG-1": (
+        "platform",
+        "height",
+        "edge",
+        "scaffold",
+        "bin",
+        "overhead",
+        "roof",
+        "opening",
+        "above",
+        "stack",
+        "rack",
+        "mezzanine",
+    ),
     "FO-ENG-2": ("fork", "forklift", "pallet", "stack", "reach truck"),
     "FO-ADM-2": ("fork", "forklift", "pallet", "stack", "reach truck"),
-    "PR-ENG-1": ("gas", "air", "compressed", "steam", "vessel", "cylinder", "pneumatic", "receiver", "boiler"),
+    "PR-ENG-1": (
+        "gas",
+        "air",
+        "compressed",
+        "steam",
+        "vessel",
+        "cylinder",
+        "pneumatic",
+        "receiver",
+        "boiler",
+    ),
     "PR-ENG-2": ("hydraulic", "hose", "oil", "injection"),
     "PR-ADM-2": ("hydraulic", "injection"),
     "LIFT-ENG-4": ("crane", "eot", "hoist"),
     "HT-ENG-1": ("platform", "edge", "opening", "bin", "pit", "floor", "mezzanine", "walkway"),
+    "HT-ENG-3": ("fragile", "roof", "skylight", "sheet"),
+    "HT-ENG-4": ("fragile", "roof", "skylight"),
 }
 # Never put water near molten metal (steam explosion).
 _WATER = ("water", "mist", "wet ", "wetting", "spray")
 _MOLTEN = ("molten", "hot metal", "liquid metal", "slag", "ladle", "furnace", "tapping", "steam explosion")
-_GROUP = {"ELIMINATION": "E", "SUBSTITUTION": "E", "ENGINEERING": "ENG", "ADMINISTRATIVE": "ADM", "PPE": "PPE"}
+_GROUP = {
+    "ELIMINATION": "E",
+    "SUBSTITUTION": "E",
+    "ENGINEERING": "ENG",
+    "ADMINISTRATIVE": "ADM",
+    "PPE": "PPE",
+}
 
 INTERIM = {
     "LIFTING": "Interim: supervisor present for every lift and no one under the load until it is installed",
@@ -472,12 +516,15 @@ def linked(a: str | None, b: str | None, threshold: float) -> bool:
     return len(common) >= 3 and len(common) / max(1, min(len(ta), len(tb))) >= threshold
 
 
-def same_control(cand_hierarchy: str, cand_text: str, c_hierarchy: str | None, c_text: str | None,
-                 threshold: float) -> bool:
+def same_control(
+    cand_hierarchy: str, cand_text: str, c_hierarchy: str | None, c_text: str | None, threshold: float
+) -> bool:
     """An existing control covers a candidate when both are in the same hierarchy
     group (a camera is not a banksman) and their wording overlaps enough."""
-    return _GROUP.get((cand_hierarchy or "").upper()) == _GROUP.get((c_hierarchy or "").upper()) and \
-        similarity(cand_text, c_text) >= threshold
+    return (
+        _GROUP.get((cand_hierarchy or "").upper()) == _GROUP.get((c_hierarchy or "").upper())
+        and similarity(cand_text, c_text) >= threshold
+    )
 
 
 @dataclass
@@ -504,6 +551,10 @@ def _effect_text(dl: int, ds: int) -> str:
     return ", ".join(p for p in parts if p) or "completes the ALARP checklist"
 
 
+def _cand_key(cand: Candidate) -> str:
+    return cand.id if cand.source == "catalogue" else f"llm:{cand.description.lower()[:60]}"
+
+
 def recommend(
     hazard_results: list[dict[str, Any]],
     *,
@@ -513,11 +564,17 @@ def recommend(
     open_capas: list[dict[str, Any]] | None = None,
     sibling_recommended: list[dict[str, Any]] | None = None,
     extra_candidates: list[Candidate] | None = None,
+    entry_max_severity: int | None = None,
 ) -> dict[str, Any]:
     """Pick the recommendations for one entry.
 
-    hazard_results: from review_v2 (each with hazard, controls, residual, tolerability...).
-    extra_candidates: LLM-proposed controls (Assistant / Copilot draft), filtered the same way.
+    hazard_results: from review_v2 (hazard, controls, residual, tolerability ...).
+    A hazard gets a recommendation only when its residual route is CONTROLS, or
+    the ALARP checklist lacks an engineering control. Never from the inherent
+    rating alone (round 2 G), never for S<=3 hazards whose controls are not
+    captured (round 2 C: hr["noRecommendations"]).
+    extra_candidates: proposed controls (LLM draft or the entry's own proposed
+    recommendations), filtered the same way as the catalogue (round 2 E).
     """
     rc = cfg["recommendations"]
     weight = rc["costWeight"]
@@ -527,142 +584,171 @@ def recommend(
     linked_capas: dict[str, dict[str, Any]] = {}
     skipped: list[dict[str, Any]] = []
     needing: dict[str, dict[str, Any]] = {}
-    per_hazard: list[tuple[eng.Hazard, str, dict[str, Any], dict[str, Any], list[dict[str, Any]]]] = []
+    per_hazard: list[
+        tuple[dict[str, Any], eng.Hazard, str, dict[str, Any], dict[str, Any], list[dict[str, Any]]]
+    ] = []
+    no_credit_items: list[dict[str, Any]] = []
     molten_entry = any(
         hr["hazard"].family == "MOLTEN" or any(w in hr["hazard"].text.lower() for w in _MOLTEN)
         for hr in hazard_results
         if hr.get("hazard") is not None
     )
+    hidx = {x: i for i, x in enumerate(eng.HIERARCHY)}
+
+    def pool_for(h: eng.Hazard, fam: str) -> list[Candidate]:
+        htext = h.text.lower()
+        pool = [
+            c for c in catalogue_for(fam) if not REQUIRES.get(c.id) or any(w in htext for w in REQUIRES[c.id])
+        ]
+        for x in extra_candidates or []:
+            fams = eng.control_families(x.description)
+            if x.family in (fam, "GENERAL") or fam in fams or fams & ({fam} | eng.RELATED.get(fam, set())):
+                pool.append(x)
+        return pool
+
+    def admissible(cand: Candidate, h: eng.Hazard, controls: list[eng.Control], res: dict[str, Any]) -> bool:
+        if molten_entry and any(w in f" {cand.description.lower()} " for w in _WATER):
+            skipped.append({"candidate": cand.description, "reason": "water near molten metal"})
+            return False
+        dup = next(
+            (
+                c
+                for c in controls
+                if same_control(
+                    cand.hierarchy, cand.description, c.hierarchy, c.description, rc["dedupeSimilarity"]
+                )
+            ),
+            None,
+        )
+        if dup is not None:
+            skipped.append({"candidate": cand.description, "reason": f"already in place: {dup.description}"})
+            return False
+        capa = next(
+            (k for k in open_capas if linked(cand.description, k.get("text"), rc.get("linkSimilarity", 0.6))),
+            None,
+        )
+        if capa is not None:
+            linked_capas[capa["id"]] = {
+                **capa,
+                "hazards": sorted({*linked_capas.get(capa["id"], {}).get("hazards", []), h.name}),
+            }
+            return False
+        if is_filler(cand.description, cfg):
+            has_admin = any(
+                (c.hierarchy or "").upper() == "ADMINISTRATIVE" and eng.applies_to(c, h)[0]
+                for c in controls
+                if not c.planned
+            )
+            if has_admin:
+                skipped.append({"candidate": cand.description, "reason": "generic filler; no gap shown"})
+                return False
+        if cand.cost in ("HIGH", "VERY_HIGH") and eng.level_index(res["level"]) < eng.level_index(
+            rc["highCostMinResidual"]
+        ):
+            skipped.append(
+                {"candidate": cand.description, "reason": "not reasonably practicable at this risk"}
+            )
+            return False
+        return True
+
+    def trial(hr: dict[str, Any], h: eng.Hazard, cands: list[Candidate]) -> dict[str, Any]:
+        kept_existing = (
+            [] if hr.get("basisIncludesControls") else [c for c in hr["controls"] if not c.planned]
+        )
+        new_controls = [
+            eng.Control(
+                key=None,
+                hierarchy=c.hierarchy,
+                description=c.description,
+                effectiveness="EFFECTIVE",
+                evidence_attached=True,
+                hazard_keys=(h.key,),
+                verification_method="planned verification",
+            )
+            for c in cands
+        ]
+        base_l, base_s = hr["basis"]
+        r = eng.residual_from_controls(base_l, base_s, [*kept_existing, *new_controls], cfg, hazard=h)
+        return eng.rate(r["likelihood"], r["severity"], cfg)
+
+    def tol_after(hr: dict[str, Any], new_rate: dict[str, Any], cands: list[Candidate]) -> dict[str, Any]:
+        # ALARP records (elimination considered, review date) come with the
+        # suggested defaults; the controls themselves are what this adds.
+        alarp_after = {
+            **hr["alarp"],
+            "eliminationConsidered": True,
+            "reviewDateSet": True,
+            "engineeringInPlaceOrPlanned": hr["alarp"].get("engineeringInPlaceOrPlanned")
+            or any(c.hierarchy == "ENGINEERING" for c in cands),
+        }
+        return eng.tolerability(
+            new_rate,
+            credible_s=hr.get("credibleS"),
+            alarp=alarp_after,
+            strict=strict,
+            cfg=cfg,
+            verified_control=True,
+            rating_credit=hr.get("ratingCredit", True),
+        )
 
     for hr in hazard_results:
         tol = hr.get("tolerability")
-        if hr.get("collapsed") or not tol or eng.resolved(tol) or tol["route"] == "OVERRIDE":
+        if hr.get("collapsed") or not tol or hr.get("noRecommendations") or tol.get("overridden"):
+            continue
+        h: eng.Hazard = hr["hazard"]
+        fam = h.family
+        res = hr["residual"]
+        if res is None:
+            continue  # never from the inherent rating alone
+        sev = max(res["severity"], hr.get("credibleS") or 0)
+        # Plant-index sheet rating: no control can move the rating. Offer one
+        # improvement for a serious open hazard, tagged as such (round 2 H).
+        if not hr.get("ratingCredit", True):
+            if sev >= 4 and not eng.resolved(tol) and hr.get("plannedCovers") is not True:
+                pool = [c for c in pool_for(h, fam) if admissible(c, h, hr["controls"], res)]
+                pool.sort(
+                    key=lambda c: (
+                        c.hierarchy != "ENGINEERING",
+                        hidx.get(c.hierarchy, 9),
+                        rc["costWeight"].get(c.cost, 2),
+                        c.id,
+                    )
+                )
+                if pool:
+                    no_credit_items.append({"hr": hr, "h": h, "fam": fam, "res": res, "cand": pool[0]})
+            continue
+        if eng.resolved(tol) or tol["route"] not in ("CONTROLS", "ALARP_CHECKLIST"):
             continue
         need_eng_only = tol["route"] == "ALARP_CHECKLIST"
         if need_eng_only and "engineeringInPlaceOrPlanned" not in tol["missing"]:
             continue  # the checklist gap is a record, not a control
         if hr.get("plannedCovers"):
             continue  # a planned control with a date already covers this hazard
-        h: eng.Hazard = hr["hazard"]
-        fam = h.family
-        controls: list[eng.Control] = hr["controls"]
-        res = hr["residual"] or hr["inherent"]
         needing[h.key] = {"key": h.key, "name": h.name, "residual": res}
-        htext = h.text.lower()
-        pool = [c for c in catalogue_for(fam) if not REQUIRES.get(c.id) or any(w in htext for w in REQUIRES[c.id])]
-        for x in extra_candidates or []:
-            if (
-                x.family in (fam, "GENERAL")
-                or fam in eng.control_families(x.description)
-                or eng.control_families(x.description) & ({fam} | eng.RELATED.get(fam, set()))
-            ):
-                pool.append(x)
         scored = []
-        for cand in pool:
+        for cand in pool_for(h, fam):
             if need_eng_only and cand.hierarchy != "ENGINEERING":
                 continue
-            if molten_entry and any(w in f" {cand.description.lower()} " for w in _WATER):
-                skipped.append({"candidate": cand.description, "reason": "water near molten metal"})
+            if not admissible(cand, h, hr["controls"], res):
                 continue
-            # already in place (same hierarchy group, similar wording)?
-            dup = next(
-                (
-                    c
-                    for c in controls
-                    if same_control(cand.hierarchy, cand.description, c.hierarchy, c.description,
-                                    rc["dedupeSimilarity"])
-                ),
-                None,
-            )
-            if dup is not None:
-                skipped.append(
-                    {"candidate": cand.description, "reason": f"already in place: {dup.description}"}
-                )
-                continue
-            capa = next(
-                (
-                    k
-                    for k in open_capas
-                    if linked(cand.description, k.get("text"), rc.get("linkSimilarity", 0.6))
-                ),
-                None,
-            )
-            if capa is not None:
-                linked_capas[capa["id"]] = {
-                    **capa,
-                    "hazards": sorted({*linked_capas.get(capa["id"], {}).get("hazards", []), h.name}),
-                }
-                continue
-            if is_filler(cand.description, cfg):
-                has_admin = any(
-                    (c.hierarchy or "").upper() == "ADMINISTRATIVE" and eng.applies_to(c, h)[0]
-                    for c in controls
-                    if not c.planned
-                )
-                if has_admin:
-                    skipped.append({"candidate": cand.description, "reason": "generic filler; no gap shown"})
-                    continue
-            if cand.cost in ("HIGH", "VERY_HIGH") and eng.level_index(res["level"]) < eng.level_index(
-                rc["highCostMinResidual"]
-            ):
-                skipped.append(
-                    {"candidate": cand.description, "reason": "not reasonably practicable at this risk"}
-                )
-                continue
-            # A rating that already includes the existing controls (single-rating
-            # sheet) gets credit for the new control only.
-            kept_existing = [] if hr.get("basisIncludesControls") else [c for c in controls if not c.planned]
-            trial = [
-                *kept_existing,
-                eng.Control(
-                    key=None,
-                    hierarchy=cand.hierarchy,
-                    description=cand.description,
-                    effectiveness="EFFECTIVE",
-                    evidence_attached=True,
-                    hazard_keys=(h.key,),
-                    verification_method="planned verification",
-                ),
-            ]
-            base_l, base_s = hr["basis"]
-            new = eng.residual_from_controls(base_l, base_s, trial, cfg, hazard=h)
-            new_rate = eng.rate(new["likelihood"], new["severity"], cfg)
+            new_rate = trial(hr, h, [cand])
             gain = res["score"] - new_rate["score"]
             if gain <= 0 and not need_eng_only:
                 continue
-            # The ALARP records (elimination considered, review date) are filled by
-            # the suggested defaults; only the control itself is what this adds.
-            alarp_after = {
-                **hr["alarp"],
-                "eliminationConsidered": True,
-                "reviewDateSet": True,
-                "engineeringInPlaceOrPlanned": hr["alarp"].get("engineeringInPlaceOrPlanned")
-                or cand.hierarchy == "ENGINEERING",
-            }
-            tol_after = eng.tolerability(
-                new_rate, credible_s=hr.get("credibleS"), alarp=alarp_after, strict=strict, cfg=cfg
-            )
             scored.append(
                 {
                     "cand": cand,
                     "gain": gain,
                     "per_effort": gain / weight.get(cand.cost, 2),
                     "after": new_rate,
-                    "tolAfter": tol_after,
-                    "effect": _effect_text(
-                        res["likelihood"] - new_rate["likelihood"], res["severity"] - new_rate["severity"]
-                    ),
+                    "tolAfter": tol_after(hr, new_rate, [cand]),
                 }
             )
         if not scored:
             continue
-        hidx = {x: i for i, x in enumerate(eng.HIERARCHY)}
-        per_hazard.append((h, fam, res, tol, scored))
         # A serious hazard (S>=4) needs an engineering control for ALARP anyway:
         # prefer one over a cheaper procedure that would leave that gap open.
-        serious = max(res["severity"], hr.get("credibleS") or 0) >= 4 and not hr["alarp"].get(
-            "engineeringInPlaceOrPlanned"
-        )
+        serious = sev >= 4 and not hr["alarp"].get("engineeringInPlaceOrPlanned")
         scored.sort(
             key=lambda x: (
                 not eng.resolved(x["tolAfter"]) and x["tolAfter"]["route"] != "OVERRIDE",
@@ -672,59 +758,149 @@ def recommend(
                 x["cand"].id,
             )
         )
+        per_hazard.append((hr, h, fam, res, tol, scored))
 
-    # Pick per hazard, most serious first. When the one-capex-per-entry limit
-    # rules out a hazard's best item, take its next-best affordable one, so no
-    # hazard is left over for a later pass.
+    def effect_text(res: dict[str, Any], after: dict[str, Any]) -> str:
+        return _effect_text(res["likelihood"] - after["likelihood"], res["severity"] - after["severity"])
+
+    def add_pick(
+        key: str,
+        cand: Candidate,
+        h: eng.Hazard,
+        fam: str,
+        res: dict[str, Any],
+        after: dict[str, Any],
+        effect: str,
+        moves_out: bool,
+        rank: tuple[int, float],
+        kind: str | None = None,
+    ) -> None:
+        if key in picks:
+            pk = picks[key]
+            pk["targetHazards"].append({"key": h.key, "name": h.name})
+            pk["raisesCapa"] = pk["raisesCapa"] or moves_out
+            if pk["kind"] != "IMPROVEMENT_NO_RATING_CREDIT":
+                pk["kind"] = "CAPA" if pk["raisesCapa"] else "IMPROVEMENT_NOTE"
+            pk["_rank"] = max(pk["_rank"], rank)
+            return
+        capex = cand.cost in ("HIGH", "VERY_HIGH")
+        picks[key] = {
+            "id": key,
+            "hierarchy": cand.hierarchy,
+            "description": cand.description,
+            "targetHazards": [{"key": h.key, "name": h.name}],
+            "expectedEffect": effect,
+            "residualAfter": after,
+            "costBand": cand.cost,
+            "ownerRole": rc["ownerRoles"].get(cand.hierarchy, "Section Head"),
+            "dueDays": rc["dueDays"].get(res["level"], 90),
+            "raisesCapa": moves_out,
+            "kind": kind or ("CAPA" if moves_out else "IMPROVEMENT_NOTE"),
+            "source": cand.source,
+            "family": fam,
+            "interimMeasure": INTERIM.get(fam, "Interim: supervisor check before each task until in place")
+            if capex
+            else None,
+            "_rank": rank,
+        }
+
+    # Pick per hazard, most serious first. The one-capex limit falls back to the
+    # next affordable item, so no hazard is left over for a later pass. A second,
+    # independent control only for an S>=4 hazard the first leaves open (D).
     capex_seen = 0
-    per_hazard.sort(key=lambda x: (-x[2]["score"], -x[2]["severity"], x[0].name))
-    for h, fam, res, tol, scored in per_hazard:
-        taken = 0
+    max_per = rc.get("maxRecsPerHazard", rc["maxPerHazard"])
+    per_hazard.sort(key=lambda x: (-x[3]["score"], -x[3]["severity"], x[1].name))
+    for hr, h, fam, res, tol, scored in per_hazard:
+        chosen: list[dict[str, Any]] = []
         for best in scored:
-            if taken >= rc["maxPerHazard"]:
+            if len(chosen) >= max_per:
                 break
             cand = best["cand"]
-            key = cand.id if cand.source == "catalogue" else f"llm:{cand.description.lower()[:60]}"
-            capex = cand.cost in ("HIGH", "VERY_HIGH")
-            if capex and key not in picks and capex_seen >= rc["maxCapexPerEntry"]:
+            key = _cand_key(cand)
+            if (
+                cand.cost in ("HIGH", "VERY_HIGH")
+                and key not in picks
+                and capex_seen >= rc["maxCapexPerEntry"]
+            ):
                 skipped.append({"candidate": cand.description, "reason": "only one capex proposal per entry"})
                 continue
-            taken += 1
-            moves_out = not eng.resolved(tol) and (
-                eng.resolved(best["tolAfter"]) or best["tolAfter"]["route"] == "OVERRIDE"
+            chosen.append(best)
+            capex_seen += int(cand.cost in ("HIGH", "VERY_HIGH") and key not in picks)
+        if not chosen:
+            continue
+        first = chosen[0]
+        sev = max(res["severity"], hr.get("credibleS") or 0)
+        if (
+            rc.get("secondRecWhenSevere", True)
+            and len(chosen) < 2
+            and sev >= 4
+            and not eng.resolved(first["tolAfter"])
+            and first["tolAfter"]["route"] != "OVERRIDE"
+        ):
+            fc = first["cand"]
+            seconds = []
+            for x in scored[1:]:
+                c2 = x["cand"]
+                if same_control(c2.hierarchy, c2.description, fc.hierarchy, fc.description, 0.3):
+                    continue  # not independent
+                if (
+                    c2.cost in ("HIGH", "VERY_HIGH")
+                    and _cand_key(c2) not in picks
+                    and capex_seen >= rc["maxCapexPerEntry"]
+                ):
+                    continue
+                both = trial(hr, h, [fc, c2])
+                if both["score"] >= first["after"]["score"]:
+                    continue  # adds nothing beyond the first
+                gain = res["score"] - both["score"]
+                seconds.append(
+                    {
+                        "cand": c2,
+                        "gain": gain,
+                        "per_effort": gain / weight.get(c2.cost, 2),
+                        "after": both,
+                        "tolAfter": tol_after(hr, both, [fc, c2]),
+                    }
+                )
+            seconds.sort(
+                key=lambda x: (
+                    not eng.resolved(x["tolAfter"]) and x["tolAfter"]["route"] != "OVERRIDE",
+                    x["cand"].hierarchy != "ENGINEERING",
+                    -x["per_effort"],
+                    hidx.get(x["cand"].hierarchy, 9),
+                    x["cand"].id,
+                )
             )
-            if key in picks:
-                pk = picks[key]
-                pk["targetHazards"].append({"key": h.key, "name": h.name})
-                pk["raisesCapa"] = pk["raisesCapa"] or moves_out
-                pk["kind"] = "CAPA" if pk["raisesCapa"] else "IMPROVEMENT_NOTE"
-                pk["_rank"] = max(pk["_rank"], (res["score"], best["per_effort"]))
-                continue
-            capex_seen += int(capex)
-            picks[key] = {
-                "id": key,
-                "hierarchy": cand.hierarchy,
-                "description": cand.description,
-                "targetHazards": [{"key": h.key, "name": h.name}],
-                "expectedEffect": best["effect"],
-                "residualAfter": best["after"],
-                "costBand": cand.cost,
-                "ownerRole": rc["ownerRoles"].get(cand.hierarchy, "Section Head"),
-                "dueDays": rc["dueDays"].get(res["level"], 90),
-                "raisesCapa": moves_out,
-                "kind": "CAPA" if moves_out else "IMPROVEMENT_NOTE",
-                "source": cand.source,
-                "family": fam,
-                "interimMeasure": INTERIM.get(fam, "Interim: supervisor check before each task until in place")
-                if capex
-                else None,
-                "_rank": (res["score"], best["per_effort"]),
-            }
+            if seconds:
+                chosen.append({**seconds[0], "second": True})
+                capex_seen += int(seconds[0]["cand"].cost in ("HIGH", "VERY_HIGH"))
+        final_tol = chosen[-1]["tolAfter"]
+        moves_out = not eng.resolved(tol) and (eng.resolved(final_tol) or final_tol["route"] == "OVERRIDE")
+        prev_after = res
+        for best in chosen:
+            cand = best["cand"]
+            add_pick(
+                _cand_key(cand),
+                cand,
+                h,
+                fam,
+                res,
+                best["after"],
+                effect_text(prev_after, best["after"]),
+                moves_out,
+                (res["score"], best["per_effort"]),
+            )
+            prev_after = best["after"]
 
     kept = sorted(picks.values(), key=lambda r: (-r["_rank"][0], -r["_rank"][1], r["id"]))
-    cap = (
-        rc["maxPerEntryHighCritical"] if entry_level in ("HIGH", "CRITICAL") else rc["maxPerEntryLowModerate"]
-    )
+    if entry_max_severity is not None and entry_max_severity <= cfg["tolerability"].get("lowSeverityMax", 3):
+        cap = rc.get("maxPerEntryLowSeverity", rc["maxPerEntryLowModerate"])
+    else:
+        cap = (
+            rc["maxPerEntryHighCritical"]
+            if entry_level in ("HIGH", "CRITICAL")
+            else rc["maxPerEntryLowModerate"]
+        )
     # Controls already planned (with a date) count toward the cap, so acting on
     # the recommendations never produces a fresh batch on the next pass.
     planned = {
@@ -737,9 +913,44 @@ def recommend(
     for r in kept[room:]:
         skipped.append({"candidate": r["description"], "reason": f"entry cap of {cap} reached"})
     kept = kept[:room]
-    targeted = {t["key"] for r in kept for t in r["targetHazards"]}
+    # Improvements with no rating credit (plant-index sheet): within the cap,
+    # never a CAPA, never counted toward blockers or the override.
+    for item in no_credit_items:
+        if len(kept) >= room:
+            break
+        cand = item["cand"]
+        key = _cand_key(cand)
+        if any(k["id"] == key for k in kept):
+            continue
+        kept.append(
+            {
+                "id": key,
+                "hierarchy": cand.hierarchy,
+                "description": cand.description,
+                "targetHazards": [{"key": item["h"].key, "name": item["h"].name}],
+                "expectedEffect": "No change to the plant rating until the team re-scores it on the sheet",
+                "residualAfter": item["res"],
+                "costBand": cand.cost,
+                "ownerRole": rc["ownerRoles"].get(cand.hierarchy, "Section Head"),
+                "dueDays": rc["dueDays"].get(item["res"]["level"], 90),
+                "raisesCapa": False,
+                "kind": "IMPROVEMENT_NO_RATING_CREDIT",
+                "source": cand.source,
+                "family": item["fam"],
+                "interimMeasure": None,
+                "_rank": (item["res"]["score"], 0.0),
+            }
+        )
+    targeted = {
+        t["key"] for r in kept if r["kind"] != "IMPROVEMENT_NO_RATING_CREDIT" for t in r["targetHazards"]
+    }
     uncovered = [
-        {**n, "reason": "entry cap reached" if (len(planned) + len(kept)) >= cap else "no practicable control found"}
+        {
+            **n,
+            "reason": "entry cap reached"
+            if (len(planned) + len(kept)) >= cap
+            else "no practicable control found",
+        }
         for k, n in needing.items()
         if k not in targeted
     ]
@@ -761,5 +972,14 @@ def recommend(
     }
 
 
-__all__ = ["CATALOG", "Candidate", "catalogue_for", "is_filler", "linked", "recommend", "same_control", "similarity",
-           "tokens"]
+__all__ = [
+    "CATALOG",
+    "Candidate",
+    "catalogue_for",
+    "is_filler",
+    "linked",
+    "recommend",
+    "same_control",
+    "similarity",
+    "tokens",
+]

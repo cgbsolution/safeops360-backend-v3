@@ -55,31 +55,296 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "highExposureFrequencies": ["DAILY", "CONTINUOUS"],
     },
     "severity": {
-        # Credible worst case per hazard family: min = understated below this,
-        # max = overstated above this. s5Keywords lift the floor to 5.
+        # Credible worst case per hazard family (round 2 B). A floor ("min") only
+        # applies when the hazard text names the high-consequence scenario
+        # ("floorWhen"; no list = the family itself is that scenario). "rules"
+        # are scenario rules, first match wins; each has an id for the report.
+        "workAtHeightThresholdM": 2.0,  # plant-configurable; placeholder, HSE lead to confirm
         "rubric": {
             "LIFTING": {
                 "min": 4,
+                "floorWhen": [
+                    "crane",
+                    "hoist",
+                    "suspended",
+                    "dropped load",
+                    "falling load",
+                    "load fall",
+                    "over people",
+                    "tonne",
+                    "1 t ",
+                    "sling",
+                    "rigging",
+                    "hook",
+                    "eot",
+                    "lifting equipment",
+                    "lifting gear",
+                    "swinging load",
+                    "bag",
+                ],
                 "s5Keywords": ["1 t ", "1t ", "tonne", "ton ", "fatal", "over people", "crushed by"],
             },
             "HEIGHT": {
                 "min": 4,
-                "s5Keywords": ["fatal", "into the bin", "bin opening", "engulf", "over 2", "2 m", "2m"],
+                "heightRule": True,
+                "s5Keywords": ["fatal", "into the bin", "bin opening", "engulf"],
             },
             "MOLTEN": {"min": 4},
-            "ELECTRICAL": {"min": 4},
+            "ELECTRICAL": {
+                "min": 4,
+                "floorWhen": [
+                    "panel",
+                    "mcc",
+                    "switchgear",
+                    "busbar",
+                    "live",
+                    "arc",
+                    "kv",
+                    "high voltage",
+                    "hv ",
+                    "transformer",
+                    "electrocut",
+                    "fatal",
+                    "415",
+                    "440",
+                    "substation",
+                    "overhead line",
+                    "wet",
+                    "damaged cable",
+                    "grinder cable",
+                    "hand lamp",
+                ],
+            },
             "CONFINED_SPACE": {"min": 4, "s5Keywords": ["oxygen", "toxic", "engulf", "entrap", "fatal"]},
-            "VEHICLE": {"min": 4},
-            "PRESSURE": {"min": 4},
-            "FIRE_EXPLOSION": {"min": 4},
-            "MACHINERY": {"min": 3, "max": 4, "uncapKeywords": ["fatal", "drawn into", "crushed to death"]},
+            "VEHICLE": {
+                "min": 4,
+                "floorWhen": [
+                    "truck",
+                    "forklift",
+                    "tipper",
+                    "dumper",
+                    "loader",
+                    "trailer",
+                    "carrier",
+                    "vehicle",
+                    "reversing",
+                    "run over",
+                    "struck",
+                    "collision",
+                    "crush",
+                    "pedestrian",
+                    "fatal",
+                    "overturn",
+                    "transfer car",
+                ],
+            },
+            "PRESSURE": {
+                "min": 4,
+                "floorWhen": [
+                    "receiver",
+                    "vessel",
+                    "boiler",
+                    "rupture",
+                    "burst",
+                    "explosion",
+                    "compressed",
+                    "high pressure",
+                    "bar",
+                    "injection",
+                    "fatal",
+                    "blast",
+                    "hydraulic",
+                ],
+            },
+            "FIRE_EXPLOSION": {
+                "min": 4,
+                # flammable inventory: stored fuels, gases, solvents (not combustible waste)
+                "floorWhen": [
+                    "lpg",
+                    "png",
+                    "gas",
+                    "fuel",
+                    "oil drum",
+                    "oil tank",
+                    "oil store",
+                    "oil storage",
+                    "furnace oil",
+                    "hydraulic oil",
+                    "solvent",
+                    "paint",
+                    "thinner",
+                    "flammable",
+                    "cylinder",
+                    "acetylene",
+                    "oxygen",
+                    "diesel",
+                    "petrol",
+                    "hydrogen",
+                    "explosion",
+                    "explosive",
+                    "molten",
+                    "flashback",
+                ],
+                "rules": [
+                    {
+                        "id": "FIRE_ROUTINE_SPARKS_S3",
+                        "when": ["spark", "grinding", "cutting", "welding", "hot work"],
+                        "unless": [
+                            "lpg",
+                            "png",
+                            "gas",
+                            "fuel",
+                            "oil drum",
+                            "oil tank",
+                            "oil store",
+                            "oil storage",
+                            "furnace oil",
+                            "solvent",
+                            "paint",
+                            "thinner",
+                            "flammable",
+                            "cylinder",
+                            "acetylene",
+                            "diesel",
+                            "petrol",
+                            "hydrogen",
+                            "explosion",
+                            "explosive",
+                            "flashback",
+                        ],
+                        "max": 3,
+                        "noFloor": True,
+                    }
+                ],
+            },
+            "MACHINERY": {
+                "min": 3,
+                "max": 4,
+                "floorWhen": [
+                    "entangle",
+                    "caught",
+                    "drawn",
+                    "amputat",
+                    "crush",
+                    "press",
+                    "rotating",
+                    "nip",
+                    "conveyor",
+                    "shear",
+                    "pulley",
+                ],
+                "uncapKeywords": ["fatal", "drawn into", "crushed to death"],
+            },
+            "CHEMICAL": {
+                "min": 3,
+                "max": 4,
+                "floorWhen": [
+                    "corrosive",
+                    "acid",
+                    "alkali",
+                    "caustic",
+                    "burn",
+                    "eye",
+                    "splash",
+                    "toxic",
+                    "vapour",
+                ],
+                "uncapKeywords": [
+                    "toxic gas",
+                    "h2s",
+                    "hydrogen sulphide",
+                    "hydrogen sulfide",
+                    "chlorine",
+                    "ammonia",
+                    "fatal",
+                    "asphyx",
+                    "carbon monoxide",
+                    "cyanide",
+                ],
+            },
             "FALLING_OBJECT": {"max": 4},
-            "HEAT": {"max": 4, "uncapKeywords": ["fatal"]},
+            "HEAT": {
+                "max": 3,
+                "rules": [
+                    {
+                        "id": "HEAT_AMBIENT_S3",
+                        "when": [
+                            "ambient",
+                            "outdoor",
+                            "outdoors",
+                            "summer",
+                            "sun",
+                            "cabin",
+                            "cab ",
+                            "gate",
+                            "heat exhaustion",
+                            "heat stress",
+                            "weather",
+                        ],
+                        "unless": ["close range", "close-range", "taphole", "within 1 m", "within 2 m"],
+                        "max": 3,
+                        "noFloor": True,
+                    },
+                    {
+                        "id": "HEAT_RADIANT_CLOSE_S4",
+                        "when": [
+                            "close range",
+                            "close-range",
+                            "near the furnace",
+                            "furnace",
+                            "ladle",
+                            "tapping",
+                            "taphole",
+                            "molten",
+                            "within 1 m",
+                            "within 2 m",
+                            "hot surface",
+                            "radiant",
+                        ],
+                        "min": 4,
+                        "max": 4,
+                    },
+                ],
+                "uncapKeywords": ["fatal"],
+            },
             "THERMAL": {"max": 3, "uncapKeywords": ["steam", "molten", "fatal"]},
-            "CHEMICAL": {"min": 3, "max": 4, "uncapKeywords": ["toxic gas", "h2s", "hydrogen sulphide", "hydrogen sulfide", "chlorine", "ammonia", "fatal", "asphyx", "carbon monoxide", "cyanide"]},
             "SHARP": {"max": 3},
-            "DUST": {"max": 3, "uncapKeywords": ["asbestos", "silica", "mesothelioma", "carcinogen", "silicosis", "benzene", "cancer"]},
-            "MANUAL_HANDLING": {"max": 3},
+            "DUST": {
+                "max": 3,
+                "uncapKeywords": [
+                    "asbestos",
+                    "silica",
+                    "mesothelioma",
+                    "carcinogen",
+                    "silicosis",
+                    "benzene",
+                    "cancer",
+                ],
+            },
+            "MANUAL_HANDLING": {
+                "max": 2,
+                "rules": [
+                    {
+                        "id": "MANUAL_HEAVY_LOAD_S3",
+                        "when": [
+                            "heavy",
+                            "bale",
+                            "sack",
+                            "drum",
+                            "full bin",
+                            "tube",
+                            "roll",
+                            "cylinder",
+                            "bag",
+                            "box",
+                            "carton",
+                            "awkward load",
+                        ],
+                        "heavyKg": 20,
+                        "max": 3,
+                    }
+                ],
+            },
             "SLIP_TRIP": {"max": 3},
             "NOISE": {"max": 3},
             "PSYCHOSOCIAL": {"max": 3},
@@ -153,12 +418,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "tolerability": {
         "alarpBandEnabled": True,
+        # Round 2 A: hazards rated S <= lowSeverityMax are never put through the
+        # ALARP checklist; LOW / MODERATE is ACCEPTABLE once a non-baseline
+        # control with a recorded verification method is in place.
+        "lowSeverityMax": 3,
+        "requireVerifiedControlForModerate": True,
         # None = follow the matrix (MODERATE -> UNACCEPTABLE in alarpBands means strict).
         "moderateNotAcceptable": None,
         "reviewMonths": 12,
     },
     "recommendations": {
-        "maxPerHazard": 1,
+        "maxPerHazard": 1,  # = maxRecsPerHazard
+        "secondRecWhenSevere": True,  # a 2nd, independent control for an S>=4 hazard the 1st leaves open
+        "maxPerEntryLowSeverity": 2,  # entries whose highest inherent severity is <= 3
         "maxPerEntryLowModerate": 3,
         "maxPerEntryHighCritical": 5,
         "maxCapexPerEntry": 1,
@@ -190,6 +462,40 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "dedupeSimilarity": 0.4,  # Jaccard, same hierarchy group
         "linkSimilarity": 0.6,  # share of the shorter text's words (min 3), for open CAPAs / siblings
     },
+    # Round 2 C: when controls are not captured, the assessor confirms the
+    # routine controls in place instead of getting recommendations.
+    "routineControls": {
+        "_ALL": [
+            ["ADMINISTRATIVE", "Work instruction / SOP for this task, briefed to the crew"],
+            ["ADMINISTRATIVE", "Supervisor check before the task starts"],
+        ],
+        "SLIP_TRIP": [
+            ["ADMINISTRATIVE", "Housekeeping schedule with spillage clean-up, checked by the supervisor"]
+        ],
+        "SHARP": [["ADMINISTRATIVE", "Safe handling of sharp scrap and cut-ends in the work instruction"]],
+        "MANUAL_HANDLING": [
+            ["ADMINISTRATIVE", "Manual handling briefing and team-lift rule for heavy items"]
+        ],
+        "DUST": [
+            [
+                "ADMINISTRATIVE",
+                "Dust control routine (damp sweeping / extraction check) in the work instruction",
+            ]
+        ],
+        "NOISE": [["ADMINISTRATIVE", "Hearing protection zone signage and issue register"]],
+        "HEAT": [["ADMINISTRATIVE", "Heat stress routine: drinking water, shade and rest breaks"]],
+        "THERMAL": [["ADMINISTRATIVE", "Hot surface marking and do-not-touch briefing"]],
+        "ELECTRICAL": [
+            ["ADMINISTRATIVE", "Inspection register for portable electrical equipment and extension boards"]
+        ],
+        "PSYCHOSOCIAL": [["ADMINISTRATIVE", "Shift roster and workload review by the supervisor"]],
+    },
+    "evidence": {
+        # Which incidents / near misses count for an entry: the same area
+        # (default), an area group from areaGroups, or the whole plant.
+        "areaScope": "AREA",
+        "areaGroups": {},
+    },
     "findings": {"maxBlockersShown": 3, "defaultShown": 3},
     "assistant": {"maxHazardsRoutine": 5, "maxHazardsNonRoutine": 7},
 }
@@ -207,8 +513,16 @@ def deep_merge(base: dict[str, Any], over: dict[str, Any] | None) -> dict[str, A
 
 # HIRA types (round 3, K). Calibration rules run for TASK_BASED only; the
 # others get structural completeness checks and a neutral banner.
-HIRA_TYPES = ("TASK_BASED", "HAZOP_PHA", "FMEA", "FIRE_EXPLOSION_STUDY", "MOC_RISK", "EMERGENCY_SCENARIO",
-              "OCC_HEALTH", "OTHER")
+HIRA_TYPES = (
+    "TASK_BASED",
+    "HAZOP_PHA",
+    "FMEA",
+    "FIRE_EXPLOSION_STUDY",
+    "MOC_RISK",
+    "EMERGENCY_SCENARIO",
+    "OCC_HEALTH",
+    "OTHER",
+)
 CALIBRATED_TYPES = ("TASK_BASED",)
 
 

@@ -139,22 +139,17 @@ def calibrate_draft(
         for i, c in enumerate(draft.get("existingControls") or [])
         if c.get("description")
     ]
-    extra = []
-    for c in draft.get("recommendedControls") or []:
-        desc = (c.get("description") or "").strip()
-        if not desc:
-            continue
-        fams = eng.control_families(desc)
-        extra.append(
-            rec.Candidate(
-                id=f"llm-{len(extra)}",
-                family=next(iter(sorted(fams)), "GENERAL"),
-                hierarchy=(c.get("hierarchy") or "ADMINISTRATIVE").upper(),
-                cost=(c.get("costBand") or c.get("estimatedCostBand") or "MEDIUM").upper(),
-                description=desc,
-                source="assistant",
-            )
-        )
+    # The draft's proposed controls ride on the entry as candidates, exactly as a
+    # stored entry's proposed recommendations do (one path, round 2 E).
+    proposed = [
+        {
+            "hierarchy": (c.get("hierarchy") or "ADMINISTRATIVE").upper(),
+            "description": (c.get("description") or "").strip(),
+            "costBand": (c.get("costBand") or c.get("estimatedCostBand") or "MEDIUM").upper(),
+        }
+        for c in draft.get("recommendedControls") or []
+        if (c.get("description") or "").strip()
+    ]
     entry = rv.EntryInput(
         entry_id=draft.get("entryId") or "draft",
         label=draft.get("label") or "draft",
@@ -168,9 +163,11 @@ def calibrate_draft(
         controls=controls,
         hazard_ratings_stored=True,
         review_date_set=bool(draft.get("reviewDateSet")),
+        candidate_controls=proposed,
+        statutory_current=draft.get("statutoryCurrent"),
         elimination_considered=bool(draft.get("eliminationConsidered")),
     )
-    result = rv.evaluate(entry, cfg=cfg, rule=rule, evidence=evidence, plant=plant, extra_candidates=extra)
+    result = rv.evaluate(entry, cfg=cfg, rule=rule, evidence=evidence, plant=plant, extra_candidates=None)
     by_key = {c["hazard"].key: c for c in kept}
     hazards_out = []
     for h in result["hazards"]:

@@ -293,7 +293,16 @@ async def apply(
         if "DEFAULTS" in parts
         else {}
     )
-    if "EXISTING_CONTROLS" in parts or eff:
+    # "Confirm routine controls" (round 2 C): accept the routine / proposed
+    # controls and record the assessor's confirmation on unverified ones.
+    confirm = (
+        {x["key"]: x["verificationMethod"] for x in defaults.get("confirmControls") or []}
+        if "CONFIRM_ROUTINE_CONTROLS" in parts
+        else {}
+    )
+    if "CONFIRM_ROUTINE_CONTROLS" in parts:
+        parts = [*parts, "EXISTING_CONTROLS"]
+    if "EXISTING_CONTROLS" in parts or eff or confirm:
         current = [
             {
                 k: getattr(c, k, None)
@@ -316,6 +325,8 @@ async def apply(
         for c in current:
             if c["_id"] in eff and not c["effectiveness"]:
                 c["effectiveness"] = eff[c["_id"]]
+            if c["_id"] in confirm and not (c["verificationMethod"] or "").strip():
+                c["verificationMethod"] = confirm[c["_id"]]
         if "EXISTING_CONTROLS" in parts:
             for p in result["existingControlProposals"]:
                 current.append(

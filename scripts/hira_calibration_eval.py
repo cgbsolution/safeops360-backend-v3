@@ -78,85 +78,194 @@ def rule_for(fixture: dict[str, Any], act: dict[str, Any]) -> MatrixRule:
 
 
 def evidence_for(act: dict[str, Any]) -> eng.Evidence:
-    by = {fam: {"window": int(v.get("window", 0)), "12m": int(v.get("12m", 0)),
-                "failures": list(v.get("failures") or []), "items": list(v.get("items") or [])}
-          for fam, v in sorted(((act.get("evidence") or {}).get("byFamily") or {}).items())}
-    return eng.Evidence(events_window=sum(v["window"] for v in by.values()),
-                        events_12m=sum(v["12m"] for v in by.values()),
-                        control_failures=[f for v in by.values() for f in v["failures"]],
-                        items=[i for v in by.values() for i in v["items"]], by_family=by)
+    by = {
+        fam: {
+            "window": int(v.get("window", 0)),
+            "12m": int(v.get("12m", 0)),
+            "failures": list(v.get("failures") or []),
+            "items": list(v.get("items") or []),
+        }
+        for fam, v in sorted(((act.get("evidence") or {}).get("byFamily") or {}).items())
+    }
+    return eng.Evidence(
+        events_window=sum(v["window"] for v in by.values()),
+        events_12m=sum(v["12m"] for v in by.values()),
+        control_failures=[f for v in by.values() for f in v["failures"]],
+        items=[i for v in by.values() for i in v["items"]],
+        by_family=by,
+    )
 
 
 def plant_for(act: dict[str, Any]) -> rv.PlantData:
     p = act.get("plantData") or {}
-    return rv.PlantData(existing_control_proposals=copy.deepcopy(p.get("existingControlProposals") or []),
-                        open_capas=copy.deepcopy(p.get("openCapas") or []),
-                        sibling_recommended=copy.deepcopy(p.get("siblingRecommended") or []),
-                        statutory_overdue=copy.deepcopy(p.get("statutoryOverdue") or {}))
+    return rv.PlantData(
+        existing_control_proposals=copy.deepcopy(p.get("existingControlProposals") or []),
+        open_capas=copy.deepcopy(p.get("openCapas") or []),
+        sibling_recommended=copy.deepcopy(p.get("siblingRecommended") or []),
+        statutory_overdue=copy.deepcopy(p.get("statutoryOverdue") or {}),
+    )
 
 
 def draft_for(act: dict[str, Any]) -> dict[str, Any]:
-    return {"entryId": act["id"], "label": act["id"], "activity": act["activity"], "routine": act.get("routine"),
-            "frequency": act.get("frequency"), "hazards": copy.deepcopy(act["hazards"]),
-            "existingControls": copy.deepcopy(act.get("existingControls") or []),
-            "recommendedControls": copy.deepcopy(act.get("recommendedControls") or []),
-            "reviewDateSet": bool(act.get("reviewDateSet")),
-            "eliminationConsidered": bool(act.get("eliminationConsidered"))}
+    return {
+        "entryId": act["id"],
+        "label": act["id"],
+        "activity": act["activity"],
+        "routine": act.get("routine"),
+        "frequency": act.get("frequency"),
+        "hazards": copy.deepcopy(act["hazards"]),
+        "existingControls": copy.deepcopy(act.get("existingControls") or []),
+        "recommendedControls": copy.deepcopy(act.get("recommendedControls") or []),
+        "reviewDateSet": bool(act.get("reviewDateSet")),
+        "eliminationConsidered": bool(act.get("eliminationConsidered")),
+        "statutoryCurrent": act.get("statutoryCurrent"),
+    }
 
 
-def entry_from_draft(draft: dict[str, Any], calibrated: dict[str, Any]) -> tuple[rv.EntryInput, list[rec.Candidate]]:
+def entry_from_draft(
+    draft: dict[str, Any], calibrated: dict[str, Any]
+) -> tuple[rv.EntryInput, list[rec.Candidate]]:
     """The EntryInput (and LLM candidates) calibrate_draft() evaluated, rebuilt
     from its output. Mirrors assistant_v2.calibrate_draft line for line; run()
     checks that evaluating it reproduces calibrate_draft's review exactly."""
     routine = (draft.get("routine") or "ROUTINE").upper()
-    src = {str(h.get("key") or f"h{i}"): h
-           for i, h in enumerate(h for h in draft.get("hazards") or [] if h.get("key") or h.get("name"))}
+    src = {
+        str(h.get("key") or f"h{i}"): h
+        for i, h in enumerate(h for h in draft.get("hazards") or [] if h.get("key") or h.get("name"))
+    }
     hazards = []
     for h in calibrated["hazards"]:  # the kept hazards, in calibrate_draft's ranked order
         d = src[h["key"]]
-        hazards.append(eng.Hazard(key=h["key"], name=d.get("name") or "Hazard", code=d.get("code"),
-                                  category=d.get("category"), consequence=d.get("consequence"),
-                                  likelihood=h["inherent"]["likelihood"], severity=h["inherent"]["severity"]))
-    controls = [eng.Control(key=f"x{i}", hierarchy=(c.get("hierarchy") or "").upper(),
-                            description=c.get("description") or "", effectiveness=c.get("effectiveness"),
-                            verification_method=c.get("verificationMethod"),
-                            hazard_keys=tuple(c["hazardKeys"]) if c.get("hazardKeys") else None)
-                for i, c in enumerate(draft.get("existingControls") or []) if c.get("description")]
-    extra: list[rec.Candidate] = []
-    for c in draft.get("recommendedControls") or []:
-        desc = (c.get("description") or "").strip()
-        if not desc:
-            continue
-        fams = eng.control_families(desc)
-        extra.append(rec.Candidate(id=f"llm-{len(extra)}", family=next(iter(sorted(fams)), "GENERAL"),
-                                   hierarchy=(c.get("hierarchy") or "ADMINISTRATIVE").upper(),
-                                   cost=(c.get("costBand") or c.get("estimatedCostBand") or "MEDIUM").upper(),
-                                   description=desc, source="assistant"))
+        hazards.append(
+            eng.Hazard(
+                key=h["key"],
+                name=d.get("name") or "Hazard",
+                code=d.get("code"),
+                category=d.get("category"),
+                consequence=d.get("consequence"),
+                likelihood=h["inherent"]["likelihood"],
+                severity=h["inherent"]["severity"],
+            )
+        )
+    controls = [
+        eng.Control(
+            key=f"x{i}",
+            hierarchy=(c.get("hierarchy") or "").upper(),
+            description=c.get("description") or "",
+            effectiveness=c.get("effectiveness"),
+            verification_method=c.get("verificationMethod"),
+            hazard_keys=tuple(c["hazardKeys"]) if c.get("hazardKeys") else None,
+        )
+        for i, c in enumerate(draft.get("existingControls") or [])
+        if c.get("description")
+    ]
+    proposed = [
+        {
+            "hierarchy": (c.get("hierarchy") or "ADMINISTRATIVE").upper(),
+            "description": (c.get("description") or "").strip(),
+            "costBand": (c.get("costBand") or c.get("estimatedCostBand") or "MEDIUM").upper(),
+        }
+        for c in draft.get("recommendedControls") or []
+        if (c.get("description") or "").strip()
+    ]
     entry = rv.EntryInput(
-        entry_id=draft.get("entryId") or "draft", label=draft.get("label") or "draft",
-        activity=draft.get("activity") or "", routine=routine, frequency=draft.get("frequency"),
-        hazards=hazards, entry_l=None, entry_s=None, saved_residual=None, controls=controls,
-        hazard_ratings_stored=True, review_date_set=bool(draft.get("reviewDateSet")),
-        elimination_considered=bool(draft.get("eliminationConsidered")))
-    return entry, extra
+        entry_id=draft.get("entryId") or "draft",
+        label=draft.get("label") or "draft",
+        activity=draft.get("activity") or "",
+        routine=routine,
+        frequency=draft.get("frequency"),
+        hazards=hazards,
+        entry_l=None,
+        entry_s=None,
+        saved_residual=None,
+        controls=controls,
+        candidate_controls=proposed,
+        statutory_current=draft.get("statutoryCurrent"),
+        hazard_ratings_stored=True,
+        review_date_set=bool(draft.get("reviewDateSet")),
+        elimination_considered=bool(draft.get("eliminationConsidered")),
+    )
+    return entry, None
 
 
 def stored_entry(act: dict[str, Any]) -> rv.EntryInput:
     """A team's saved entry: one entry rating, hazards rated or not."""
     er = act["entryRating"]
-    hazards = [eng.Hazard(key=h["key"], name=h["name"], code=h.get("code"), category=h.get("category"),
-                          consequence=h.get("consequence"), likelihood=h.get("likelihood"), severity=h.get("severity"))
-               for h in act["hazards"]]
-    controls = [eng.Control(key=f"c{i + 1}", hierarchy=(c.get("hierarchy") or "").upper(), description=c["description"],
-                            effectiveness=c.get("effectiveness"), verification_method=c.get("verificationMethod"),
-                            hazard_keys=tuple(c["hazardKeys"]) if c.get("hazardKeys") else None)
-                for i, c in enumerate(act.get("existingControls") or [])]
+    hazards = [
+        eng.Hazard(
+            key=h["key"],
+            name=h["name"],
+            code=h.get("code"),
+            category=h.get("category"),
+            consequence=h.get("consequence"),
+            likelihood=h.get("likelihood"),
+            severity=h.get("severity"),
+        )
+        for h in act["hazards"]
+    ]
+    controls = [
+        eng.Control(
+            key=f"c{i + 1}",
+            hierarchy=(c.get("hierarchy") or "").upper(),
+            description=c["description"],
+            effectiveness=c.get("effectiveness"),
+            verification_method=c.get("verificationMethod"),
+            hazard_keys=tuple(c["hazardKeys"]) if c.get("hazardKeys") else None,
+        )
+        for i, c in enumerate(act.get("existingControls") or [])
+    ]
     saved = tuple(act["savedResidual"]) if act.get("savedResidual") else None
-    return rv.EntryInput(act["id"], act["id"], act["activity"], act.get("routine"), act.get("frequency"), hazards,
-                         er["likelihood"], er["severity"], saved, rating_basis=act.get("ratingBasis") or "INHERENT",
-                         controls=controls, hazard_ratings_stored=all(h.likelihood and h.severity for h in hazards),
-                         review_date_set=bool(act.get("reviewDateSet")),
-                         elimination_considered=bool(act.get("eliminationConsidered")))
+    # The entry's own proposed (not yet planned) controls are candidates, exactly
+    # as a draft's are (round 2 E: one engine path for stored entries and drafts).
+    proposed = [
+        {
+            "hierarchy": (c.get("hierarchy") or "ADMINISTRATIVE").upper(),
+            "description": c["description"],
+            "costBand": (c.get("costBand") or c.get("estimatedCostBand") or "MEDIUM").upper(),
+        }
+        for c in act.get("recommendedControls") or []
+        if c.get("description")
+    ]
+    return rv.EntryInput(
+        act["id"],
+        act["id"],
+        act["activity"],
+        act.get("routine"),
+        act.get("frequency"),
+        hazards,
+        er["likelihood"],
+        er["severity"],
+        saved,
+        rating_basis=act.get("ratingBasis") or "INHERENT",
+        controls=controls,
+        hazard_ratings_stored=all(h.likelihood and h.severity for h in hazards),
+        review_date_set=bool(act.get("reviewDateSet")),
+        elimination_considered=bool(act.get("eliminationConsidered")),
+        candidate_controls=proposed,
+        statutory_current=act.get("statutoryCurrent"),
+    )
+
+
+def saved_draft(act: dict[str, Any], calibrated: dict[str, Any]) -> dict[str, Any]:
+    """The calibrated draft as it is saved: the kept hazards with their own
+    ratings, the same controls and proposed recommendations (for the parity
+    check: the stored-entry path must give the same result as the draft)."""
+    out = copy.deepcopy(act)
+    out["id"], out["mode"] = act["id"], "STORED"
+    kept = {h["key"]: h for h in calibrated["hazards"]}
+    src = {h["key"]: h for h in act["hazards"]}
+    out["hazards"] = [
+        {
+            **src[k],
+            "likelihood": kept[k]["inherent"]["likelihood"],
+            "severity": kept[k]["inherent"]["severity"],
+        }
+        for k in kept
+    ]
+    drv = calibrated["entry"]["inherent"] or {"likelihood": None, "severity": None}
+    out["entryRating"] = {"likelihood": drv["likelihood"], "severity": drv["severity"]}
+    out["savedResidual"] = None
+    return out
 
 
 def stored_variant(act: dict[str, Any]) -> dict[str, Any]:
@@ -197,7 +306,9 @@ def v1_rate(l: int, s: int) -> dict[str, Any]:
 def v1_entry_rating(act: dict[str, Any]) -> tuple[int, int]:
     if act.get("entryRating"):
         return act["entryRating"]["likelihood"], act["entryRating"]["severity"]
-    best = max(act["hazards"], key=lambda h: (h["likelihood"] * h["severity"], h["severity"], h["likelihood"]))
+    best = max(
+        act["hazards"], key=lambda h: (h["likelihood"] * h["severity"], h["severity"], h["likelihood"])
+    )
     return best["likelihood"], best["severity"]
 
 
@@ -207,13 +318,23 @@ def v1_numbers(act: dict[str, Any]) -> dict[str, Any]:
     l, s = v1_entry_rating(act)
     ctl = act.get("existingControls") or []
     if ctl:
-        rl, rs = _suggest_residual_scores(l, s, [SimpleNamespace(hierarchy=c.get("hierarchy"),
-                                                                 effectiveness=c.get("effectiveness")) for c in ctl])
+        rl, rs = _suggest_residual_scores(
+            l,
+            s,
+            [
+                SimpleNamespace(hierarchy=c.get("hierarchy"), effectiveness=c.get("effectiveness"))
+                for c in ctl
+            ],
+        )
         how = "v1 control model"
     else:
         rl, rs, how = l, s, "residual = initial (no controls)"
-    return {"inherent": v1_rate(l, s), "residual": v1_rate(rl, rs), "residualSource": how,
-            "recommendations": len(act.get("recommendedControls") or [])}
+    return {
+        "inherent": v1_rate(l, s),
+        "residual": v1_rate(rl, rs),
+        "residualSource": how,
+        "recommendations": len(act.get("recommendedControls") or []),
+    }
 
 
 # ─── one activity ───────────────────────────────────────────────────────
@@ -234,12 +355,30 @@ def hazard_states(review: dict[str, Any]) -> list[dict[str, Any]]:
         t = h.get("tolerability")
         if t is None:
             low = bool(h.get("inherent")) and h["inherent"]["level"] == "LOW"
-            out.append({"key": h["key"], "name": h["name"], "state": eng.ACCEPTABLE if low else "INHERENT_ONLY",
-                        "route": None, "missing": [], "residual": None,
-                        "note": "inherent LOW, no controls needed" if low else "no controls: residual not assessed"})
+            out.append(
+                {
+                    "key": h["key"],
+                    "name": h["name"],
+                    "state": eng.ACCEPTABLE if low else "INHERENT_ONLY",
+                    "route": None,
+                    "missing": [],
+                    "residual": None,
+                    "note": "inherent LOW, no controls needed"
+                    if low
+                    else "no controls: residual not assessed",
+                }
+            )
         else:
-            out.append({"key": h["key"], "name": h["name"], "state": t["state"], "route": t["route"],
-                        "missing": t["missing"], "residual": h["residual"]})
+            out.append(
+                {
+                    "key": h["key"],
+                    "name": h["name"],
+                    "state": t["state"],
+                    "route": t["route"],
+                    "missing": t["missing"],
+                    "residual": h["residual"],
+                }
+            )
     return out
 
 
@@ -256,14 +395,28 @@ def final_state(review: dict[str, Any]) -> dict[str, Any]:
         label = "ACCEPTABLE"
     else:
         label = "TOLERABLE_ALARP"
-    return {"label": label, "reached": reached, "override": override, "status": review["entry"]["status"],
-            "entryResidual": review["entry"]["residual"], "hazards": states}
+    return {
+        "label": label,
+        "reached": reached,
+        "override": override,
+        "status": review["entry"]["status"],
+        "entryResidual": review["entry"]["residual"],
+        "hazards": states,
+    }
 
 
 def _rec_summary(r: dict[str, Any]) -> dict[str, Any]:
-    return {"id": r["id"], "hierarchy": r["hierarchy"], "description": r["description"],
-            "targets": [t["key"] for t in r["targetHazards"]], "costBand": r["costBand"], "kind": r["kind"],
-            "source": r["source"], "studyLevel": r["studyLevel"], "residualAfter": r["residualAfter"]}
+    return {
+        "id": r["id"],
+        "hierarchy": r["hierarchy"],
+        "description": r["description"],
+        "targets": [t["key"] for t in r["targetHazards"]],
+        "costBand": r["costBand"],
+        "kind": r["kind"],
+        "source": r["source"],
+        "studyLevel": r["studyLevel"],
+        "residualAfter": r["residualAfter"],
+    }
 
 
 def _expected_match(expected: str | None, actual: str) -> bool | None:
@@ -285,9 +438,20 @@ def run_activity(act: dict[str, Any], fixture: dict[str, Any]) -> tuple[dict[str
         check = rv.evaluate(copy.deepcopy(entry), plant=copy.deepcopy(plant), extra_candidates=extra, **kw)
         reconstruction_ok = check == calibrated["review"]
         r1 = calibrated["review"]
+        # round 2 E: the same content through the stored-entry path
+        st = stored_entry(saved_draft(act, calibrated))
+        ps = rv.evaluate(copy.deepcopy(st), plant=copy.deepcopy(plant), **kw)
+        p3 = rv.evaluate(rv.apply_suggestions(st, ps, implement=True), plant=copy.deepcopy(plant), **kw)
+        parity = {
+            "recommendations": [r["id"] for r in ps["recommendations"]]
+            == [r["id"] for r in r1["recommendations"]],
+            "finalState": None,  # filled below once the draft's single pass is known
+            "_storedFinal": final_state(p3)["label"],
+        }
     else:
         entry = stored_entry(act)
         r1 = rv.evaluate(copy.deepcopy(entry), plant=copy.deepcopy(plant), **kw)
+        parity = None
 
     # b. convergence: accept everything proposed, review the saved entry again
     e2 = rv.apply_suggestions(entry, r1)
@@ -301,46 +465,89 @@ def run_activity(act: dict[str, Any], fixture: dict[str, Any]) -> tuple[dict[str
     inh, res = r1["entry"]["inherent"], r1["entry"]["residual"]
     level_for_cap = (res or inh or {}).get("level")
     fin = final_state(r3)
+    if parity is not None:
+        parity["finalState"] = parity.pop("_storedFinal") == fin["label"]
     crit_res = [h for h in r1["hazards"] if h.get("residual") and h["residual"]["level"] == "CRITICAL"]
     exp = act.get("expected") or {}
     residual_label = res["level"] if res else "NOT_ASSESSED"
     summary = {
-        "id": act["id"], "title": act["title"], "mode": act["mode"], "matrix": act["matrix"],
-        "routine": act.get("routine"), "frequency": act.get("frequency"),
+        "id": act["id"],
+        "title": act["title"],
+        "mode": act["mode"],
+        "matrix": act["matrix"],
+        "routine": act.get("routine"),
+        "frequency": act.get("frequency"),
         "controlsProfile": controls_profile(act),
         "evidenceFamilies": sorted(ev.by_family) if ev.by_family else [],
         "reconstructionMatchesCalibrateDraft": reconstruction_ok,
+        "parity": parity,
         "v1": v1_numbers(act),
         "v2": {
-            "inherent": inh, "residual": res, "residualLabel": r1["entry"]["residualLabel"],
-            "inherentOnly": r1["entry"]["inherentOnly"], "status": r1["entry"]["status"],
-            "entryLevelForCap": level_for_cap, "recommendationCap": r1["recommendationCap"],
+            "inherent": inh,
+            "residual": res,
+            "residualLabel": r1["entry"]["residualLabel"],
+            "inherentOnly": r1["entry"]["inherentOnly"],
+            "status": r1["entry"]["status"],
+            "entryLevelForCap": level_for_cap,
+            "recommendationCap": r1["recommendationCap"],
             "recommendations": [_rec_summary(r) for r in r1["recommendations"]],
             "linkedCapas": [c.get("number") or c.get("id") for c in r1["linkedCapas"]],
             "existingControlProposals": len(r1["existingControlProposals"]),
             "droppedHazards": [d["name"] for d in calibrated["droppedHazards"]] if calibrated else [],
-            "blockers": sorted(b1), "findings": [f["code"] for f in r1["findings"]],
+            "blockers": sorted(b1),
+            "findings": [f["code"] for f in r1["findings"]],
             "controlsJustify": r1["controlsJustify"],
-            "criticalResidualHazards": [{"key": h["key"], "name": h["name"], "family": h["family"],
-                                         "rating": h["residual"], "evidence": ev.for_family(h["family"]).has_any}
-                                        for h in crit_res],
-            "hazards": [{"key": h["key"], "name": h["name"], "code": h.get("code"), "family": h["family"],
-                         "proposed": next(({"likelihood": x.get("likelihood"), "severity": x.get("severity")}
-                                           for x in act["hazards"] if x["key"] == h["key"]), None),
-                         "likelihoodReason": h["likelihood"]["reason"] if h.get("likelihood") else None,
-                         "severityFinding": ((h.get("severity") or {}).get("finding") or {}).get("kind"),
-                         "inherent": h["inherent"], "residual": h["residual"],
-                         "tolerability": h["tolerability"] and {k: h["tolerability"][k] for k in
-                                                                ("state", "route", "missing")}}
-                        for h in r1["hazards"]],
+            "criticalResidualHazards": [
+                {
+                    "key": h["key"],
+                    "name": h["name"],
+                    "family": h["family"],
+                    "rating": h["residual"],
+                    "evidence": ev.for_family(h["family"]).has_any,
+                }
+                for h in crit_res
+            ],
+            "hazards": [
+                {
+                    "key": h["key"],
+                    "name": h["name"],
+                    "code": h.get("code"),
+                    "family": h["family"],
+                    "proposed": next(
+                        (
+                            {"likelihood": x.get("likelihood"), "severity": x.get("severity")}
+                            for x in act["hazards"]
+                            if x["key"] == h["key"]
+                        ),
+                        None,
+                    ),
+                    "likelihoodReason": h["likelihood"]["reason"] if h.get("likelihood") else None,
+                    "severityFinding": ((h.get("severity") or {}).get("finding") or {}).get("kind"),
+                    "inherent": h["inherent"],
+                    "residual": h["residual"],
+                    "tolerability": h["tolerability"]
+                    and {k: h["tolerability"][k] for k in ("state", "route", "missing")},
+                }
+                for h in r1["hazards"]
+            ],
         },
-        "pass2": {"blockers": sorted(b2), "newBlockers": sorted(b2 - b1), "recommendations": len(r2["recommendations"]),
-                  "blockerDetails": [f"{f['code']}: {f['detail']}" for f in r2["findings"] if f["class"] == rv.BLOCKER],
-                  "status": r2["entry"]["status"], "pass3Blockers": sorted(b2b), "pass3NewBlockers": sorted(b2b - b2)},
+        "pass2": {
+            "blockers": sorted(b2),
+            "newBlockers": sorted(b2 - b1),
+            "recommendations": len(r2["recommendations"]),
+            "blockerDetails": [
+                f"{f['code']}: {f['detail']}" for f in r2["findings"] if f["class"] == rv.BLOCKER
+            ],
+            "status": r2["entry"]["status"],
+            "pass3Blockers": sorted(b2b),
+            "pass3NewBlockers": sorted(b2b - b2),
+        },
         "final": fin,
         "expected": exp,
-        "expectedMatch": {"inherent": _expected_match(exp.get("inherentBand"), inh["level"] if inh else "NONE"),
-                          "residual": _expected_match(exp.get("residualBand"), residual_label)},
+        "expectedMatch": {
+            "inherent": _expected_match(exp.get("inherentBand"), inh["level"] if inh else "NONE"),
+            "residual": _expected_match(exp.get("residualBand"), residual_label),
+        },
     }
     raw = {"calibrated": calibrated, "pass1": r1, "pass2": r2, "pass2b": r2b, "implemented": r3}
     return summary, raw
@@ -372,7 +579,9 @@ def targets(rows: list[dict[str, Any]], deterministic: bool, det_detail: str) ->
     n = len(rows)
     crit_inh = [r["id"] for r in rows if (r["v2"]["inherent"] or {}).get("level") == "CRITICAL"]
     crit_res = [r["id"] for r in rows if (r["v2"]["residual"] or {}).get("level") == "CRITICAL"]
-    crit_res_no_ev = [r["id"] for r in rows if any(not h["evidence"] for h in r["v2"]["criticalResidualHazards"])]
+    crit_res_no_ev = [
+        r["id"] for r in rows if any(not h["evidence"] for h in r["v2"]["criticalResidualHazards"])
+    ]
     recs = [len(r["v2"]["recommendations"]) for r in rows]
     over5 = [r["id"] for r in rows if len(r["v2"]["recommendations"]) > T_MAX_RECS]
     reached = [r["id"] for r in rows if r["final"]["reached"]]
@@ -382,26 +591,55 @@ def targets(rows: list[dict[str, Any]], deterministic: bool, det_detail: str) ->
     more_recs = [r["id"] for r in rows if r["pass2"]["recommendations"]]
     avg = sum(recs) / n if n else 0.0
     out = [
-        {"target": "Critical inherent <= 15% of entries", "value": _pct(len(crit_inh), n),
-         "pass": len(crit_inh) / n <= T_CRIT_INHERENT, "offenders": crit_inh},
-        {"target": "Critical residual <= 5% of entries, and only with evidence",
-         "value": f"{_pct(len(crit_res), n)}; without evidence: {len(crit_res_no_ev)}",
-         "pass": len(crit_res) / n <= T_CRIT_RESIDUAL and not crit_res_no_ev, "offenders": crit_res},
-        {"target": "Average recommendations per entry <= 3.0", "value": f"{avg:.2f} (total {sum(recs)})",
-         "pass": avg <= T_AVG_RECS, "offenders": []},
-        {"target": "Never more than 5 recommendations on an entry", "value": f"max {max(recs) if recs else 0}",
-         "pass": not over5, "offenders": over5},
-        {"target": ">= 80% reach ACCEPTABLE / TOLERABLE_ALARP (or the OVERRIDE route) in one pass",
-         "value": f"{_pct(len(reached), n)}; of which OVERRIDE route: {len(override)}",
-         "pass": len(reached) / n >= T_REACH, "offenders": [r["id"] for r in rows if not r["final"]["reached"]]},
-        {"target": "Zero loops: pass 2 has 0 blockers", "value": f"{len(loops)} entr{'y' if len(loops) == 1 else 'ies'} "
-                                                             f"with pass-2 blockers",
-         "pass": not loops, "offenders": loops},
-        {"target": "No new blockers on pass 2 or pass 3", "value": f"{len(new_b)} entries", "pass": not new_b,
-         "offenders": new_b},
+        {
+            "target": "Critical inherent <= 15% of entries",
+            "value": _pct(len(crit_inh), n),
+            "pass": len(crit_inh) / n <= T_CRIT_INHERENT,
+            "offenders": crit_inh,
+        },
+        {
+            "target": "Critical residual <= 5% of entries, and only with evidence",
+            "value": f"{_pct(len(crit_res), n)}; without evidence: {len(crit_res_no_ev)}",
+            "pass": len(crit_res) / n <= T_CRIT_RESIDUAL and not crit_res_no_ev,
+            "offenders": crit_res,
+        },
+        {
+            "target": "Average recommendations per entry <= 3.0",
+            "value": f"{avg:.2f} (total {sum(recs)})",
+            "pass": avg <= T_AVG_RECS,
+            "offenders": [],
+        },
+        {
+            "target": "Never more than 5 recommendations on an entry",
+            "value": f"max {max(recs) if recs else 0}",
+            "pass": not over5,
+            "offenders": over5,
+        },
+        {
+            "target": ">= 80% reach ACCEPTABLE / TOLERABLE_ALARP (or the OVERRIDE route) in one pass",
+            "value": f"{_pct(len(reached), n)}; of which OVERRIDE route: {len(override)}",
+            "pass": len(reached) / n >= T_REACH,
+            "offenders": [r["id"] for r in rows if not r["final"]["reached"]],
+        },
+        {
+            "target": "Zero loops: pass 2 has 0 blockers",
+            "value": f"{len(loops)} entr{'y' if len(loops) == 1 else 'ies'} with pass-2 blockers",
+            "pass": not loops,
+            "offenders": loops,
+        },
+        {
+            "target": "No new blockers on pass 2 or pass 3",
+            "value": f"{len(new_b)} entries",
+            "pass": not new_b,
+            "offenders": new_b,
+        },
         {"target": "100% deterministic", "value": det_detail, "pass": deterministic, "offenders": []},
-        {"target": "(info) pass 2 still recommends more controls", "value": f"{len(more_recs)} entries",
-         "pass": None, "offenders": more_recs},
+        {
+            "target": "(info) pass 2 still recommends more controls",
+            "value": f"{len(more_recs)} entries",
+            "pass": None,
+            "offenders": more_recs,
+        },
     ]
     return out
 
@@ -446,25 +684,40 @@ def why(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
         hz = r["v2"]["hazards"]
         crit = [h for h in hz if h["inherent"] and h["inherent"]["level"] == "CRITICAL"]
         if crit:
-            out["criticalInherent"].append(f"{r['id']}: " + "; ".join(
-                f"{h['name']} [{h['family']}] proposed L{(h['proposed'] or {}).get('likelihood')}xS"
-                f"{(h['proposed'] or {}).get('severity')} -> L{h['inherent']['likelihood']} ({_lik_note(h)}) x "
-                f"S{h['inherent']['severity']} ({_sev_note(h, rubric)})" for h in crit[:3]))
+            out["criticalInherent"].append(
+                f"{r['id']}: "
+                + "; ".join(
+                    f"{h['name']} [{h['family']}] proposed L{(h['proposed'] or {}).get('likelihood')}xS"
+                    f"{(h['proposed'] or {}).get('severity')} -> L{h['inherent']['likelihood']} ({_lik_note(h)}) x "
+                    f"S{h['inherent']['severity']} ({_sev_note(h, rubric)})"
+                    for h in crit[:3]
+                )
+            )
         for h in r["v2"]["criticalResidualHazards"]:
             src = next(x for x in hz if x["key"] == h["key"])
             out["criticalResidual"].append(
                 f"{r['id']}: {h['name']} [{h['family']}] residual L{h['rating']['likelihood']}xS{h['rating']['severity']}"
-                f" ({'with' if h['evidence'] else 'NO'} evidence; L {_lik_note(src)}, S {_sev_note(src, rubric)})")
+                f" ({'with' if h['evidence'] else 'NO'} evidence; L {_lik_note(src)}, S {_sev_note(src, rubric)})"
+            )
         if not r["final"]["reached"]:
-            open_ = [h for h in r["final"]["hazards"] if not (h["state"] in REACHED or h["route"] == "OVERRIDE")]
-            out["reach"].append(f"{r['id']}: " + "; ".join(
-                f"{h['name']} {_r(h['residual']) if h['residual'] else ''} {h['route'] or h['state']}"
-                + (f" missing {', '.join(h['missing'])}" if h["missing"] else "") for h in open_[:4]))
+            open_ = [
+                h for h in r["final"]["hazards"] if not (h["state"] in REACHED or h["route"] == "OVERRIDE")
+            ]
+            out["reach"].append(
+                f"{r['id']}: "
+                + "; ".join(
+                    f"{h['name']} {_r(h['residual']) if h['residual'] else ''} {h['route'] or h['state']}"
+                    + (f" missing {', '.join(h['missing'])}" if h["missing"] else "")
+                    for h in open_[:4]
+                )
+            )
         if r["pass2"]["blockers"]:
-            out["loops"].append(f"{r['id']}: pass-1 {r['v2']['blockers'] or '[]'} / "
-                                f"{len(r['v2']['recommendations'])} recs -> pass-2 "
-                                + " | ".join(d[:160] for d in r["pass2"]["blockerDetails"])
-                                + f" (pass-2 recommends {r['pass2']['recommendations']} more)")
+            out["loops"].append(
+                f"{r['id']}: pass-1 {r['v2']['blockers'] or '[]'} / "
+                f"{len(r['v2']['recommendations'])} recs -> pass-2 "
+                + " | ".join(d[:160] for d in r["pass2"]["blockerDetails"])
+                + f" (pass-2 recommends {r['pass2']['recommendations']} more)"
+            )
     return out
 
 
@@ -474,12 +727,17 @@ def bench1_checks(row: dict[str, Any]) -> list[dict[str, Any]]:
     soft = {"h5", "h7"}  # sharp edge + dust
     soft_n = sum(1 for r in recs if set(r["targets"]) & soft)
     return [
-        {"check": "entry residual <= 10 and not CRITICAL",
-         "value": eng.rating_text(res) if res else "not assessed",
-         "pass": bool(res) and res["score"] <= 10 and res["level"] != "CRITICAL"},
+        {
+            "check": "entry residual <= 10 and not CRITICAL",
+            "value": eng.rating_text(res) if res else "not assessed",
+            "pass": bool(res) and res["score"] <= 10 and res["level"] != "CRITICAL",
+        },
         {"check": "recommendations <= 5", "value": str(len(recs)), "pass": len(recs) <= 5},
-        {"check": "dust + sharp-edge hazards together get <= 2 recommendations", "value": str(soft_n),
-         "pass": soft_n <= 2},
+        {
+            "check": "dust + sharp-edge hazards together get <= 2 recommendations",
+            "value": str(soft_n),
+            "pass": soft_n <= 2,
+        },
     ]
 
 
@@ -488,16 +746,24 @@ def bench6_checks(row: dict[str, Any]) -> list[dict[str, Any]]:
     recs = row["v2"]["recommendations"]
     res = h["residual"]
     return [
-        {"check": "no 'L1 x S2' claim: residual stays L2 x S3",
-         "value": eng.rating_text(res) if res else "not assessed",
-         "pass": bool(res) and (res["likelihood"], res["severity"]) == (2, 3)
-         and not any("L1 x S2" in j for j in row["v2"]["controlsJustify"])},
-        {"check": "SEVERITY_UNDERSTATED ADVISORY present",
-         "value": "present" if "SEVERITY_UNDERSTATED" in row["v2"]["findings"] else "missing",
-         "pass": "SEVERITY_UNDERSTATED" in row["v2"]["findings"] and "SEVERITY_UNDERSTATED" not in row["v2"]["blockers"]},
-        {"check": "at most 1 recommendation and it is ENGINEERING",
-         "value": ", ".join(f"{r['hierarchy']}: {r['description'][:50]}" for r in recs) or "none",
-         "pass": len(recs) <= 1 and all(r["hierarchy"] == "ENGINEERING" for r in recs)},
+        {
+            "check": "no 'L1 x S2' claim: residual stays L2 x S3",
+            "value": eng.rating_text(res) if res else "not assessed",
+            "pass": bool(res)
+            and (res["likelihood"], res["severity"]) == (2, 3)
+            and not any("L1 x S2" in j for j in row["v2"]["controlsJustify"]),
+        },
+        {
+            "check": "SEVERITY_UNDERSTATED ADVISORY present",
+            "value": "present" if "SEVERITY_UNDERSTATED" in row["v2"]["findings"] else "missing",
+            "pass": "SEVERITY_UNDERSTATED" in row["v2"]["findings"]
+            and "SEVERITY_UNDERSTATED" not in row["v2"]["blockers"],
+        },
+        {
+            "check": "at most 1 recommendation and it is ENGINEERING",
+            "value": ", ".join(f"{r['hierarchy']}: {r['description'][:50]}" for r in recs) or "none",
+            "pass": len(recs) <= 1 and all(r["hierarchy"] == "ENGINEERING" for r in recs),
+        },
     ]
 
 
@@ -520,14 +786,18 @@ def render_report(out: dict[str, Any]) -> str:
     a = L.append
     a("# HIRA calibration v2: evaluation report")
     a("")
-    a(f"Generated by `scripts/hira_calibration_eval.py` from `tests/eval/hira_calibration/activities.json` "
-      f"({len(rows)} activities). Engine {out['engineVersion']}, DEFAULT_CONFIG, offline (no DB, network or LLM).")
+    a(
+        f"Generated by `scripts/hira_calibration_eval.py` from `tests/eval/hira_calibration/activities.json` "
+        f"({len(rows)} activities). Engine {out['engineVersion']}, DEFAULT_CONFIG, offline (no DB, network or LLM)."
+    )
     a("")
-    a("How each entry is run: pass 1 = `calibrate_draft` (Copilot drafts) or `review_v2.evaluate` (stored team "
-      "rating); pass 2 = `apply_suggestions(entry, pass1)` then review of the saved entry; single pass = "
-      "`apply_suggestions(entry, pass1, implement=True)` then review. v1 = one entry rating (max proposed L x S), "
-      "`_suggest_residual_scores` with the existing controls (residual = initial without controls), v1 band "
-      "(L2xS2 = LOW), v1 recommendations = every control the LLM proposed.")
+    a(
+        "How each entry is run: pass 1 = `calibrate_draft` (Copilot drafts) or `review_v2.evaluate` (stored team "
+        "rating); pass 2 = `apply_suggestions(entry, pass1)` then review of the saved entry; single pass = "
+        "`apply_suggestions(entry, pass1, implement=True)` then review. v1 = one entry rating (max proposed L x S), "
+        "`_suggest_residual_scores` with the existing controls (residual = initial without controls), v1 band "
+        "(L2xS2 = LOW), v1 recommendations = every control the LLM proposed."
+    )
     a("")
     a("## Targets")
     a("")
@@ -539,11 +809,13 @@ def render_report(out: dict[str, Any]) -> str:
     a("")
     a("### What drives the failing targets (computed from this run)")
     a("")
-    titles = {"criticalInherent": "CRITICAL inherent hazards (L: capped / evidence / plant-index pass-through / as "
-                                  "proposed; S: rubric effect)",
-              "criticalResidual": "CRITICAL residual hazards",
-              "reach": "Hazards still open after implementing the pass-1 recommendations once",
-              "loops": "Pass-2 blockers (after accepting everything pass 1 proposed)"}
+    titles = {
+        "criticalInherent": "CRITICAL inherent hazards (L: capped / evidence / plant-index pass-through / as "
+        "proposed; S: rubric effect)",
+        "criticalResidual": "CRITICAL residual hazards",
+        "reach": "Hazards still open after implementing the pass-1 recommendations once",
+        "loops": "Pass-2 blockers (after accepting everything pass 1 proposed)",
+    }
     for key, title in titles.items():
         items = out["why"][key]
         if not items:
@@ -563,22 +835,30 @@ def render_report(out: dict[str, Any]) -> str:
     a("")
     a("### Benchmarks before (v1) and after (v2)")
     a("")
-    a("| Benchmark | Inherent v1 | Inherent v2 | Residual v1 | Residual v2 | Recs v1 | Recs v2 | Pass-2 blockers | "
-      "After implementing |")
+    a(
+        "| Benchmark | Inherent v1 | Inherent v2 | Residual v1 | Residual v2 | Recs v1 | Recs v2 | Pass-2 blockers | "
+        "After implementing |"
+    )
     a("|---|---|---|---|---|---|---|---|---|")
     for b in out["benchmarks"]:
         r = b["row"]
-        a(f"| {r['id']} | {_r(r['v1']['inherent'])} | {_r(r['v2']['inherent'])} | {_r(r['v1']['residual'])} | "
-          f"{_r(r['v2']['residual'])} | {r['v1']['recommendations']} | {len(r['v2']['recommendations'])} | "
-          f"{', '.join(r['pass2']['blockers']) or 'none'} | {r['final']['label']} |")
+        a(
+            f"| {r['id']} | {_r(r['v1']['inherent'])} | {_r(r['v2']['inherent'])} | {_r(r['v1']['residual'])} | "
+            f"{_r(r['v2']['residual'])} | {r['v1']['recommendations']} | {len(r['v2']['recommendations'])} | "
+            f"{', '.join(r['pass2']['blockers']) or 'none'} | {r['final']['label']} |"
+        )
     a("")
     a("## Per activity")
     a("")
-    a("Final state = after implementing the pass-1 recommendations once (single pass). Expected = HSE judgement "
-      "recorded in the fixture before the run (TODO = not agreed yet).")
+    a(
+        "Final state = after implementing the pass-1 recommendations once (single pass). Expected = HSE judgement "
+        "recorded in the fixture before the run (TODO = not agreed yet)."
+    )
     a("")
-    a("| ID | Activity | Matrix | Controls | Evidence | Inherent v1 | Inherent v2 | Residual v1 | Residual v2 | "
-      "Recs v1 | Recs v2 | Pass-1 blockers | Pass-2 blockers | Final state | Expected inh / res |")
+    a(
+        "| ID | Activity | Matrix | Controls | Evidence | Inherent v1 | Inherent v2 | Residual v1 | Residual v2 | "
+        "Recs v1 | Recs v2 | Pass-1 blockers | Pass-2 blockers | Final state | Expected inh / res |"
+    )
     a("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         exp = r["expected"]
@@ -586,24 +866,31 @@ def render_report(out: dict[str, Any]) -> str:
 
         def mark(v: bool | None) -> str:
             return "" if v is None else (" ✓" if v else " ✗")
-        a(f"| {r['id']} | {r['title']} | {r['matrix']} | {r['controlsProfile']} | "
-          f"{', '.join(r['evidenceFamilies']) or '-'} | {_r(r['v1']['inherent'])} | {_r(r['v2']['inherent'])} | "
-          f"{_r(r['v1']['residual'])} | {_r(r['v2']['residual'])} | {r['v1']['recommendations']} | "
-          f"{len(r['v2']['recommendations'])} | {', '.join(r['v2']['blockers']) or '-'} | "
-          f"{', '.join(r['pass2']['blockers']) or '-'} | {r['final']['label']} | "
-          f"{exp.get('inherentBand', '-')}{mark(em['inherent'])} / {exp.get('residualBand', '-')}{mark(em['residual'])} |")
+
+        a(
+            f"| {r['id']} | {r['title']} | {r['matrix']} | {r['controlsProfile']} | "
+            f"{', '.join(r['evidenceFamilies']) or '-'} | {_r(r['v1']['inherent'])} | {_r(r['v2']['inherent'])} | "
+            f"{_r(r['v1']['residual'])} | {_r(r['v2']['residual'])} | {r['v1']['recommendations']} | "
+            f"{len(r['v2']['recommendations'])} | {', '.join(r['v2']['blockers']) or '-'} | "
+            f"{', '.join(r['pass2']['blockers']) or '-'} | {r['final']['label']} | "
+            f"{exp.get('inherentBand', '-')}{mark(em['inherent'])} / {exp.get('residualBand', '-')}{mark(em['residual'])} |"
+        )
     a("")
     s = out["summary"]
-    a(f"Totals: v1 recommendations {s['v1Recs']} -> v2 {s['v2Recs']}; v1 CRITICAL inherent {s['v1CritInh']} -> "
-      f"v2 {s['v2CritInh']}; v1 CRITICAL residual {s['v1CritRes']} -> v2 {s['v2CritRes']}; "
-      f"expected bands agreed {s['expectedAgree']} of {s['expectedCompared']} compared.")
+    a(
+        f"Totals: v1 recommendations {s['v1Recs']} -> v2 {s['v2Recs']}; v1 CRITICAL inherent {s['v1CritInh']} -> "
+        f"v2 {s['v2CritInh']}; v1 CRITICAL residual {s['v1CritRes']} -> v2 {s['v2CritRes']}; "
+        f"expected bands agreed {s['expectedAgree']} of {s['expectedCompared']} compared."
+    )
     a("")
     a("## Hazard detail (pass 1)")
     a("")
     for r in rows:
         a(f"<details><summary>{r['id']} — {r['title']}</summary>")
         a("")
-        a("| Hazard | Family | LLM / team | Inherent v2 | Residual v2 | Tolerability (pass 1) | After implementing |")
+        a(
+            "| Hazard | Family | LLM / team | Inherent v2 | Residual v2 | Tolerability (pass 1) | After implementing |"
+        )
         a("|---|---|---|---|---|---|---|")
         fin = {h["key"]: h for h in r["final"]["hazards"]}
         for h in r["v2"]["hazards"]:
@@ -612,18 +899,27 @@ def render_report(out: dict[str, Any]) -> str:
             tol = h["tolerability"]
             tol_s = f"{tol['state']} ({tol['route'] or '-'})" if tol else "not assessed"
             f = fin.get(h["key"]) or {}
-            fin_s = f"{f.get('state')} ({f.get('route') or '-'})" + (f" missing {', '.join(f['missing'])}"
-                                                                      if f.get("missing") else "")
-            a(f"| {h['name']} | {h['family']} | {prop} | {_r(h['inherent'])} | "
-              f"{_r(h['residual']) if h['residual'] else 'not assessed'} | {tol_s} | {fin_s} |")
+            fin_s = f"{f.get('state')} ({f.get('route') or '-'})" + (
+                f" missing {', '.join(f['missing'])}" if f.get("missing") else ""
+            )
+            a(
+                f"| {h['name']} | {h['family']} | {prop} | {_r(h['inherent'])} | "
+                f"{_r(h['residual']) if h['residual'] else 'not assessed'} | {tol_s} | {fin_s} |"
+            )
         if r["v2"]["droppedHazards"]:
             a("")
             a(f"Dropped by the hazard cap: {', '.join(r['v2']['droppedHazards'])}.")
         if r["v2"]["recommendations"]:
             a("")
-            a("Recommendations: " + "; ".join(f"{x['hierarchy']} {x['id']} -> {', '.join(x['targets'])} "
-                                              f"({x['costBand']}{', study-level' if x['studyLevel'] else ''})"
-                                              for x in r["v2"]["recommendations"]) + ".")
+            a(
+                "Recommendations: "
+                + "; ".join(
+                    f"{x['hierarchy']} {x['id']} -> {', '.join(x['targets'])} "
+                    f"({x['costBand']}{', study-level' if x['studyLevel'] else ''})"
+                    for x in r["v2"]["recommendations"]
+                )
+                + "."
+            )
         if r["v2"]["linkedCapas"]:
             a(f"Linked open CAPAs (not re-raised): {', '.join(r['v2']['linkedCapas'])}.")
         a("")
@@ -637,8 +933,14 @@ def render_report(out: dict[str, Any]) -> str:
 
 def _subprocess_digests(seed: str) -> dict[str, str] | None:
     env = {**os.environ, "PYTHONHASHSEED": seed, "PYTHONPATH": str(ROOT)}
-    p = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--digest-only"], cwd=str(ROOT), env=env,
-                       capture_output=True, text=True, timeout=600)
+    p = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), "--digest-only"],
+        cwd=str(ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
     if p.returncode != 0:
         return None
     return json.loads(p.stdout.strip().splitlines()[-1])
@@ -655,16 +957,25 @@ def evaluate_all(path: Path = ACTIVITIES, *, cross_process: bool = True) -> dict
         sub = [(seed, _subprocess_digests(seed)) for seed in ("0", "4242")]
         ok = all(d == d1 for _, d in sub)
         same = same and ok
-        detail += ("; subprocesses with PYTHONHASHSEED=0 and 4242 identical" if ok else
-                   "; subprocess runs differ: " + ", ".join(f"seed {s}: " + ("failed" if d is None else ", ".join(
-                       k for k in d1 if d.get(k) != d1[k])) for s, d in sub if d != d1))
+        detail += (
+            "; subprocesses with PYTHONHASHSEED=0 and 4242 identical"
+            if ok
+            else "; subprocess runs differ: "
+            + ", ".join(
+                f"seed {s}: " + ("failed" if d is None else ", ".join(k for k in d1 if d.get(k) != d1[k]))
+                for s, d in sub
+                if d != d1
+            )
+        )
     by_id = {r["id"]: r for r in rows}
     benches = []
     if "BENCH-1" in by_id:
         benches.append({"id": "BENCH-1", "row": by_id["BENCH-1"], "checks": bench1_checks(by_id["BENCH-1"])})
         b1 = next(a for a in fixture["activities"] if a["id"] == "BENCH-1")
         sv, _ = run_activity(stored_variant(b1), fixture)
-        benches.append({"id": "BENCH-1/stored (tests entry1, supplementary)", "row": sv, "checks": bench1_checks(sv)})
+        benches.append(
+            {"id": "BENCH-1/stored (tests entry1, supplementary)", "row": sv, "checks": bench1_checks(sv)}
+        )
     if "BENCH-6" in by_id:
         benches.append({"id": "BENCH-6", "row": by_id["BENCH-6"], "checks": bench6_checks(by_id["BENCH-6"])})
     compared = [v for r in rows for v in r["expectedMatch"].values() if v is not None]
@@ -675,11 +986,21 @@ def evaluate_all(path: Path = ACTIVITIES, *, cross_process: bool = True) -> dict
         "v2CritInh": sum(1 for r in rows if (r["v2"]["inherent"] or {}).get("level") == "CRITICAL"),
         "v1CritRes": sum(1 for r in rows if r["v1"]["residual"]["level"] == "CRITICAL"),
         "v2CritRes": sum(1 for r in rows if (r["v2"]["residual"] or {}).get("level") == "CRITICAL"),
-        "expectedCompared": len(compared), "expectedAgree": sum(1 for v in compared if v),
+        "expectedCompared": len(compared),
+        "expectedAgree": sum(1 for v in compared if v),
     }
-    return {"engineVersion": ENGINE_VERSION, "activityCount": len(rows), "deterministic": same,
-            "determinismDetail": detail, "digests": d1, "targets": targets(rows, same, detail),
-            "why": why(rows), "benchmarks": benches, "summary": summary, "activities": rows}
+    return {
+        "engineVersion": ENGINE_VERSION,
+        "activityCount": len(rows),
+        "deterministic": same,
+        "determinismDetail": detail,
+        "digests": d1,
+        "targets": targets(rows, same, detail),
+        "why": why(rows),
+        "benchmarks": benches,
+        "summary": summary,
+        "activities": rows,
+    }
 
 
 def _strip_dates(obj: Any) -> Any:
@@ -694,7 +1015,9 @@ def _strip_dates(obj: Any) -> Any:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--activities", default=str(ACTIVITIES))
-    ap.add_argument("--digest-only", action="store_true", help="print per-activity digests as JSON (determinism check)")
+    ap.add_argument(
+        "--digest-only", action="store_true", help="print per-activity digests as JSON (determinism check)"
+    )
     ap.add_argument("--no-subprocess", action="store_true", help="skip the cross-process determinism check")
     args = ap.parse_args(argv)
     if args.digest_only:
@@ -704,11 +1027,17 @@ def main(argv: list[str] | None = None) -> int:
     out = evaluate_all(Path(args.activities), cross_process=not args.no_subprocess)
     REPORT.write_text(render_report(out), encoding="utf-8")
     results = {k: v for k, v in out.items() if k != "digests"}
-    results["benchmarks"] = [{"id": b["id"], "checks": b["checks"],
-                              "row": {k: b["row"][k] for k in ("id", "v1", "v2", "pass2", "final")}}
-                             for b in out["benchmarks"]]
-    RESULTS.write_text(json.dumps(_strip_dates(results), indent=1, sort_keys=False, default=str) + "\n",
-                       encoding="utf-8")
+    results["benchmarks"] = [
+        {
+            "id": b["id"],
+            "checks": b["checks"],
+            "row": {k: b["row"][k] for k in ("id", "v1", "v2", "pass2", "final")},
+        }
+        for b in out["benchmarks"]
+    ]
+    RESULTS.write_text(
+        json.dumps(_strip_dates(results), indent=1, sort_keys=False, default=str) + "\n", encoding="utf-8"
+    )
     print(f"{out['activityCount']} activities, engine {out['engineVersion']}")
     for t in out["targets"]:
         print(f"  [{_pf(t['pass']):4}] {t['target']}: {t['value']}")

@@ -24,7 +24,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("hira_calibration_eval", ROOT / "scripts" / "hira_calibration_eval.py")
+_spec = importlib.util.spec_from_file_location(
+    "hira_calibration_eval", ROOT / "scripts" / "hira_calibration_eval.py"
+)
 harness = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(harness)
 
@@ -41,7 +43,10 @@ KNOWN_NEW_BLOCKERS: dict[str, str] = {}
 
 
 def _params(known: dict[str, str]) -> list:
-    return [pytest.param(i, marks=pytest.mark.xfail(strict=True, reason=known[i])) if i in known else i for i in IDS]
+    return [
+        pytest.param(i, marks=pytest.mark.xfail(strict=True, reason=known[i])) if i in known else i
+        for i in IDS
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -82,8 +87,14 @@ def test_deterministic_in_process(run):
 def test_deterministic_across_hash_seeds(run):
     _, d1 = run
     env = {**os.environ, "PYTHONHASHSEED": "4242", "PYTHONPATH": str(ROOT)}
-    p = subprocess.run([sys.executable, str(ROOT / "scripts" / "hira_calibration_eval.py"), "--digest-only"],
-                       cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=600)
+    p = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "hira_calibration_eval.py"), "--digest-only"],
+        cwd=str(ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
     assert p.returncode == 0, p.stderr[-2000:]
     assert json.loads(p.stdout.strip().splitlines()[-1]) == d1
 
@@ -97,7 +108,9 @@ def test_zero_loops_pass2_has_no_blockers(rows, aid):
 @pytest.mark.parametrize("aid", _params(KNOWN_NEW_BLOCKERS))
 def test_applying_suggestions_raises_no_new_blockers(rows, aid):
     r = rows[aid]
-    assert r["pass2"]["newBlockers"] == [] and r["pass2"]["pass3NewBlockers"] == [], r["pass2"]["blockerDetails"]
+    assert r["pass2"]["newBlockers"] == [] and r["pass2"]["pass3NewBlockers"] == [], r["pass2"][
+        "blockerDetails"
+    ]
 
 
 @pytest.mark.parametrize("aid", IDS)
@@ -108,7 +121,13 @@ def test_recommendation_caps(rows, aid):
     if r["v2"]["entryLevelForCap"] in ("LOW", "MODERATE"):
         assert n <= 3
     targets = [t for x in r["v2"]["recommendations"] for t in x["targets"]]
-    assert len(targets) == len(set(targets)), "at most one recommendation per hazard"
+    # round 2 D: one per hazard, a second (independent) one only for an S>=4 hazard
+    sev = {h["key"]: (h["inherent"] or {}).get("severity") or 0 for h in r["v2"]["hazards"]}
+    for t in set(targets):
+        n_t = targets.count(t)
+        assert n_t <= 2, f"{t}: more than two recommendations"
+        if n_t == 2:
+            assert sev.get(t, 0) >= 4, f"{t}: a second recommendation for an S<=3 hazard"
 
 
 def test_no_residual_without_real_controls(rows):

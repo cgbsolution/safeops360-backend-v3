@@ -13,6 +13,7 @@ has been applied.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -131,10 +132,14 @@ async def _hira_type(db: AsyncSession, study: Any, entry: Any) -> str:
         ).scalar()
         _TYPE_COL.update(ready=bool(n), at=time.monotonic())
     if _TYPE_COL["ready"] and study is not None:
-        v = (await db.execute(text('SELECT "hiraType" FROM "HiraStudy" WHERE id = :i'), {"i": study.id})).scalar()
+        v = (
+            await db.execute(text('SELECT "hiraType" FROM "HiraStudy" WHERE id = :i'), {"i": study.id})
+        ).scalar()
         if v in HIRA_TYPES:
             return v
-    structured = bool((entry.activityDescription or "").strip()) and bool(entry.hazards or entry.existingControls)
+    structured = bool((entry.activityDescription or "").strip()) and bool(
+        entry.hazards or entry.existingControls
+    )
     return "TASK_BASED" if structured else "OTHER"
 
 
@@ -148,6 +153,86 @@ def _event_families(text_: str, category: str | None) -> set[str]:
     return fams
 
 
+@dataclass(frozen=True)
+class Event:
+    """One incident / near miss, as evidence."""
+
+    when: datetime | None
+    label: str  # e.g. "near miss NM-2026-0310"
+    area_id: str | None
+    text: str
+    category: str | None = None
+
+
+def area_in_scope(
+    event_area: str | None, entry_area: str | None, scope: str, groups: dict[str, list[str]]
+) -> bool:
+    """Does an event in `event_area` count for an entry in `entry_area`?
+    AREA: same area only. AREA_GROUP: same configured group (else same area).
+    PLANT: anywhere in the plant."""
+    if scope == "PLANT":
+        return True
+    if not entry_area or not event_area:
+        return False
+    if event_area == entry_area:
+        return True
+    if scope == "AREA_GROUP":
+        return any(entry_area in ids and event_area in ids for ids in (groups or {}).values())
+    return False
+
+
+def evidence_from_events(
+    events: list[Event],
+    *,
+    entry_area: str | None,
+    months: int,
+    now: datetime,
+    scope: str = "AREA",
+    groups: dict[str, list[str]] | None = None,
+    failures: list[tuple[str, str]] | None = None,
+) -> eng.Evidence:
+    """Pure: count events per hazard family, in the window and in the area
+    scope; control failures (family, message) count for their family only.
+    The rationale lists the event ids and dates used (round 2 I)."""
+    ev = eng.Evidence(window_months=months)
+    since, since12 = now - timedelta(days=30 * months), now - timedelta(days=365)
+
+    def aware(d: datetime) -> datetime:
+        return d if d.tzinfo else d.replace(tzinfo=UTC)
+
+    used = [
+        x
+        for x in events
+        if x.when is not None
+        and aware(x.when) >= since
+        and area_in_scope(x.area_id, entry_area, scope, groups or {})
+    ]
+    ev.events_window = len(used)
+    ev.events_12m = sum(1 for x in used if aware(x.when) >= since12)
+    if used:
+        ev.items.append(
+            f"{len(used)} incident(s) / near miss(es) in scope ({scope.lower()}) in the last {months} months"
+        )
+    for x in sorted(used, key=lambda x: (aware(x.when), x.label), reverse=True):
+        recent = aware(x.when) >= since12
+        for fam in sorted(_event_families(x.text, x.category)):
+            f = ev.by_family.setdefault(fam, {"window": 0, "12m": 0, "failures": [], "items": []})
+            f["window"] += 1
+            f["12m"] += int(recent)
+            if len(f["items"]) < 5:
+                f["items"].append(f"{x.label} ({x.when:%d %b %Y})")
+    for fam, msg in failures or []:
+        ev.control_failures.append(msg)
+        ev.items.append(msg)
+        f = ev.by_family.setdefault(fam, {"window": 0, "12m": 0, "failures": [], "items": []})
+        f["failures"].append(msg)
+        f["items"].append(msg)
+    # Families with no matching event still get an (empty) entry, so each hazard
+    # is judged on its own record rather than the whole area's.
+    ev.by_family.setdefault("GENERAL", {"window": 0, "12m": 0, "failures": [], "items": []})
+    return ev
+
+
 async def _evidence(
     db: AsyncSession,
     *,
@@ -156,24 +241,31 @@ async def _evidence(
     months: int,
     equipment: list[Any],
     now: datetime,
+    scope: str = "AREA",
+    groups: dict[str, list[str]] | None = None,
 ) -> eng.Evidence:
-    """Incidents and near misses in the entry's area within the window, counted
-    per hazard family by what they describe; overdue statutory inspections of
+    """Incidents and near misses in scope (default: the entry's area) within the
+    window, counted per hazard family; overdue statutory inspections of
     equipment the entry names count as control failures for that family."""
     from app.models.incident import Incident  # noqa: PLC0415
     from app.models.near_miss import NearMiss  # noqa: PLC0415
 
-    ev = eng.Evidence(window_months=months)
     if not plant_id:
-        return ev
-    since, since12 = now - timedelta(days=30 * months), now - timedelta(days=365)
-    events: list[tuple[datetime, str, set[str]]] = []
-    if area_id:
+        return eng.Evidence(window_months=months)
+    since = now - timedelta(days=30 * months)
+    events: list[Event] = []
+    if area_id or scope == "PLANT":
+        area_filter_i = [] if scope != "AREA" else [Incident.areaId == area_id]
+        area_filter_n = [] if scope != "AREA" else [NearMiss.areaId == area_id]
         inc = (
             await db.execute(
                 select(
-                    Incident.date, Incident.number, Incident.description, Incident.activityBeingPerformed
-                ).where(Incident.plantId == plant_id, Incident.areaId == area_id, Incident.date >= since)
+                    Incident.date,
+                    Incident.number,
+                    Incident.description,
+                    Incident.activityBeingPerformed,
+                    Incident.areaId,
+                ).where(Incident.plantId == plant_id, Incident.date >= since, *area_filter_i)
             )
         ).all()
         nm = (
@@ -185,41 +277,28 @@ async def _evidence(
                     NearMiss.activity,
                     NearMiss.activityBeingPerformed,
                     NearMiss.hazardCategory,
-                ).where(NearMiss.plantId == plant_id, NearMiss.areaId == area_id, NearMiss.date >= since)
+                    NearMiss.areaId,
+                ).where(NearMiss.plantId == plant_id, NearMiss.date >= since, *area_filter_n)
             )
         ).all()
-        for d, num, desc, act in inc:
-            events.append((d, f"incident {num}", _event_families(f"{desc} {act or ''}", None)))
-        for d, num, desc, act, act2, cat in nm:
-            events.append((d, f"near miss {num}", _event_families(f"{desc} {act or ''} {act2 or ''}", cat)))
-    ev.events_window = len(events)
-    ev.events_12m = sum(
-        1 for d, _, _ in events if d and (d if d.tzinfo else d.replace(tzinfo=UTC)) >= since12
-    )
-    if events:
-        ev.items.append(f"{len(events)} incident(s) / near miss(es) in this area in the last {months} months")
-    for d, label, fams in events:
-        recent = bool(d and (d if d.tzinfo else d.replace(tzinfo=UTC)) >= since12)
-        for fam in fams:
-            f = ev.by_family.setdefault(fam, {"window": 0, "12m": 0, "failures": [], "items": []})
-            f["window"] += 1
-            f["12m"] += int(recent)
-            if len(f["items"]) < 3:
-                f["items"].append(f"{label} ({d:%d %b %Y})" if d else label)
+        events += [Event(d, f"incident {num}", a, f"{desc} {act or ''}") for d, num, desc, act, a in inc]
+        events += [
+            Event(d, f"near miss {num}", a, f"{desc} {act or ''} {act2 or ''}", cat)
+            for d, num, desc, act, act2, cat, a in nm
+        ]
+    failures = []
     for q in equipment:
         due = q.nextInspectionDue
         if due is not None and (due if due.tzinfo else due.replace(tzinfo=UTC)) < now:
-            msg = f"statutory inspection of {q.name} overdue since {due:%d %b %Y}"
-            ev.control_failures.append(msg)
-            ev.items.append(msg)
-            fam = _equipment_family(q) or "GENERAL"
-            f = ev.by_family.setdefault(fam, {"window": 0, "12m": 0, "failures": [], "items": []})
-            f["failures"].append(msg)
-            f["items"].append(msg)
-    # Families with no matching event still get an (empty) entry, so the hazard
-    # is judged on its own record rather than the whole area's.
-    ev.by_family.setdefault("GENERAL", {"window": 0, "12m": 0, "failures": [], "items": []})
-    return ev
+            failures.append(
+                (
+                    _equipment_family(q) or "GENERAL",
+                    f"statutory inspection of {q.name} overdue since {due:%d %b %Y}",
+                )
+            )
+    return evidence_from_events(
+        events, entry_area=area_id, months=months, now=now, scope=scope, groups=groups, failures=failures
+    )
 
 
 def _equipment_family(e: Any) -> str | None:
@@ -326,6 +405,7 @@ async def build(db: AsyncSession, entry_id: str, cfg: dict[str, Any]) -> dict[st
         for c in sorted(e.existingControls, key=lambda c: c.sortOrder or 0)
     ]
     recommended = []
+    candidate_controls: list[dict[str, Any]] = []
     for r in e.recommendedControls:
         x = rec_extra.get(r.id, {})
         links = tuple(x["links"]) if x.get("links") else None
@@ -340,6 +420,11 @@ async def build(db: AsyncSession, entry_id: str, cfg: dict[str, Any]) -> dict[st
                     evidence_attached=bool(r.evidenceAttached),
                     hazard_keys=links,
                 )
+            )
+        elif r.status == "PROPOSED" and not due:
+            # proposed with no date yet: a candidate, not a planned control (round 2 E)
+            candidate_controls.append(
+                {"hierarchy": r.hierarchy, "description": r.description, "costBand": r.estimatedCostBand}
             )
         elif r.status in PLANNED_STATUSES:
             controls.append(
@@ -392,8 +477,7 @@ async def build(db: AsyncSession, entry_id: str, cfg: dict[str, Any]) -> dict[st
         review_date_set=review_due is not None,
         review_overdue=bool(
             e.nextReviewDue
-            and (e.nextReviewDue if e.nextReviewDue.tzinfo else e.nextReviewDue.replace(tzinfo=UTC))
-            < now
+            and (e.nextReviewDue if e.nextReviewDue.tzinfo else e.nextReviewDue.replace(tzinfo=UTC)) < now
         ),
         override_active=bool(
             e.unacceptableOverrideById
@@ -408,6 +492,7 @@ async def build(db: AsyncSession, entry_id: str, cfg: dict[str, Any]) -> dict[st
         hazard_regulations=regs,
         today=date.today(),
         hira_type=await _hira_type(db, study, e),
+        candidate_controls=candidate_controls,
     )
 
     # ── statutory register: equipment this entry names ──
@@ -438,9 +523,7 @@ async def build(db: AsyncSession, entry_id: str, cfg: dict[str, Any]) -> dict[st
         elif (
             q.nextInspectionDue
             and (
-                q.nextInspectionDue
-                if q.nextInspectionDue.tzinfo
-                else q.nextInspectionDue.replace(tzinfo=UTC)
+                q.nextInspectionDue if q.nextInspectionDue.tzinfo else q.nextInspectionDue.replace(tzinfo=UTC)
             )
             < now
         ):
@@ -453,15 +536,15 @@ async def build(db: AsyncSession, entry_id: str, cfg: dict[str, Any]) -> dict[st
         months=cfg["likelihood"]["evidenceWindowMonths"],
         equipment=matched,
         now=now,
+        scope=(cfg.get("evidence") or {}).get("areaScope", "AREA"),
+        groups=(cfg.get("evidence") or {}).get("areaGroups") or {},
     )
     statutory_overdue: dict[str, list[str]] = {}
     for q in matched:
         if (
             q.nextInspectionDue
             and (
-                q.nextInspectionDue
-                if q.nextInspectionDue.tzinfo
-                else q.nextInspectionDue.replace(tzinfo=UTC)
+                q.nextInspectionDue if q.nextInspectionDue.tzinfo else q.nextInspectionDue.replace(tzinfo=UTC)
             )
             < now
         ):
@@ -661,6 +744,8 @@ async def build_for_draft(
         months=cfg["likelihood"]["evidenceWindowMonths"],
         equipment=[],
         now=now,
+        scope=(cfg.get("evidence") or {}).get("areaScope", "AREA"),
+        groups=(cfg.get("evidence") or {}).get("areaGroups") or {},
     )
     siblings = (
         (

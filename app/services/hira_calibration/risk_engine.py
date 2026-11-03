@@ -125,7 +125,21 @@ FAMILY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
         ("crane", "hoist", "sling", "rigging", "suspended load", "eot", "chain block", "dropped load"),
     ),
     ("HEIGHT", ("fall from", "work at height", "ladder", "scaffold", "roof", "platform edge", "bin opening")),
-    ("VEHICLE", ("forklift", "vehicle", "truck", "dumper", "reversing", "loader")),
+    (
+        "VEHICLE",
+        (
+            "forklift",
+            "vehicle",
+            "truck",
+            "dumper",
+            "revers",
+            "loader",
+            "tipper",
+            "trailer",
+            "carrier",
+            "transfer car",
+        ),
+    ),
     ("MACHINERY", ("rotating", "press", "nip point", "entangle", "caught in", "amputat", "conveyor")),
     ("PRESSURE", ("pressure", "hydraulic", "pneumatic", "compressed")),
     ("FIRE_EXPLOSION", ("fire", "explosion", "flammable", "lpg")),
@@ -146,6 +160,9 @@ RELATED = {
     "MACHINERY": {"ELECTRICAL"},
     "ELECTRICAL": {"MACHINERY"},
     "PHYSICAL": {"SLIP_TRIP", "FALLING_OBJECT"},
+    # a confined-space entry permit / attendant governs the access climb too
+    "HEIGHT": {"CONFINED_SPACE"},
+    "CONFINED_SPACE": {"HEIGHT"},
 }
 CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
     "LIFTING": (
@@ -291,6 +308,9 @@ CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "rescue",
         "entry permit",
         "tripod",
+        "ventilat",
+        "blower",
+        "air mover",
     ),
     "CHEMICAL": (
         "msds",
@@ -338,7 +358,21 @@ CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
     ),
     "PRESSURE": ("relief valve", "pressure", "gauge", "hose", "whip", "depressur", "bleed"),
     "NOISE": ("noise", "acoustic", "silencer", "earmuff", "ear muff", "ear plug"),
-    "HEAT": ("heat", "cool", "drinking water", "rest", "shade", "hydration", "acclimat"),
+    "HEAT": (
+        "heat",
+        "cool",
+        "drinking water",
+        "rest",
+        "shade",
+        "hydration",
+        "acclimat",
+        "air-conditioned",
+        "air conditioned",
+        "ac cabin",
+        "cabin",
+        "man cooler",
+        "spot cool",
+    ),
 }
 GENERIC_KEYWORDS = (
     "sop",
@@ -528,9 +562,10 @@ def calibrate_likelihood(
 ) -> dict[str, Any]:
     """Cap a proposed likelihood by the evidence. L4 needs a recorded event in
     the window or a documented control failure; L5 needs 2+ events in 12 months.
-    Without evidence, exposure decides: daily / continuous routine exposure can
-    justify L3, anything else L2. A team's rating on a plant-index scale (not a
-    frequency scale) passes through; an LLM draft (draft=True) is capped too."""
+    Without evidence a proposal is capped at L3 (round 2 F: flat, whatever the
+    exposure; no control credit is ever part of the inherent rating). A team's
+    rating on a plant-index scale passes through; an LLM draft (draft=True) is
+    capped too."""
     lk = cfg["likelihood"]
     if scale != "FREQUENCY" and not draft:
         v = proposed if proposed else default_likelihood(routine, frequency, cfg)
@@ -560,16 +595,18 @@ def calibrate_likelihood(
         p = 4  # fall through to the L4 test
     if p == 4 and evidence.has_any:
         return {"value": 4, "proposed": proposed, "capped": False, "reason": f"L4 supported: {ev_txt}."}
-    cap = min(lk["capWithoutEvidence"], default_likelihood(routine, frequency, cfg))
+    cap = lk["capWithoutEvidence"]
     if p > cap and not evidence.has_any:
         why = (
-            "Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on "
+            "Exposure is not the same as a likely event; L4 needs a recorded incident/near miss on "
             "this activity or area, or a documented control failure (overdue statutory exam, failed inspection)."
-            if cap >= 3
-            else "The task is not a daily routine exposure, so with no recorded event L3 is not supported "
-            "(L3 needs daily exposure or a recorded event; L4 a recorded event or a control failure)."
         )
-        return {"value": cap, "proposed": proposed, "capped": True, "reason": f"Capped at L{cap}: {ev_txt}. {why}"}
+        return {
+            "value": cap,
+            "proposed": proposed,
+            "capped": True,
+            "reason": f"Capped at L{cap}: {ev_txt}. {why}",
+        }
     return {
         "value": p,
         "proposed": proposed,
@@ -581,15 +618,82 @@ def calibrate_likelihood(
 # ─── R4: severity = credible worst case ─────────────────────────────────
 
 
-def credible_severity(family: str, text: str | None, cfg: dict[str, Any]) -> tuple[int | None, int | None]:
+_HEIGHT_EXPOSED = (
+    "edge",
+    "opening",
+    "fragile",
+    "roof",
+    "scaffold",
+    "platform",
+    "bin",
+    "pit",
+    "hopper",
+    "tower",
+    "manhole",
+    "gallery",
+    "open side",
+    "skylight",
+    "mezzanine",
+    "unprotected",
+)
+_HEIGHT_LADDER = (
+    "ladder",
+    "step stool",
+    "step-stool",
+    "stepladder",
+    "step ladder",
+    "stool",
+    "kick step",
+    "rack access",
+    "low step",
+)
+_METRES = re.compile(r"(\d+(?:\.\d+)?)\s*(?:m|metre|metres|meter|meters)(?![a-z0-9])")
+_KG = re.compile(r"(\d+(?:\.\d+)?)\s*kg(?![a-z0-9])")
+
+
+def severity_rule(family: str, text: str | None, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Credible severity range for a hazard: {"min", "max", "rule"}. A floor only
+    applies when the text names the high-consequence scenario (round 2 B)."""
     rule = (cfg["severity"]["rubric"] or {}).get(family) or {}
-    lo, hi = rule.get("min"), rule.get("max")
     t = _norm(text)
+    lo, hi, rid = rule.get("min"), rule.get("max"), None
+    if lo and rule.get("floorWhen") and not _any(t, rule["floorWhen"]):
+        lo, rid = None, f"{family}_FLOOR_NOT_TRIGGERED"
+    if rule.get("heightRule"):
+        threshold = float(cfg["severity"].get("workAtHeightThresholdM", 2.0))
+        heights = [float(x) for x in _METRES.findall(t)]
+        above = bool(heights) and max(heights) >= threshold
+        if _any(t, _HEIGHT_EXPOSED) or above:
+            rid = "HEIGHT_AT_OR_ABOVE_THRESHOLD_OR_EDGE_S4"
+        elif _any(t, _HEIGHT_LADDER):
+            lo, hi, rid = None, 3, "HEIGHT_LADDER_BELOW_THRESHOLD_S3"
+        else:
+            lo, rid = None, "HEIGHT_FLOOR_NOT_TRIGGERED"
+    for r in rule.get("rules") or []:
+        hit = _any(t, r.get("when") or [])
+        if r.get("heavyKg"):
+            hit = hit or any(float(x) >= float(r["heavyKg"]) for x in _KG.findall(t))
+        if hit and not _any(t, r.get("unless") or []):
+            if r.get("noFloor"):
+                lo = None
+            if "min" in r:
+                lo = r["min"]
+            if "max" in r:
+                hi = r["max"]
+            rid = r["id"]
+            break
     if lo and _any(t, rule.get("s5Keywords") or []):
         lo = 5
     if hi and _any(t, rule.get("uncapKeywords") or []):
         hi = None  # e.g. asbestos dust, toxic gas, steam: the ceiling does not apply
-    return lo, hi
+    if lo and hi and lo > hi:
+        hi = lo
+    return {"min": lo, "max": hi, "rule": rid}
+
+
+def credible_severity(family: str, text: str | None, cfg: dict[str, Any]) -> tuple[int | None, int | None]:
+    r = severity_rule(family, text, cfg)
+    return r["min"], r["max"]
 
 
 def calibrate_severity(
@@ -598,12 +702,14 @@ def calibrate_severity(
     """Check a severity against the credible-worst-case rubric. With adjust=True
     (Assistant drafts) the value is moved into the credible range; otherwise
     (a team's own rating) it is left alone and an ADVISORY is returned."""
-    lo, hi = credible_severity(family, text, cfg)
+    sr = severity_rule(family, text, cfg)
+    lo, hi = sr["min"], sr["max"]
     out: dict[str, Any] = {
         "value": proposed,
         "proposed": proposed,
         "credibleMin": lo,
         "credibleMax": hi,
+        "rubricRule": sr["rule"],
         "finding": None,
     }
     if proposed is None:
@@ -889,69 +995,106 @@ def tolerability(
     strict: bool,
     cfg: dict[str, Any],
     overridden: bool = False,
+    verified_control: bool = False,
+    exhausted: bool = False,
+    rating_credit: bool = True,
 ) -> dict[str, Any]:
     """ACCEPTABLE / TOLERABLE_ALARP / NOT_ACCEPTABLE, with the route that ends it.
 
-    MODERATE with a hazard of S>=4: the deterministic ALARP checklist (all four
-    items). MODERATE with S<=3: review date only. Checklist complete ->
-    TOLERABLE_ALARP (monitor, review in 12 months) and no more control requests.
-    A stricter plant rule (MODERATE not acceptable) -> elevated override with a
-    pre-drafted justification instead of more controls.
+    Severity tier = max(rated S, credible floor):
+      S <= 3: LOW is ACCEPTABLE; MODERATE is ACCEPTABLE once a non-baseline control
+        has a recorded verification method (route CONFIRM_CONTROLS until then);
+        HIGH / CRITICAL need controls. Never the ALARP checklist, never
+        TOLERABLE_ALARP.
+      S >= 4: MODERATE -> ALARP checklist; HIGH -> controls, or the ALARP
+        checklist once no practicable control is left (exhausted) or controls
+        cannot change the rating; CRITICAL -> controls or override.
+    A stricter plant rule (MODERATE not acceptable) ends on the elevated override
+    instead of TOLERABLE_ALARP. `rating_credit=False` (a plant-index sheet rating
+    that already includes the controls): the engineering item of the checklist
+    is not required, because no control can move that rating.
     """
+    t = cfg["tolerability"]
     level = residual["level"]
-    months = cfg["tolerability"]["reviewMonths"]
+    months = t["reviewMonths"]
+    sev = max(residual["severity"], credible_s or 0)
+
+    def out(state: str, route: str | None, note: str, missing: list[str] | None = None) -> dict[str, Any]:
+        return {"state": state, "route": route, "missing": missing or [], "overridden": False, "note": note}
+
     if level == "LOW":
+        return out(ACCEPTABLE, None, "Acceptable: keep the controls in place.")
+    if overridden:
         return {
-            "state": ACCEPTABLE,
-            "route": None,
+            "state": NOT_ACCEPTABLE,
+            "route": "OVERRIDE",
             "missing": [],
-            "overridden": False,
-            "note": "Acceptable: keep the controls in place.",
+            "overridden": True,
+            "note": "Accepted under the elevated override.",
         }
-    if level == "MODERATE" and cfg["tolerability"]["alarpBandEnabled"]:
-        sev = max(residual["severity"], credible_s or 0)
-        items = list(ALARP_ITEMS) if sev >= 4 else ["reviewDateSet"]
-        missing = [i for i in items if not alarp.get(i)]
-        if missing:
-            return {
-                "state": NOT_ACCEPTABLE,
-                "route": "ALARP_CHECKLIST",
-                "missing": missing,
-                "overridden": False,
-                "note": "Complete the ALARP checklist: " + "; ".join(ALARP_ITEMS[m] for m in missing) + ".",
-            }
-        if strict:
-            return {
-                "state": NOT_ACCEPTABLE,
-                "route": "OVERRIDE",
-                "missing": [],
-                "overridden": overridden,
-                "note": (
-                    "Accepted under the elevated override."
-                    if overridden
-                    else "The plant rule does not accept MODERATE. The ALARP checklist is complete, so route it "
-                    "to the elevated override (Plant Head / Corporate HSE) with the drafted justification "
-                    "instead of adding controls."
-                ),
-            }
-        return {
-            "state": TOLERABLE_ALARP,
-            "route": None,
-            "missing": [],
-            "overridden": False,
-            "note": f"Tolerable (ALARP): monitor and review in {months} months. No further controls needed.",
-        }
-    return {
-        "state": NOT_ACCEPTABLE,
-        "route": "OVERRIDE" if overridden else "CONTROLS",
-        "missing": [],
-        "overridden": overridden,
-        "note": (
-            "Accepted under the elevated override."
-            if overridden
-            else f"{level} residual: reduce it with controls, or use the elevated override."
-        ),
-    }
+    override_note = (
+        "No practicable control is left: the elevated override (Plant Head / Corporate HSE) with a "
+        "review date and the drafted justification."
+    )
+    if sev <= t.get("lowSeverityMax", 3):
+        if level == "MODERATE":
+            if strict:
+                if exhausted or not rating_credit:
+                    return out(
+                        NOT_ACCEPTABLE,
+                        "OVERRIDE",
+                        "The plant rule does not accept MODERATE. " + override_note,
+                    )
+                return out(
+                    NOT_ACCEPTABLE, "CONTROLS", "The plant rule does not accept MODERATE: add a control."
+                )
+            if verified_control or not t.get("requireVerifiedControlForModerate", True):
+                return out(ACCEPTABLE, None, "Acceptable: routine controls are in place and verified.")
+            return out(
+                NOT_ACCEPTABLE,
+                "CONFIRM_CONTROLS",
+                "Confirm the routine controls are in place and how they are checked.",
+                ["verifiedControl"],
+            )
+        if exhausted:
+            return out(NOT_ACCEPTABLE, "OVERRIDE", override_note)
+        return out(NOT_ACCEPTABLE, "CONTROLS", f"{level} residual: reduce it with a control.")
+    # S >= 4
+    if level == "CRITICAL":
+        if exhausted:
+            return out(NOT_ACCEPTABLE, "OVERRIDE", override_note)
+        return out(
+            NOT_ACCEPTABLE, "CONTROLS", "CRITICAL residual: reduce it with controls, or use the override."
+        )
+    alarp_route = t["alarpBandEnabled"] and (level == "MODERATE" or exhausted or not rating_credit)
+    if not alarp_route:
+        return out(NOT_ACCEPTABLE, "CONTROLS", f"{level} residual: reduce it with a control.")
+    # The engineering item is waived when no control can move the rating, or no
+    # practicable engineering control is left (recorded in the review).
+    items = [
+        i for i in ALARP_ITEMS if (rating_credit and not exhausted) or i != "engineeringInPlaceOrPlanned"
+    ]
+    missing = [i for i in items if not alarp.get(i)]
+    if missing:
+        return out(
+            NOT_ACCEPTABLE,
+            "ALARP_CHECKLIST",
+            "Complete the ALARP checklist: " + "; ".join(ALARP_ITEMS[m] for m in missing) + ".",
+            missing,
+        )
+    if strict:
+        return out(
+            NOT_ACCEPTABLE,
+            "OVERRIDE",
+            "The plant rule does not accept this residual. The ALARP checklist is complete, so route it to the "
+            "elevated override (Plant Head / Corporate HSE) with the drafted justification instead of adding "
+            "controls.",
+        )
+    return out(
+        TOLERABLE_ALARP,
+        None,
+        f"Tolerable (ALARP): monitor and review in {months} months. No further controls needed.",
+    )
 
 
 def resolved(t: dict[str, Any]) -> bool:
@@ -975,7 +1118,9 @@ def entry_rating(hazards: list[dict[str, Any]]) -> dict[str, Any]:
         return {"inherent": None, "residual": None, "drivers": []}
     inh = max(rated, key=lambda h: key(h, "inherent"))["inherent"]
     with_res = [h for h in rated if h.get("residual")]
-    res = max(with_res, key=lambda h: key(h, "residual"))["residual"] if len(with_res) == len(rated) else None
+    # max over the hazards whose residual is assessed; hazards with no control
+    # captured are "not assessed" and never drive the entry residual
+    res = max(with_res, key=lambda h: key(h, "residual"))["residual"] if with_res else None
     which = "residual" if res else "inherent"
     drivers = sorted(rated, key=lambda h: (-key(h, which)[0], -key(h, which)[1], h.get("name") or ""))[:2]
     return {
@@ -1001,6 +1146,7 @@ __all__ = [
     "calibrate_severity",
     "control_families",
     "credible_severity",
+    "severity_rule",
     "default_likelihood",
     "engineering_kind",
     "entry_rating",

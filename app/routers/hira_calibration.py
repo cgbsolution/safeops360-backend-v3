@@ -38,7 +38,7 @@ class CalibrationConfigIn(BaseModel):
 
 
 class CalibrationApplyIn(BaseModel):
-    parts: list[Literal["EXISTING_CONTROLS", "RECOMMENDATIONS", "DEFAULTS"]] = Field(min_length=1)
+    parts: list[Literal["EXISTING_CONTROLS", "CONFIRM_ROUTINE_CONTROLS", "RECOMMENDATIONS", "DEFAULTS"]] = Field(min_length=1)
     changeReason: str | None = Field(default=None, max_length=500)
     recommendationIds: list[str] | None = None
 

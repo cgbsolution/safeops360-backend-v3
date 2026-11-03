@@ -162,14 +162,15 @@ def test_suspended_one_tonne_load_is_s5():
 
 
 def test_cuts_dust_manual_handling_are_s1_to_s3():
-    for code, cat in (
-        ("MECH_SHARP_EDGE", "mechanical"),
-        ("ENV_DUST_AIRBORNE", "environmental"),
-        ("MECH_HEAVY_LIFTING", "mechanical"),
+    # round 2 B (b): routine manual handling is S2; S3 only with a heavy load
+    for code, cat, want in (
+        ("MECH_SHARP_EDGE", "mechanical", 3),
+        ("ENV_DUST_AIRBORNE", "environmental", 3),
+        ("MECH_HEAVY_LIFTING", "mechanical", 2),
     ):
         h = H("h", "x", code=code, category=cat)
         r = eng.calibrate_severity(5, family=h.family, text=h.text, cfg=CFG, adjust=True)
-        assert r["finding"]["kind"] == "OVERSTATED" and r["value"] == 3
+        assert r["finding"]["kind"] == "OVERSTATED" and r["value"] == want
 
 
 def test_manual_lifting_is_not_crane_lifting():
@@ -318,8 +319,14 @@ def test_checklist_gap_names_the_missing_item_not_more_controls():
     assert t["route"] == "ALARP_CHECKLIST" and t["missing"] == ["eliminationConsidered"]
 
 
-def test_s3_moderate_needs_only_a_review_date():
-    assert tol(2, 3, {"reviewDateSet": True})["state"] == eng.TOLERABLE_ALARP
+def test_s3_moderate_is_acceptable_once_a_control_is_verified_never_alarp():
+    # round 2 A: S<=3 never runs the ALARP checklist and is never TOLERABLE_ALARP
+    unverified = eng.tolerability(eng.rate(2, 3, CFG), credible_s=None, alarp={}, strict=False, cfg=CFG)
+    assert unverified["route"] == "CONFIRM_CONTROLS" and unverified["state"] != eng.TOLERABLE_ALARP
+    verified = eng.tolerability(
+        eng.rate(2, 3, CFG), credible_s=None, alarp={}, strict=False, cfg=CFG, verified_control=True
+    )
+    assert verified["state"] == eng.ACCEPTABLE
 
 
 def test_strict_plant_rule_routes_to_override():
@@ -620,10 +627,11 @@ def test_existing_controls_offered_once_and_unverified():
         ]
     )
     r = review(entry1(), plant=plant)
-    assert len(r["existingControlProposals"]) == 2
+    plant_props = [p for p in r["existingControlProposals"] if not p.get("routine")]
+    assert len(plant_props) == 2  # plus the routine controls offered for confirmation (round 2 C)
     assert all(p["effectiveness"] == "NOT_VERIFIED" for p in r["existingControlProposals"])
     nc = next(f for f in r["findings"] if f["code"] == "NO_CONTROLS")
-    assert nc["action"] == "USE_EXISTING_CONTROLS" and "2 existing controls" in nc["fix"]
+    assert nc["action"] == "USE_EXISTING_CONTROLS" and "existing / routine controls" in nc["fix"]
 
 
 @pytest.mark.parametrize(
@@ -659,38 +667,57 @@ def test_deterministic():
 
 
 def test_a_baseline_keywords_match_whole_words_only():
-    assert not eng.is_baseline("ADMINISTRATIVE", "Banksman guides every reversing tipper", CFG)  # "ppe" in tipper
+    assert not eng.is_baseline(
+        "ADMINISTRATIVE", "Banksman guides every reversing tipper", CFG
+    )  # "ppe" in tipper
     assert not eng.is_baseline("ADMINISTRATIVE", "Hopper grid kept closed", CFG)
     assert eng.is_baseline("PPE", "Helmets, safety shoes and gloves", CFG)
 
 
 def test_b_adding_a_control_never_makes_the_residual_worse():
     fire = H("f", "Fire at the cutting area", code="FIRE-001", category="fire_explosion", consequence="burns")
-    base = [C("a", "ADMINISTRATIVE", "Hot work permit", verification_method="audit"),
-            C("e1", "ENGINEERING", "Gas detector with auto shut-off", effectiveness="EFFECTIVE"),
-            C("e2", "ENGINEERING", "Spark guard screens", evidence_attached=True)]
+    base = [
+        C("a", "ADMINISTRATIVE", "Hot work permit", verification_method="audit"),
+        C("e1", "ENGINEERING", "Gas detector with auto shut-off", effectiveness="EFFECTIVE"),
+        C("e2", "ENGINEERING", "Spark guard screens", evidence_attached=True),
+    ]
     before = eng.residual_from_controls(4, 5, base, CFG, hazard=fire)
     after = eng.residual_from_controls(
-        4, 5, [*base, C("m", "ENGINEERING", "Deluge sprinkler over the bay", effectiveness="EFFECTIVE")], CFG,
-        hazard=fire)
+        4,
+        5,
+        [*base, C("m", "ENGINEERING", "Deluge sprinkler over the bay", effectiveness="EFFECTIVE")],
+        CFG,
+        hazard=fire,
+    )
     rate = lambda r: (r["likelihood"] * r["severity"], r["severity"])  # noqa: E731
     assert rate(after) <= rate(before)
 
 
-def test_exposure_caps_unevidenced_likelihood():
-    assert lcal(3, freq="WEEKLY")["value"] == 2  # L3 needs daily exposure or a recorded event
-    assert lcal(3, freq="DAILY")["value"] == 3
-    assert lcal(3, eng.Evidence(events_window=1), freq="WEEKLY")["value"] == 3
+def test_unevidenced_likelihood_is_capped_flat_at_l3():
+    # round 2 F: the cap is L3 whatever the exposure (the round-1 exposure term is gone)
+    assert lcal(3, freq="WEEKLY")["value"] == 3
+    assert lcal(4, freq="WEEKLY")["value"] == 3
+    assert lcal(4, freq="DAILY")["value"] == 3
+    assert lcal(2, freq="DAILY")["value"] == 2
 
 
 def test_llm_draft_on_a_plant_index_scale_is_capped():
-    r = eng.calibrate_likelihood(4, routine="ROUTINE", frequency="DAILY", evidence=NO_EVIDENCE, scale="PLANT_INDEX",
-                                 cfg=CFG, draft=True)
+    r = eng.calibrate_likelihood(
+        4,
+        routine="ROUTINE",
+        frequency="DAILY",
+        evidence=NO_EVIDENCE,
+        scale="PLANT_INDEX",
+        cfg=CFG,
+        draft=True,
+    )
     assert r["value"] == 3 and r["capped"]
 
 
 def test_severity_ceilings_lift_for_specific_harm():
-    dust = H("d", "Asbestos fibres", code="ENV_DUST_AIRBORNE", category="environmental", consequence="mesothelioma")
+    dust = H(
+        "d", "Asbestos fibres", code="ENV_DUST_AIRBORNE", category="environmental", consequence="mesothelioma"
+    )
     assert eng.credible_severity(dust.family, dust.text, CFG)[1] is None
     steam = H("t", "Steam line", code="THERMAL_STEAM_BURN", category="thermal", consequence="steam burns")
     assert eng.credible_severity(steam.family, steam.text, CFG)[1] is None
@@ -698,54 +725,141 @@ def test_severity_ceilings_lift_for_specific_harm():
 
 def test_lpg_controls_count_for_the_fire_hazard_and_arrestors_are_preventive():
     lpg = H("g", "LPG leak", code="FIRE_LPG_LEAK", category="fire_explosion", consequence="flash fire, fatal")
-    r = eng.residual_from_controls(3, 5, [C("c", "ENGINEERING", "LPG cylinder bank outside in a ventilated cage with "
-                                                               "a main isolation valve", effectiveness="EFFECTIVE")],
-                                   CFG, hazard=lpg)
+    r = eng.residual_from_controls(
+        3,
+        5,
+        [
+            C(
+                "c",
+                "ENGINEERING",
+                "LPG cylinder bank outside in a ventilated cage with a main isolation valve",
+                effectiveness="EFFECTIVE",
+            )
+        ],
+        CFG,
+        hazard=lpg,
+    )
     assert r["likelihood"] == 2
     assert eng.engineering_kind("Flashback arrestors at torch and regulator ends") == "PREVENTIVE"
     assert eng.engineering_kind("Fall arrest harness lifeline") == "MITIGATING"
 
 
 def test_f_dedupe_needs_the_same_kind_of_control():
-    assert not rec.same_control("ENGINEERING", "Reversing camera on tippers", "ADMINISTRATIVE",
-                                "Banksman guides every reversing tipper", CFG["recommendations"]["dedupeSimilarity"])
-    assert rec.same_control("ADMINISTRATIVE", "Third party inspection of cranes", "ADMINISTRATIVE",
-                            "Pre-use check + third-party examination of the crane",
-                            CFG["recommendations"]["dedupeSimilarity"])
+    assert not rec.same_control(
+        "ENGINEERING",
+        "Reversing camera on tippers",
+        "ADMINISTRATIVE",
+        "Banksman guides every reversing tipper",
+        CFG["recommendations"]["dedupeSimilarity"],
+    )
+    assert rec.same_control(
+        "ADMINISTRATIVE",
+        "Third party inspection of cranes",
+        "ADMINISTRATIVE",
+        "Pre-use check + third-party examination of the crane",
+        CFG["recommendations"]["dedupeSimilarity"],
+    )
 
 
 def test_no_water_suggested_near_molten_metal():
-    e = rv.EntryInput("e", "#m", "Slag pot dumping", "ROUTINE", "DAILY", [
-        H("m", "Molten slag splash", code="FIRE_MOLTEN_METAL", category="fire_explosion", likelihood=3, severity=5,
-          consequence="steam explosion and burns"),
-        H("d", "Slag dust", code="ENV_DUST_AIRBORNE", category="environmental", likelihood=3, severity=3,
-          consequence="dust inhalation")], 3, 5, None,
-        controls=[C("c", "ADMINISTRATIVE", "Slag yard SOP")], hazard_ratings_stored=True)
+    e = rv.EntryInput(
+        "e",
+        "#m",
+        "Slag pot dumping",
+        "ROUTINE",
+        "DAILY",
+        [
+            H(
+                "m",
+                "Molten slag splash",
+                code="FIRE_MOLTEN_METAL",
+                category="fire_explosion",
+                likelihood=3,
+                severity=5,
+                consequence="steam explosion and burns",
+            ),
+            H(
+                "d",
+                "Slag dust",
+                code="ENV_DUST_AIRBORNE",
+                category="environmental",
+                likelihood=3,
+                severity=3,
+                consequence="dust inhalation",
+            ),
+        ],
+        3,
+        5,
+        None,
+        controls=[C("c", "ADMINISTRATIVE", "Slag yard SOP")],
+        hazard_ratings_stored=True,
+    )
     r = review(e)
     assert not any(w in x["description"].lower() for x in r["recommendations"] for w in ("water", "mist"))
 
 
 def test_d_entry_with_only_baseline_ppe_is_not_a_dead_end():
-    e = rv.EntryInput("e", "#b", "Bag opening at the hopper", "ROUTINE", "DAILY", [
-        H("k", "Knife cut", code="MECH_SHARP_EDGE", category="mechanical", likelihood=3, severity=3,
-          consequence="hand laceration")], 3, 3, None,
-        controls=[C("p", "PPE", "Helmet, safety shoes")], hazard_ratings_stored=True)
+    e = rv.EntryInput(
+        "e",
+        "#b",
+        "Bag opening at the hopper",
+        "ROUTINE",
+        "DAILY",
+        [
+            H(
+                "k",
+                "Knife cut",
+                code="MECH_SHARP_EDGE",
+                category="mechanical",
+                likelihood=3,
+                severity=3,
+                consequence="hand laceration",
+            )
+        ],
+        3,
+        3,
+        None,
+        controls=[C("p", "PPE", "Helmet, safety shoes")],
+        hazard_ratings_stored=True,
+    )
     r1 = review(e)
-    assert r1["recommendations"], "recommends against the inherent rating"
+    # round 2 C: an S<=3 hazard with nothing captured gets "confirm routine
+    # controls", not recommendations; confirming resolves it
+    assert r1["recommendations"] == []
+    assert any(f["code"] == "CONFIRM_ROUTINE_CONTROLS" for f in r1["findings"])
+    assert r1["existingControlProposals"]
     r2 = review(rv.apply_suggestions(e, r1))
-    assert not rv.blocker_codes(r2)
+    assert not rv.blocker_codes(r2) and r2["entry"]["state"] == "ACCEPTABLE"
 
 
 def test_e_cap_counts_planned_controls_so_no_new_batch_appears():
-    many = [H(f"h{i}", n, code=c, category=cat, likelihood=3, severity=5)
-            for i, (n, c, cat) in enumerate([("Crane", "MECH-008", "lifting"), ("Fall", "WAH-003", "height"),
-                                             ("Electric", "ELEC-001", "electrical"),
-                                             ("Vehicle", "VEH-001", "transportation"),
-                                             ("Confined", "CS-001", "confined_space"),
-                                             ("Press", "MECH-001", "mechanical"),
-                                             ("Pressure", "MECH-004", "pressure")])]
-    e = rv.EntryInput("e", "#x", "Shutdown maintenance", "NON_ROUTINE", "OCCASIONAL", many, 3, 5, None,
-                      controls=[C("c", "ADMINISTRATIVE", "Shutdown work instruction")], hazard_ratings_stored=True)
+    many = [
+        H(f"h{i}", n, code=c, category=cat, likelihood=3, severity=5)
+        for i, (n, c, cat) in enumerate(
+            [
+                ("Crane", "MECH-008", "lifting"),
+                ("Fall", "WAH-003", "height"),
+                ("Electric", "ELEC-001", "electrical"),
+                ("Vehicle", "VEH-001", "transportation"),
+                ("Confined", "CS-001", "confined_space"),
+                ("Press", "MECH-001", "mechanical"),
+                ("Pressure", "MECH-004", "pressure"),
+            ]
+        )
+    ]
+    e = rv.EntryInput(
+        "e",
+        "#x",
+        "Shutdown maintenance",
+        "NON_ROUTINE",
+        "OCCASIONAL",
+        many,
+        3,
+        5,
+        None,
+        controls=[C("c", "ADMINISTRATIVE", "Shutdown work instruction")],
+        hazard_ratings_stored=True,
+    )
     r1 = review(e)
     r2 = review(rv.apply_suggestions(e, r1))
     assert r2["recommendations"] == [] and not rv.blocker_codes(r2)
