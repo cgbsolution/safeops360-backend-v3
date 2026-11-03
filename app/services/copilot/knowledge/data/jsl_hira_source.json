@@ -18,7 +18,7 @@
   "significantScore": 3.33,
   "significantScoreCell": 3.3313069908814588,
   "matrix": "JSL_QSD24_GT",
-  "imported": "2026-11-02T19:36:10"
+  "imported": "2026-11-03T05:19:48"
  },
  "studies": {
   "HIRA-JSL-SMS1-CHG": {
@@ -120,7 +120,7 @@
         "VEHICULAR"
        ],
        "masters": [
-        "MECH_MOBILE_EQUIPMENT"
+        "VEH-003"
        ],
        "risk": "Truck may hit someone",
        "control_ref": "DOC NO SM01/01/W",
@@ -1435,12 +1435,12 @@
        "activity": "Placement of equipment and raw material at proper place",
        "rnr": "NR",
        "hazard": "Machinery or tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "ERGONOMIC",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "ERGONOMIC"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH_HEAVY_LIFTING"
        ],
        "risk": "Body part injury",
        "control_ref": "DOC NO SM01/01/W",
@@ -1909,7 +1909,7 @@
         "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH-007"
+        "MECH-008"
        ],
        "risk": "Person may injured",
        "control_ref": "DOC No SM01/02/W",
@@ -3571,12 +3571,12 @@
        "activity": "Lifting of the transfer ladle filled with Liquid metal and slag by crane",
        "rnr": "R",
        "hazard": "Gravity hazard",
-       "hazardType": "GRAVITY_FALLING_OBJECT",
+       "hazardType": "BURN_SCALD",
        "hazardTypes": [
-        "GRAVITY_FALLING_OBJECT"
+        "BURN_SCALD"
        ],
        "masters": [
-        "MECH_FALLING_OBJECT"
+        "FIRE_MOLTEN_METAL"
        ],
        "risk": "Body parts may burnt",
        "control_ref": "DOC No SM01/02/W",
@@ -3673,12 +3673,12 @@
        "activity": "Tilting of the trasnfer ladle to drain the slag in the slagpot",
        "rnr": "R",
        "hazard": "Machinery or tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH-008"
        ],
        "risk": "Person may injured",
        "control_ref": "DOC No SM01/02/W",
@@ -3735,7 +3735,7 @@
         "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH-007"
+        "MECH-008"
        ],
        "risk": "Person may injured",
        "control_ref": "DOC No SM01/02/W",
@@ -3787,12 +3787,12 @@
        "activity": "Tilting of the trasnfer ladle to drain the slag in the slagpot",
        "rnr": "R",
        "hazard": "Gravity hazard",
-       "hazardType": "GRAVITY_FALLING_OBJECT",
+       "hazardType": "BURN_SCALD",
        "hazardTypes": [
-        "GRAVITY_FALLING_OBJECT"
+        "BURN_SCALD"
        ],
        "masters": [
-        "MECH_FALLING_OBJECT"
+        "FIRE_MOLTEN_METAL"
        ],
        "risk": "Splashed slag may injured nearby workers",
        "control_ref": "DOC No SM01/02/W",
@@ -4105,12 +4105,12 @@
        "activity": "Addition of radex after tapping LM in ladle",
        "rnr": "R",
        "hazard": "Gravity hazard",
-       "hazardType": "GRAVITY_FALLING_OBJECT",
+       "hazardType": "BURN_SCALD",
        "hazardTypes": [
-        "GRAVITY_FALLING_OBJECT"
+        "BURN_SCALD"
        ],
        "masters": [
-        "MECH_FALLING_OBJECT"
+        "FIRE_MOLTEN_METAL"
        ],
        "risk": "Body parts may burnt",
        "control_ref": "DOC No SM01/02/W",
@@ -5053,7 +5053,7 @@
         "MACHINERY_TOOL"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH_PINCH_POINT"
        ],
        "risk": "Body part injury due to breakage of controls",
        "control_ref": "DOC No SM01/02/W",
@@ -5106,7 +5106,7 @@
         "MACHINERY_TOOL"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH_PINCH_POINT"
        ],
        "risk": "Body part injury due to breakage of controls",
        "control_ref": "DOC No SM01/02/W",
@@ -5891,12 +5891,12 @@
        "activity": "Lifting the transfer ladle & tilting of the trasnfer ladle to drain the slag in the slagpot",
        "rnr": "R",
        "hazard": "Gravity hazard",
-       "hazardType": "GRAVITY_FALLING_OBJECT",
+       "hazardType": "BURN_SCALD",
        "hazardTypes": [
-        "GRAVITY_FALLING_OBJECT"
+        "BURN_SCALD"
        ],
        "masters": [
-        "MECH_FALLING_OBJECT"
+        "FIRE_MOLTEN_METAL"
        ],
        "risk": "Splashed slag may injured nearby workers",
        "control_ref": "DOC No SM01/03/W",
@@ -6002,7 +6002,7 @@
         "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH-007"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -6054,12 +6054,12 @@
        "activity": "Weighment of the transfer ladle",
        "rnr": "R",
        "hazard": "Machinery/tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "ERGONOMIC",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "ERGONOMIC"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH_HEAVY_LIFTING"
        ],
        "risk": "Person may injured",
        "control_ref": "DOC No SM01/03/W",
@@ -6243,7 +6243,7 @@
         "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH-007"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -6293,12 +6293,12 @@
        "activity": "Pouring of the liquid metal into AOD",
        "rnr": "R",
        "hazard": "Machinery or tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -6791,12 +6791,12 @@
        "activity": "Weighment of the ferroalloys",
        "rnr": "R",
        "hazard": "Machinery/tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "ERGONOMIC",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "ERGONOMIC"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH_HEAVY_LIFTING"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -7307,12 +7307,12 @@
        "activity": "Insertion of tip into the Liquid Metal",
        "rnr": "R",
        "hazard": "Machine/tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "BURN_SCALD",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "BURN_SCALD"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "FIRE_MOLTEN_METAL"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -8436,7 +8436,7 @@
         "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH-007"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -8913,12 +8913,12 @@
        "activity": "Placement of equipment and raw material at proper place",
        "rnr": "NR",
        "hazard": "Machinery or tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "ERGONOMIC",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "ERGONOMIC"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH_HEAVY_LIFTING"
        ],
        "risk": "Body part injury during handling",
        "control_ref": "DOC No SM01/03/W",
@@ -9065,7 +9065,7 @@
         "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH-007"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -9826,7 +9826,7 @@
         "MACHINERY_TOOL"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH_PINCH_POINT"
        ],
        "risk": "Body part injury during tightening of electrode",
        "control_ref": "W.I.NO.SM01/04/W",
@@ -10779,12 +10779,12 @@
        "activity": "Wire feeding in  the liquid metal",
        "rnr": "R",
        "hazard": "Machine/tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "BURN_SCALD",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "BURN_SCALD"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "FIRE_MOLTEN_METAL"
        ],
        "risk": "Person may get injured",
        "control_ref": "W.I.NO.SM01/04/W",
@@ -11197,12 +11197,12 @@
        "activity": "Lifting of the teeming ladle by crane from HIPPO",
        "rnr": "R",
        "hazard": "Machinery or tool hazard",
-       "hazardType": "VEHICULAR",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "VEHICULAR"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_MOBILE_EQUIPMENT"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "W.I.NO.SM01/04/W",
@@ -11346,7 +11346,7 @@
         "MACHINERY_TOOL"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH_PINCH_POINT"
        ],
        "risk": "Person may get injured",
        "control_ref": "W.I.NO.SM01/04/W",
@@ -11380,12 +11380,12 @@
        "activity": "Centering & lowering of the empty teeming ladle by crane on hippo",
        "rnr": "R",
        "hazard": "Machinery or tool hazard",
-       "hazardType": "VEHICULAR",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "VEHICULAR"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_MOBILE_EQUIPMENT"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "W.I.NO.SM01/04/W",
@@ -11599,12 +11599,12 @@
        "activity": "Placement of the equipment and raw material at proper place by crane/payloader",
        "rnr": "NR",
        "hazard": "Machine/tool hazard",
-       "hazardType": "VEHICULAR",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "VEHICULAR"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_MOBILE_EQUIPMENT"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "W.I.NO.SM01/04/W",
@@ -12177,7 +12177,7 @@
         "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH-007"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "W.I.NO.SM01/04/W",
@@ -12934,7 +12934,7 @@
         "BURN_SCALD"
        ],
        "masters": [
-        "FIRE_MOLTEN_METAL"
+        "THERMAL_HOT_SURFACE"
        ],
        "risk": "Body part may injured due to burning of gases",
        "control_ref": "SM01/08/W",
@@ -14240,12 +14240,12 @@
        "activity": "Placement of equipment and raw material at proper place",
        "rnr": "NR",
        "hazard": "Machine/tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "SM01/08/W",
@@ -14562,12 +14562,12 @@
        "activity": "Placement of the bucket/bags at the top of the bin",
        "rnr": "R",
        "hazard": "Machine/tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -14671,12 +14671,12 @@
        "activity": "Filling of raw material in weighing hopper",
        "rnr": "R",
        "hazard": "Machine/tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -14779,12 +14779,12 @@
        "activity": "Placing empty bucket/bags on the truck by crane",
        "rnr": "R",
        "hazard": "Machine/tool hazard",
-       "hazardType": "VEHICULAR",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "VEHICULAR"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_MOBILE_EQUIPMENT"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01/03/W",
@@ -15039,12 +15039,12 @@
        "activity": "Placement of equipment and raw material at proper place",
        "rnr": "NR",
        "hazard": "Machine/tool hazard",
-       "hazardType": "MACHINERY_TOOL",
+       "hazardType": "EQUIPMENT_FAILURE",
        "hazardTypes": [
-        "MACHINERY_TOOL"
+        "EQUIPMENT_FAILURE"
        ],
        "masters": [
-        "MECH_UNGUARDED_ROTATING"
+        "MECH-008"
        ],
        "risk": "Person may get injured",
        "control_ref": "DOC No SM01I/03/W",

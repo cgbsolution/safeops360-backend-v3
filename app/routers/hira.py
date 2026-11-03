@@ -236,6 +236,19 @@ def _alarp_demonstrated(entry: HiraEntry) -> bool:
     )
 
 
+def _verdict_inputs(entry: HiraEntry) -> tuple:
+    """The fields the acceptability verdict is derived from (see _evaluate_alarp)."""
+    return (
+        entry.residualLikelihoodScore,
+        entry.residualSeverityScore,
+        entry.residualRiskLevel,
+        (entry.routine or "").upper(),
+        entry.alarpFurtherControlsConsidered,
+        entry.alarpGrosslyDisproportionate,
+        (entry.alarpJustification or "").strip(),
+    )
+
+
 def _evaluate_alarp(entry: HiraEntry, region: str | None, threshold: str | None, user_id: str) -> None:
     """Recompute ALARP status, sign-off and residualAcceptable from the entry's
     current residual region + demonstration fields. Call AFTER residual L/S and
@@ -1637,6 +1650,12 @@ async def update_entry(
     # and cannot be used for the comparison.)
     before_fingerprint = _risk_fingerprint(entry)
     before_scalars = _material_scalars(entry)
+    # Inputs of the acceptability verdict. The verdict is recomputed only when
+    # one of them changes, so an unrelated edit (wording, rationale, a typo)
+    # never overwrites a verdict that came from elsewhere, e.g. an imported
+    # plant HIRA where a legal/domino/chronic/emergency concern makes a LOW
+    # score "not acceptable".
+    verdict_inputs_before = _verdict_inputs(entry)
 
     data = payload.model_dump(exclude_unset=True)
 
@@ -1846,9 +1865,13 @@ async def update_entry(
         setattr(entry, k, v)
 
     # Recompute ALARP banding + acceptability from the now-current residual
-    # level, routine and demonstration fields. Runs whenever a residual exists
-    # (covers residual-changed, routine-changed, and ALARP-fields-only edits).
-    if entry.residualRiskLevel:
+    # level, routine and demonstration fields, when one of those changed (covers
+    # residual-changed, routine-changed and ALARP-fields-only edits) or when no
+    # verdict exists yet.
+    verdict_inputs_changed = _verdict_inputs(entry) != verdict_inputs_before
+    if entry.residualRiskLevel and not verdict_inputs_changed and entry.residualAcceptable is not None:
+        pass  # keep the stored verdict
+    elif entry.residualRiskLevel:
         region = _alarp_region(entry.residualRiskLevel, alarp_bands)
         threshold = (matrix.acceptableResidual or {}).get((entry.routine or "ROUTINE").lower()) if matrix else None
         _evaluate_alarp(entry, region, threshold, user.id)

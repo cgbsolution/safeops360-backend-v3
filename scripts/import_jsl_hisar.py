@@ -97,6 +97,8 @@ STUDY_CODES = {"charging area": "CHG", "electric arc": "EAF", "aod area": "AOD",
 AREA_ALIAS = {"electric arc": "EAF-1", "aod area": "AOD", "ladle refining": "LRF", "vacuum degassing": "VD Area",
               "alloy feeding": "FAFS"}
 
+ALARP_BANDS = {"LOW": "BROADLY_ACCEPTABLE", "MODERATE": "UNACCEPTABLE", "HIGH": "UNACCEPTABLE", "CRITICAL": "UNACCEPTABLE"}
+
 NOW = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)  # DB columns are naive UTC
 IST = dt.timedelta(hours=5, minutes=30)
 
@@ -136,7 +138,7 @@ def norm(s: str | None) -> str:
 
 
 def ist(d: dt.datetime) -> str:
-    return (d + IST).strftime("%d.%m.%Y %H:%M IST")
+    return (d + IST).strftime("%d.%m.%Y %H:%M:%S IST")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -175,8 +177,16 @@ def find_text(ws, pattern: str, max_row: int | None = None) -> str | None:
     for row in ws.iter_rows(min_row=1, max_row=max_row or ws.max_row, values_only=True):
         for v in row:
             if isinstance(v, str) and re.search(pattern, v, re.I):
-                return clean(v)
+                return exact(v)
     return None
+
+
+def texts_from(ws, first_row: int) -> str:
+    """Every non-empty cell from a row on (e.g. an approval block), verbatim, ' | '-joined."""
+    out = []
+    for row in ws.iter_rows(min_row=first_row, max_row=ws.max_row, values_only=True):
+        out += [exact(v) for v in row if isinstance(v, str) and exact(v)]
+    return " | ".join(out)
 
 
 def parse_hira(path: str):
@@ -193,7 +203,9 @@ def parse_hira(path: str):
         "form25": find_text(cws, r"^\s*Format No", 3),
         "abbreviations": find_text(ws, r"^Abbreviations", 16),
         "footnote": find_text(ws, r"^\* Not to be filled"),
-        "approval24": "; ".join(t for t in (find_text(ws, r"Sectional HOD"), find_text(ws, r"HOD Safety")) if t),
+        "approval24": texts_from(ws, 358),
+        "approval25": texts_from(cws, 214),
+        "revision25": " ".join(t for t in (find_text(cws, r"^Revision No", 8), find_text(cws, r"^Date:", 8)) if t),
         "file": Path(path).name,
         "author": props.creator, "lastModifiedBy": props.lastModifiedBy,
         "created": props.created.isoformat() if props.created else None,
@@ -253,7 +265,6 @@ def parse_hira(path: str):
     # moves to the next HIRA area, in the HIRA tab's order.
     order = list(dict.fromkeys(r["section"] for r in rows))
     controls, section, prev, last_sno = [], None, None, 0
-    meta["approval25"] = "; ".join(t for t in (find_text(cws, r"^1\)\s*HOD"), find_text(cws, r"^Approved By: HOD")) if t)
     for r in range(10, mx + 1):  # rows 1-9 are the form header
         if not any(raw.get((r, k)) not in (None, "") for k in range(1, 14)):
             continue  # empty, or a row that is entirely the lower half of merged cells (e.g. R178)
@@ -314,6 +325,8 @@ def classify_one(hazard: str, activity: str | None, risk: str | None) -> str:
     if re.search(r"fire|hazrad", h):
         return "FIRE-001"
     if re.search(r"burn|scald", h):
+        if re.search(r"burner", both):
+            return "THERMAL_HOT_SURFACE"  # preheating an empty ladle with an oil burner: flame/hot surface, no metal
         return "FIRE_MOLTEN_METAL" if re.search(MOLTEN, both) else "THERMAL_HOT_SURFACE"
     if re.search(r"radiation|radition", h):
         return "RADIATION_UV"  # eye injury from radiation; the library has no infrared master
@@ -342,6 +355,8 @@ def classify_one(hazard: str, activity: str | None, risk: str | None) -> str:
             return "MECH_MOBILE_EQUIPMENT"
         return "MECH-007"
     if "gravity" in h:
+        if re.search(r"splash|slag|burn", rk):
+            return "FIRE_MOLTEN_METAL"  # e.g. "Splashed slag may injured nearby workers"
         return "HEIGHT_FALL_OVER_2M" if re.search(r"fall from|from height|platform", rk) else "MECH_FALLING_OBJECT"
     if "ergonomic" in h:
         return "MECH_HEAVY_LIFTING" if re.search(r"heavy|load|lift", f"{rk} {a}") else "ERGO_AWKWARD_POSTURE"
@@ -352,16 +367,24 @@ def classify_one(hazard: str, activity: str | None, risk: str | None) -> str:
             return "MECH-001"
         if re.search(r"knife|cutting|opening of the bucket", both):
             return "MECH_SHARP_EDGE"
-        if re.search(VEHICLE, both):
-            return "MECH_MOBILE_EQUIPMENT"
-        if re.search(CRANE, both):
+        if re.search(CRANE, both):  # crane before vehicle: "by crane from HIPPO", "on the truck by crane"
             return "MECH-008"
+        if re.search(r"payloader|bobcat|hippo|loader", both):
+            return "MECH_MOBILE_EQUIPMENT"
+        if re.search(VEHICLE, both):
+            return "VEH-003"
         if "trolley" in both:
             return "MECH_MOBILE_EQUIPMENT"
         if re.search(r"door|roof|hood|dog house", both):
             return "MECH_PINCH_POINT"
         if re.search(r"hammer|brick", both):
             return "MECH_PROJECTILE"
+        if re.search(r"liquid metal|\btip\b", both):
+            return "FIRE_MOLTEN_METAL"
+        if re.search(r"electrode|slide gate|cylinder|clamp|plate", both):
+            return "MECH_PINCH_POINT"
+        if re.search(r"placement|placing|weighment|handling|shifting", both):
+            return "MECH_HEAVY_LIFTING"
         return "MECH_UNGUARDED_ROTATING"
     return "MECH_UNGUARDED_ROTATING"
 
@@ -612,6 +635,10 @@ def ensure_matrix(cur) -> str:
     bands by GT (the plant only distinguishes acceptable / significant)."""
     mid = one(cur, 'SELECT id FROM "RiskMatrix" WHERE code=%s', MATRIX_CODE)
     if mid:
+        # The plant has two classes only: GT above 3.33 is not acceptable, so no
+        # level above LOW is "tolerable with ALARP".
+        cur.execute('UPDATE "RiskMatrix" SET "alarpBands"=%s, "updatedAt"=%s WHERE id=%s',
+                    (psycopg2.extras.Json(ALARP_BANDS), NOW, mid))
         return mid
     mid = new_id()
     insert_many(cur, "RiskMatrix", [dict(
@@ -624,7 +651,7 @@ def ensure_matrix(cur) -> str:
         acceptableResidual={"routine": "LOW", "non_routine": "LOW", "emergency": "LOW"},
         controlHierarchyEnforced=True, isActive=True, isDefault=False, isGlobal=False,
         createdAt=NOW, updatedAt=NOW,
-        alarpBands={"LOW": "BROADLY_ACCEPTABLE", "MODERATE": "TOLERABLE", "HIGH": "UNACCEPTABLE", "CRITICAL": "UNACCEPTABLE"},
+        alarpBands=ALARP_BANDS,
     )])
     insert_many(cur, "RiskMatrixLikelihood", [dict(
         id=new_id(), matrixId=mid, score=n, label=f"SP x LH x DE = {n}",
@@ -773,6 +800,19 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
             renumbered.append((sec, c["xl_row"], c["sno_in_sheet"], target["sno"]))
         ctrl_for_row[target["xl_row"]].append(c)
 
+    # Crane-borne operations whose HIRA text does not say "crane": the plant's own
+    # QSD/25/F strategy row prescribes crane inspection, so the equipment/machinery
+    # hazard is a crane / lifting-gear failure.
+    for r in rows:
+        if not re.search(r"equipment|machin|tool", (r["hazard"] or "").lower()) or r["masters"] == ["MECH-008"]:
+            continue
+        if any(re.search(r"crane", " ".join(str(c.get(k) or "") for k, _, _ in CONTROL_COLUMNS), re.I)
+               for c in ctrl_for_row.get(r["xl_row"], [])):
+            r["masters"] = ["MECH-008"]
+            r["hazardTypes"] = ["EQUIPMENT_FAILURE"]
+            r["hazardType"] = "EQUIPMENT_FAILURE"
+            r["masterNote"] = "crane, per the QSD/25/F crane-inspection control"
+
     source = {"meta": {**{k: meta.get(k) for k in ("file", "form24", "form25", "dept", "revision", "date", "leader",
                                                     "team", "non_managerial", "abbreviations", "footnote", "author",
                                                     "lastModifiedBy", "created", "modified")},
@@ -790,13 +830,18 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
         f"Plant method: SV = LH x CN, GT = SP x SV x DE; significant score (sheet) = "
         f"{meta.get('significantScoreCell')}; not acceptable when GT > 3.33 or any legal/domino/chronic/emergency "
         f"concern is Y. SafeOps rates it on the matrix {MATRIX_CODE}: likelihood = SP x LH x DE, severity = CN, "
-        f"so the risk score equals GT.\n"
+        f"so the risk score equals GT (where the sheet's own SV or GT is typed inconsistently, the score follows "
+        f"the factors and the entry rationale says so).\n"
         f"Previous Score (GT) column: '*' = {(meta.get('footnote') or '').lstrip('* ')} (first assessed in this revision).\n"
-        f"Approval block in the workbook: {meta.get('approval24')} - names and signatures left blank. "
+        f"Controls tab: {meta.get('revision25')}.\n"
+        f"Approval blocks in the workbook - HIRA tab: {meta.get('approval24')}; Controls tab: "
+        f"{meta.get('approval25')} - all names and signatures left blank.\n"
         f"Workbook author {meta.get('author')}, created {(meta.get('created') or '')[:10]}, last modified "
         f"{(meta.get('modified') or '')[:10]} by {meta.get('lastModifiedBy')}.\n"
         f"Not in the workbook (set by the import): frequency (DAILY for R, OCCASIONAL for NR), review cycle "
-        f"(annual), persons exposed (0 = not recorded)."
+        f"(annual), persons exposed (0 = not recorded). Hazard masters are SafeOps classifications of the sheet "
+        f"text; where the library has no exact master the nearest is used (heat radiation -> UV radiation, animal "
+        f"bite -> biological agent, communication failure / human behaviour / mobile phone -> behavioural)."
     )
 
     for sec in sections:
@@ -827,9 +872,24 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
                 prev = r["prev_gt"]
                 prev_txt = ("first assessed in this revision ('*')" if str(prev).strip() == "*"
                             else f"previous GT {prev}" if prev not in (None, "") else "previous GT blank")
-                return (f"{r['hazard']} [{r['rnr']}]: SP {r['SP']} x (LH {r['LH']} x CN {r['CN']} = SV {r['SV']}) "
+                rnr = f"{r['rnr']}, blank in sheet: taken from the row above" if r["rnr_blank"] else r["rnr"]
+                notes = []
+                if None not in (r["LH"], r["CN"], r["SV"]) and r["LH"] * r["CN"] != r["SV"]:
+                    notes.append(f"sheet SV is typed as {r['SV']} although LH x CN = {r['LH'] * r['CN']}; SafeOps "
+                                 f"scores SP x LH x CN x DE = {r['L'] * r['CN']}")
+                elif None not in (r["SP"], r["SV"], r["DE"], r["GT"]) and r["SP"] * r["SV"] * r["DE"] != r["GT"]:
+                    notes.append(f"sheet GT is typed as {r['GT']} although SP x SV x DE = {r['SP'] * r['SV'] * r['DE']}")
+                said = (r["acceptable"] or "").lower()
+                if said.startswith("y") and not r["acceptableByRule"]:
+                    notes.append("client inconsistency: the sheet says Yes although the plant rule gives No")
+                elif said.startswith("n") and r["acceptableByRule"]:
+                    notes.append("the sheet says No although the plant rule would allow Yes")
+                elif not said:
+                    notes.append(f"Yes/No blank in sheet; the plant rule gives {'Yes' if r['acceptableByRule'] else 'No'}")
+                return (f"{r['hazard']} [{rnr}]: SP {r['SP']} x (LH {r['LH']} x CN {r['CN']} = SV {r['SV']}) "
                         f"x DE {r['DE']} = GT {r['GT']}" + (f", concerns {'/'.join(concerns)}" if concerns else "")
-                        + f", acceptable: {r['acceptable'] or 'blank'}, {prev_txt} (sheet row {r['xl_row']})")
+                        + f", acceptable: {r['acceptable'] or 'blank'}, {prev_txt} (sheet row {r['xl_row']})"
+                        + (f" [{'; '.join(notes)}]" if notes else ""))
 
             variants = []
             for r in group:
@@ -844,6 +904,9 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
                     if diff:
                         variants.append(f"QSD/25/F row {c['xl_row']} words it differently: " + "; ".join(diff))
                         c["variant"] = diff
+                    if c["sno_in_sheet"] is not None and c["sno_in_sheet"] != sno:
+                        variants.append(f"QSD/25/F row {c['xl_row']} is numbered S.No {c['sno_in_sheet']} in the sheet; "
+                                        f"by its activity and hazard it belongs to S.No {sno}")
 
             entries.append(dict(
                 id=eid, studyId=study_id, sequenceNumber=sno, groupLabel=None,
@@ -869,6 +932,8 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
                 residualSeverityId=sev[S], residualSeverityScore=S,
                 residualRiskScore=score, residualRiskLevel=level, residualRiskColor=color,
                 residualAcceptable=acceptable, residualAutoCalculated=False,
+                initialAlarpRegion=ALARP_BANDS.get(level), residualAlarpRegion=ALARP_BANDS.get(level),
+                alarpStatus="NOT_REQUIRED",
                 residualAcceptanceRationale="Acceptable OH&S risk per QSD/24/F: "
                                             + ("Yes" if acceptable else "No" if acceptable is False else "not stated")
                                             + (" (" + "; ".join(f"row {r['xl_row']}: {r['acceptable'] or 'blank'}"
@@ -937,6 +1002,8 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
                             continue
                         val = str(val)
                         cols[col] = val
+                        if any(norm(val) == norm(x["control_ref"]) for x in group if x["control_ref"]):
+                            continue  # the same measure as the HIRA tab's control column, already recorded
                         if col == "procedure" and norm_ref(val) and any(
                                 norm_ref(val) in norm_ref(x["control_ref"]) for x in group):
                             continue  # same SOP as the HIRA tab's control column
@@ -960,6 +1027,9 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
             scopeType="AREA", title=title,
             description=f"{sec} of the {meta.get('dept')} steel melt shop: {len(snos)} activities, S.No 1-{max(snos)}"
                         + (f" (no S.No {', '.join(map(str, missing))} in the workbook)" if missing else "") + ".\n"
+                        + ("This block has no heading in the workbook: its rows follow the AFS area with S.No "
+                           "restarting at 1 and activity 'All Activities'; the study name was given by the import.\n"
+                           if section_key(sec) == "general all" else "")
                         + desc_common,
             riskMatrixId=matrix_id, teamLeaderId=leader_id, status="ACTIVE",
             initiatedAt=eff, completedAt=eff, approvedAt=None, approvedById=None, effectiveFrom=eff,
@@ -1046,12 +1116,14 @@ def import_observations(cur, path, plant_id, user_id, replace=False):
         created = when(r["Created Date"]) or NOW
         closed_date, review_date = when(r["Closed Date"]), when(r.get("Final Review Date"))
         sheet_closed = clean(r["Status"]) == "Closed"
+        # A closure submitted after the last final review (or never reviewed) awaits review.
+        resubmitted = bool(closed_date and review_date and closed_date > review_date)
         if sheet_closed:
             status = "CLOSED"
-        elif closed_date and not review_date:
+        elif closed_date and (not review_date or resubmitted):
             status = "IN_PROGRESS"  # closure submitted by the task executor, final review pending
         else:
-            status = "OPEN"  # not acted on yet, or the submitted closure was rejected at final review
+            status = "OPEN"  # not acted on yet, or the submitted closure was sent back at final review
 
         details = [
             f"Inspection code: {code}",
@@ -1066,17 +1138,31 @@ def import_observations(cur, path, plant_id, user_id, replace=False):
             f"Impacted: {person(r['Individual Name'], extra=exact(r['Impacted Individual']))}" if exact(r["Impacted Individual"]) else None,
             f"Impacted function: {exact(r['Impacted Function'])}" if exact(r.get("Impacted Function")) else None,
         ]
-        remarks = [text_value(r.get("Closing Remarks"))]
-        if not sheet_closed and closed_date:
-            remarks.append(f"Closure submitted by the task executor: {ist(closed_date)}"
-                           + ("" if review_date else " (awaiting final review)"))
+        # closingRemark reads as a timeline: what the executor wrote, then the
+        # submission / review events in the order they happened.
         final = text_value(r.get("Final Remarks"))
-        if review_date:
-            remarks.append(f"Final review: {ist(review_date)}" + (f" - {final}" if final else ""))
-        elif final:
-            remarks.append(f"Final review: {final}")
-        for label, col in (("Approval remarks", "Approve Remarks"), ("Closure rejected", "Closing Rejection Remarks"),
-                           ("Exceptional remarks", "Exceptional Remarks"), ("Rejection remarks", "Rejection Remarks")):
+        rejected = text_value(r.get("Closing Rejection Remarks"))
+        review_line = (f"Final review: {ist(review_date)}" + (f" - {final}" if final else "")) if review_date else \
+            (f"Final review: {final}" if final else None)
+        remarks = [text_value(r.get("Closing Remarks"))]
+        if sheet_closed:
+            if rejected:  # the register keeps only the last rejection, undated; it came before the final approval
+                remarks.append(f"Earlier closure rejected (undated): {rejected}")
+            remarks.append(review_line)
+        elif closed_date and review_date and not resubmitted:  # submitted, then sent back at review
+            remarks += [f"Closure submitted by the task executor: {ist(closed_date)}", review_line,
+                        f"Closure rejected: {rejected}" if rejected else None]
+        elif resubmitted:  # sent back at review, then submitted again
+            remarks += [review_line, f"Closure rejected: {rejected}" if rejected else None,
+                        f"Closure resubmitted by the task executor: {ist(closed_date)} (awaiting final review)"]
+        else:
+            if closed_date:
+                remarks.append(f"Closure submitted by the task executor: {ist(closed_date)} (awaiting final review)")
+            remarks.append(review_line)
+            if rejected:
+                remarks.append(f"Closure rejected: {rejected}")
+        for label, col in (("Approval remarks", "Approve Remarks"), ("Exceptional remarks", "Exceptional Remarks"),
+                           ("Rejection remarks", "Rejection Remarks")):
             if text_value(r.get(col)):
                 remarks.append(f"{label}: {text_value(r.get(col))}")
         remarks = [x for x in remarks if x]
