@@ -21,11 +21,31 @@ NO_EVIDENCE = eng.Evidence()
 # ── R1: one matrix, one set of thresholds ─────────────────────────────────
 
 EXPECTED = {  # (L, S) -> level, every cell of the 5x5
-    (1, 1): "LOW", (1, 2): "LOW", (1, 3): "LOW", (1, 4): "MODERATE", (1, 5): "MODERATE",
-    (2, 1): "LOW", (2, 2): "MODERATE", (2, 3): "MODERATE", (2, 4): "HIGH", (2, 5): "HIGH",
-    (3, 1): "LOW", (3, 2): "MODERATE", (3, 3): "HIGH", (3, 4): "HIGH", (3, 5): "CRITICAL",
-    (4, 1): "MODERATE", (4, 2): "HIGH", (4, 3): "HIGH", (4, 4): "CRITICAL", (4, 5): "CRITICAL",
-    (5, 1): "MODERATE", (5, 2): "HIGH", (5, 3): "CRITICAL", (5, 4): "CRITICAL", (5, 5): "CRITICAL",
+    (1, 1): "LOW",
+    (1, 2): "LOW",
+    (1, 3): "LOW",
+    (1, 4): "MODERATE",
+    (1, 5): "MODERATE",
+    (2, 1): "LOW",
+    (2, 2): "MODERATE",
+    (2, 3): "MODERATE",
+    (2, 4): "HIGH",
+    (2, 5): "HIGH",
+    (3, 1): "LOW",
+    (3, 2): "MODERATE",
+    (3, 3): "HIGH",
+    (3, 4): "HIGH",
+    (3, 5): "CRITICAL",
+    (4, 1): "MODERATE",
+    (4, 2): "HIGH",
+    (4, 3): "HIGH",
+    (4, 4): "CRITICAL",
+    (4, 5): "CRITICAL",
+    (5, 1): "MODERATE",
+    (5, 2): "HIGH",
+    (5, 3): "CRITICAL",
+    (5, 4): "CRITICAL",
+    (5, 5): "CRITICAL",
 }
 
 
@@ -62,8 +82,12 @@ def test_plant_thresholds_from_config():
 def test_matrix_rule_detects_plant_index_and_strict_rule():
     class M:  # noqa: D401 - a matrix-like stub
         code = "JSL_QSD24_GT"
-        alarpBands = {"LOW": "BROADLY_ACCEPTABLE", "MODERATE": "UNACCEPTABLE", "HIGH": "UNACCEPTABLE",
-                      "CRITICAL": "UNACCEPTABLE"}
+        alarpBands = {
+            "LOW": "BROADLY_ACCEPTABLE",
+            "MODERATE": "UNACCEPTABLE",
+            "HIGH": "UNACCEPTABLE",
+            "CRITICAL": "UNACCEPTABLE",
+        }
         acceptableResidual = {"routine": "LOW"}
 
     r = matrix_rule(M, CFG, [f"Plant index {n}" for n in range(1, 6)])
@@ -71,8 +95,12 @@ def test_matrix_rule_detects_plant_index_and_strict_rule():
 
     class S:
         code = "STD_5X5"
-        alarpBands = {"LOW": "BROADLY_ACCEPTABLE", "MODERATE": "TOLERABLE", "HIGH": "TOLERABLE",
-                      "CRITICAL": "UNACCEPTABLE"}
+        alarpBands = {
+            "LOW": "BROADLY_ACCEPTABLE",
+            "MODERATE": "TOLERABLE",
+            "HIGH": "TOLERABLE",
+            "CRITICAL": "UNACCEPTABLE",
+        }
         acceptableResidual = {"routine": "MODERATE"}
 
     r = matrix_rule(S, CFG, ["Rare", "Unlikely", "Possible", "Likely", "Almost Certain"])
@@ -123,20 +151,31 @@ def test_dropped_crane_load_rated_s3_is_understated():
 
 
 def test_suspended_one_tonne_load_is_s5():
-    h = H("h", "Dropped load", code="MECH-008", category="lifting", consequence="crushed by a falling 1 t bag: fatal")
+    h = H(
+        "h",
+        "Dropped load",
+        code="MECH-008",
+        category="lifting",
+        consequence="crushed by a falling 1 t bag: fatal",
+    )
     assert eng.credible_severity(h.family, h.text, CFG)[0] == 5
 
 
 def test_cuts_dust_manual_handling_are_s1_to_s3():
-    for code, cat in (("MECH_SHARP_EDGE", "mechanical"), ("ENV_DUST_AIRBORNE", "environmental"),
-                      ("MECH_HEAVY_LIFTING", "mechanical")):
+    for code, cat in (
+        ("MECH_SHARP_EDGE", "mechanical"),
+        ("ENV_DUST_AIRBORNE", "environmental"),
+        ("MECH_HEAVY_LIFTING", "mechanical"),
+    ):
         h = H("h", "x", code=code, category=cat)
         r = eng.calibrate_severity(5, family=h.family, text=h.text, cfg=CFG, adjust=True)
         assert r["finding"]["kind"] == "OVERSTATED" and r["value"] == 3
 
 
 def test_manual_lifting_is_not_crane_lifting():
-    assert H("h", "Heavy lifting", code="MECH_HEAVY_LIFTING", category="mechanical").family == "MANUAL_HANDLING"
+    assert (
+        H("h", "Heavy lifting", code="MECH_HEAVY_LIFTING", category="mechanical").family == "MANUAL_HANDLING"
+    )
 
 
 # ── R5: control credit ────────────────────────────────────────────────────
@@ -150,16 +189,26 @@ def resid(l, s, controls, hazard=LIFT):
 
 
 def test_admin_and_ppe_never_lower_severity():
-    r = resid(2, 3, [C("a", "ADMINISTRATIVE", "Work instruction SOP-12"),
-                     C("b", "ADMINISTRATIVE", "Third party inspection of cranes"),
-                     C("p", "PPE", "Face shield, fire resistant jacket")])
+    r = resid(
+        2,
+        3,
+        [
+            C("a", "ADMINISTRATIVE", "Work instruction SOP-12"),
+            C("b", "ADMINISTRATIVE", "Third party inspection of cranes"),
+            C("p", "PPE", "Face shield, fire resistant jacket"),
+        ],
+    )
     assert r["severity"] == 3  # never the v1 "L1 x S2"
 
 
 def test_admin_combined_is_one_step_and_provisional_without_verification():
-    r = resid(3, 5, [C("a", "ADMINISTRATIVE", "Lift plan for crane lifts"), C("b", "ADMINISTRATIVE", "Crane SOP")])
+    r = resid(
+        3, 5, [C("a", "ADMINISTRATIVE", "Lift plan for crane lifts"), C("b", "ADMINISTRATIVE", "Crane SOP")]
+    )
     assert (r["likelihood"], r["stepsL"]) == (2, 1) and r["provisional"]
-    r = resid(3, 5, [C("a", "ADMINISTRATIVE", "Lift plan for crane lifts", verification_method="signed per lift")])
+    r = resid(
+        3, 5, [C("a", "ADMINISTRATIVE", "Lift plan for crane lifts", verification_method="signed per lift")]
+    )
     assert not r["provisional"]
 
 
@@ -184,25 +233,47 @@ def test_baseline_ppe_gets_no_credit():
 
 def test_two_evidenced_engineering_controls_give_two_steps():
     one = resid(3, 5, [C("e1", "ENGINEERING", "Crane overload limiter", effectiveness="EFFECTIVE")])
-    two = resid(3, 5, [C("e1", "ENGINEERING", "Crane overload limiter", effectiveness="EFFECTIVE"),
-                       C("e2", "ENGINEERING", "Hard barricaded exclusion zone under the crane", evidence_attached=True)])
+    two = resid(
+        3,
+        5,
+        [
+            C("e1", "ENGINEERING", "Crane overload limiter", effectiveness="EFFECTIVE"),
+            C("e2", "ENGINEERING", "Hard barricaded exclusion zone under the crane", evidence_attached=True),
+        ],
+    )
     assert one["stepsL"] == 1 and two["stepsL"] == 2
 
 
 def test_mitigating_engineering_needs_justification_for_severity():
     fall = H("fall", "Fall from height", code="WAH-003", category="height", consequence="fall: fatal")
-    unjust = eng.residual_from_controls(3, 5, [C("m", "ENGINEERING", "Fall arrest harness lifeline")], CFG,
-                                        hazard=fall)
-    just = eng.residual_from_controls(3, 5, [C("m", "ENGINEERING", "Fall arrest harness lifeline",
-                                               effectiveness="EFFECTIVE")], CFG, hazard=fall)
+    unjust = eng.residual_from_controls(
+        3, 5, [C("m", "ENGINEERING", "Fall arrest harness lifeline")], CFG, hazard=fall
+    )
+    just = eng.residual_from_controls(
+        3,
+        5,
+        [C("m", "ENGINEERING", "Fall arrest harness lifeline", effectiveness="EFFECTIVE")],
+        CFG,
+        hazard=fall,
+    )
     assert unjust["severity"] == 5 and just["severity"] == 4
 
 
 def test_total_reduction_capped_at_three_and_l_floor():
-    r = resid(5, 5, [C("x", "ELIMINATION", "Bags fed by a closed pneumatic system: no crane lift",
-                       effectiveness="EFFECTIVE"),
-                     C("e1", "ENGINEERING", "Crane overload limiter", effectiveness="EFFECTIVE"),
-                     C("a", "ADMINISTRATIVE", "Crane lift plan", verification_method="audit")])
+    r = resid(
+        5,
+        5,
+        [
+            C(
+                "x",
+                "ELIMINATION",
+                "Bags fed by a closed pneumatic system: no crane lift",
+                effectiveness="EFFECTIVE",
+            ),
+            C("e1", "ENGINEERING", "Crane overload limiter", effectiveness="EFFECTIVE"),
+            C("a", "ADMINISTRATIVE", "Crane lift plan", verification_method="audit"),
+        ],
+    )
     assert r["stepsL"] + r["stepsS"] == 3
     r = resid(1, 5, [C("e1", "ENGINEERING", "Crane overload limiter", effectiveness="EFFECTIVE")])
     assert r["likelihood"] == 1
@@ -223,13 +294,18 @@ def test_planned_controls_earn_no_credit():
 
 # ── R7: tolerability terminates ───────────────────────────────────────────
 
-ALL = {"eliminationConsidered": True, "engineeringInPlaceOrPlanned": True, "statutoryCurrent": True,
-       "reviewDateSet": True}
+ALL = {
+    "eliminationConsidered": True,
+    "engineeringInPlaceOrPlanned": True,
+    "statutoryCurrent": True,
+    "reviewDateSet": True,
+}
 
 
 def tol(l, s, alarp=ALL, strict=False, credible=None, overridden=False):
-    return eng.tolerability(eng.rate(l, s, CFG), credible_s=credible, alarp=alarp, strict=strict, cfg=CFG,
-                            overridden=overridden)
+    return eng.tolerability(
+        eng.rate(l, s, CFG), credible_s=credible, alarp=alarp, strict=strict, cfg=CFG, overridden=overridden
+    )
 
 
 def test_s5_at_l1_with_checklist_is_tolerable_and_stops():
@@ -267,25 +343,55 @@ def test_alarp_band_can_be_switched_off():
 
 
 def test_semantic_dedupe_example():
-    assert rec.similarity("third party inspection of cranes", "pre-use check + third-party examination") >= 0.5
-    assert rec.similarity("Overload limiter and limit switches on the crane", "Third party inspection of cranes") < 0.5
+    assert (
+        rec.similarity("third party inspection of cranes", "pre-use check + third-party examination") >= 0.5
+    )
+    assert (
+        rec.similarity("Overload limiter and limit switches on the crane", "Third party inspection of cranes")
+        < 0.5
+    )
 
 
 # ── Review: benchmarks, caps, convergence, determinism ────────────────────
 
 ENTRY1_HAZARDS = [
-    H("h1", "Crane / lifting operations", code="MECH-008", category="lifting",
-      consequence="Rigger crushed by a falling 1 t bag: fatal"),
-    H("h2", "Swinging load", code="VEH-010", category="lifting",
-      consequence="struck or pinned by a swinging bag: crush injury, possible fatality"),
-    H("h3", "Fall from bin top", code="WAH-003", category="height",
-      consequence="falls into the bin opening: fatality, engulfment"),
-    H("h4", "Falling object", code="MECH_FALLING_OBJECT", category="mechanical",
-      consequence="struck by falling alloy lumps: head injury"),
+    H(
+        "h1",
+        "Crane / lifting operations",
+        code="MECH-008",
+        category="lifting",
+        consequence="Rigger crushed by a falling 1 t bag: fatal",
+    ),
+    H(
+        "h2",
+        "Swinging load",
+        code="VEH-010",
+        category="lifting",
+        consequence="struck or pinned by a swinging bag: crush injury, possible fatality",
+    ),
+    H(
+        "h3",
+        "Fall from bin top",
+        code="WAH-003",
+        category="height",
+        consequence="falls into the bin opening: fatality, engulfment",
+    ),
+    H(
+        "h4",
+        "Falling object",
+        code="MECH_FALLING_OBJECT",
+        category="mechanical",
+        consequence="struck by falling alloy lumps: head injury",
+    ),
     H("h5", "Sharp edge", code="MECH_SHARP_EDGE", category="mechanical", consequence="hand cut by the knife"),
     H("h6", "Manual handling", code="MECH_HEAVY_LIFTING", category="mechanical", consequence="back strain"),
-    H("h7", "Airborne dust", code="ENV_DUST_AIRBORNE", category="environmental",
-      consequence="chronic respiratory disease"),
+    H(
+        "h7",
+        "Airborne dust",
+        code="ENV_DUST_AIRBORNE",
+        category="environmental",
+        consequence="chronic respiratory disease",
+    ),
 ]
 ENTRY1_EXISTING = [
     C("c1", "ADMINISTRATIVE", "Third-party examination of EOT crane and lifting tackles (statutory)"),
@@ -295,20 +401,52 @@ ENTRY1_EXISTING = [
 
 
 def entry1(controls=None):
-    return rv.EntryInput("e1", "#1", "Bag-to-bin feeding by crane", "ROUTINE", "DAILY",
-                         copy.deepcopy(ENTRY1_HAZARDS), 4, 5, (4, 5), controls=copy.deepcopy(controls or []))
+    return rv.EntryInput(
+        "e1",
+        "#1",
+        "Bag-to-bin feeding by crane",
+        "ROUTINE",
+        "DAILY",
+        copy.deepcopy(ENTRY1_HAZARDS),
+        4,
+        5,
+        (4, 5),
+        controls=copy.deepcopy(controls or []),
+    )
 
 
 def entry6():
     return rv.EntryInput(
-        "e6", "S.No 6", "Placement of the bucket/bags at the top of the bin", "ROUTINE", "DAILY",
-        [H("h1", "Crane / lifting equipment failure - dropped load", code="MECH-008", category="lifting",
-           consequence="Person may get injured")], 2, 3, (2, 3), rating_basis="WITH_CONTROLS",
-        controls=[C("c1", "ADMINISTRATIVE", "Work instruction / SOP DOC No SM01/03/W"),
-                  C("c2", "ADMINISTRATIVE", "Administrative control: Third party inspection of cranes"),
-                  C("c3", "PPE", "PPE: Helmet, Safety shoes, Dust mask, hand gloves, Fire resistant jacket, "
-                                 "face shield, safety goggles")],
-        review_date_set=True)
+        "e6",
+        "S.No 6",
+        "Placement of the bucket/bags at the top of the bin",
+        "ROUTINE",
+        "DAILY",
+        [
+            H(
+                "h1",
+                "Crane / lifting equipment failure - dropped load",
+                code="MECH-008",
+                category="lifting",
+                consequence="Person may get injured",
+            )
+        ],
+        2,
+        3,
+        (2, 3),
+        rating_basis="WITH_CONTROLS",
+        controls=[
+            C("c1", "ADMINISTRATIVE", "Work instruction / SOP DOC No SM01/03/W"),
+            C("c2", "ADMINISTRATIVE", "Administrative control: Third party inspection of cranes"),
+            C(
+                "c3",
+                "PPE",
+                "PPE: Helmet, Safety shoes, Dust mask, hand gloves, Fire resistant jacket, "
+                "face shield, safety goggles",
+            ),
+        ],
+        review_date_set=True,
+    )
 
 
 def review(e, rule=STD, plant=None, ev=NO_EVIDENCE):
@@ -360,41 +498,96 @@ def test_entry6_terminates_at_the_override_not_more_controls():
 
 
 def test_zero_recommendations_when_everything_is_acceptable():
-    e = rv.EntryInput("e", "#9", "Office filing", "ROUTINE", "DAILY",
-                      [H("h", "Slip on floor", code="PHYS_SLIP_TRIP", category="physical", likelihood=1, severity=2)],
-                      1, 2, None, controls=[C("c", "ADMINISTRATIVE", "Housekeeping schedule")],
-                      hazard_ratings_stored=True)
+    e = rv.EntryInput(
+        "e",
+        "#9",
+        "Office filing",
+        "ROUTINE",
+        "DAILY",
+        [H("h", "Slip on floor", code="PHYS_SLIP_TRIP", category="physical", likelihood=1, severity=2)],
+        1,
+        2,
+        None,
+        controls=[C("c", "ADMINISTRATIVE", "Housekeeping schedule")],
+        hazard_ratings_stored=True,
+    )
     r = review(e)
     assert r["recommendations"] == [] and r["canSubmit"]
 
 
 def test_recommendation_caps_by_entry_level():
-    many = [H(f"h{i}", n, code=c, category=cat, likelihood=3, severity=5)
-            for i, (n, c, cat) in enumerate([("Crane", "MECH-008", "lifting"), ("Fall", "WAH-003", "height"),
-                                             ("Electric", "ELEC-001", "electrical"), ("Vehicle", "VEH-001",
-                                                                                      "transportation"),
-                                             ("Confined", "CS-001", "confined_space"), ("Press", "MECH-001",
-                                                                                         "mechanical"),
-                                             ("Pressure", "MECH-004", "pressure")])]
-    e = rv.EntryInput("e", "#x", "Shutdown maintenance", "NON_ROUTINE", "OCCASIONAL", many, 3, 5, None,
-                      controls=[C("c", "ADMINISTRATIVE", "Shutdown work instruction")], hazard_ratings_stored=True)
+    many = [
+        H(f"h{i}", n, code=c, category=cat, likelihood=3, severity=5)
+        for i, (n, c, cat) in enumerate(
+            [
+                ("Crane", "MECH-008", "lifting"),
+                ("Fall", "WAH-003", "height"),
+                ("Electric", "ELEC-001", "electrical"),
+                ("Vehicle", "VEH-001", "transportation"),
+                ("Confined", "CS-001", "confined_space"),
+                ("Press", "MECH-001", "mechanical"),
+                ("Pressure", "MECH-004", "pressure"),
+            ]
+        )
+    ]
+    e = rv.EntryInput(
+        "e",
+        "#x",
+        "Shutdown maintenance",
+        "NON_ROUTINE",
+        "OCCASIONAL",
+        many,
+        3,
+        5,
+        None,
+        controls=[C("c", "ADMINISTRATIVE", "Shutdown work instruction")],
+        hazard_ratings_stored=True,
+    )
     r = review(e)
     assert len(r["recommendations"]) <= 5
-    low = rv.EntryInput("e", "#y", "Bin top housekeeping", "ROUTINE", "WEEKLY",
-                        [H(f"m{i}", n, code=c, category=cat, likelihood=3, severity=2) for i, (n, c, cat) in enumerate(
-                            [("Slip", "PHYS_SLIP_TRIP", "physical"), ("Cut", "MECH_SHARP_EDGE", "mechanical"),
-                             ("Dust", "ENV_DUST_AIRBORNE", "environmental"), ("Back", "MECH_HEAVY_LIFTING",
-                                                                               "mechanical")])],
-                        3, 2, None, controls=[C("c", "PPE", "Helmet, safety shoes")], hazard_ratings_stored=True)
+    low = rv.EntryInput(
+        "e",
+        "#y",
+        "Bin top housekeeping",
+        "ROUTINE",
+        "WEEKLY",
+        [
+            H(f"m{i}", n, code=c, category=cat, likelihood=3, severity=2)
+            for i, (n, c, cat) in enumerate(
+                [
+                    ("Slip", "PHYS_SLIP_TRIP", "physical"),
+                    ("Cut", "MECH_SHARP_EDGE", "mechanical"),
+                    ("Dust", "ENV_DUST_AIRBORNE", "environmental"),
+                    ("Back", "MECH_HEAVY_LIFTING", "mechanical"),
+                ]
+            )
+        ],
+        3,
+        2,
+        None,
+        controls=[C("c", "PPE", "Helmet, safety shoes")],
+        hazard_ratings_stored=True,
+    )
     r = review(low)
     assert len(r["recommendations"]) <= 3
 
 
 def test_recommendations_dedupe_against_existing_capas_and_siblings():
-    plant = rv.PlantData(open_capas=[{"id": "capa1", "number": "CAPA-7",
-                                      "text": "Hard barricaded exclusion zone under the crane travel path"}],
-                         sibling_recommended=[{"label": "#2", "text": "Overload limiter and limit switches on the "
-                                                                      "crane, function-tested each shift"}])
+    plant = rv.PlantData(
+        open_capas=[
+            {
+                "id": "capa1",
+                "number": "CAPA-7",
+                "text": "Hard barricaded exclusion zone under the crane travel path",
+            }
+        ],
+        sibling_recommended=[
+            {
+                "label": "#2",
+                "text": "Overload limiter and limit switches on the crane, function-tested each shift",
+            }
+        ],
+    )
     r = review(entry1(ENTRY1_EXISTING), plant=plant)
     descs = " ".join(x["description"].lower() for x in r["recommendations"])
     assert "exclusion zone" not in descs
@@ -412,11 +605,20 @@ def test_high_cost_only_when_residual_high_and_one_capex_with_interim():
 
 
 def test_existing_controls_offered_once_and_unverified():
-    plant = rv.PlantData(existing_control_proposals=[
-        {"hierarchy": "ADMINISTRATIVE", "description": "Third-party examination of EOT crane (Form 10, register)",
-         "source": "Statutory inspection register"},
-        {"hierarchy": "ADMINISTRATIVE", "description": "Work instruction WI-AFS-03 bag feeding",
-         "source": "Sibling entry #2"}])
+    plant = rv.PlantData(
+        existing_control_proposals=[
+            {
+                "hierarchy": "ADMINISTRATIVE",
+                "description": "Third-party examination of EOT crane (Form 10, register)",
+                "source": "Statutory inspection register",
+            },
+            {
+                "hierarchy": "ADMINISTRATIVE",
+                "description": "Work instruction WI-AFS-03 bag feeding",
+                "source": "Sibling entry #2",
+            },
+        ]
+    )
     r = review(entry1(), plant=plant)
     assert len(r["existingControlProposals"]) == 2
     assert all(p["effectiveness"] == "NOT_VERIFIED" for p in r["existingControlProposals"])
@@ -424,8 +626,9 @@ def test_existing_controls_offered_once_and_unverified():
     assert nc["action"] == "USE_EXISTING_CONTROLS" and "2 existing controls" in nc["fix"]
 
 
-@pytest.mark.parametrize("make,rule", [(lambda: entry1(), STD), (lambda: entry1(ENTRY1_EXISTING), STD),
-                                       (entry6, STRICT)])
+@pytest.mark.parametrize(
+    "make,rule", [(lambda: entry1(), STD), (lambda: entry1(ENTRY1_EXISTING), STD), (entry6, STRICT)]
+)
 def test_rerun_after_applying_raises_no_new_blockers(make, rule):
     e = make()
     r1 = review(e, rule=rule)

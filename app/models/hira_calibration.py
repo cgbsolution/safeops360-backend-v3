@@ -25,7 +25,9 @@ class HiraCalibrationConfig(Base, IdMixin):
     isActive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     note: Mapped[str | None] = mapped_column(Text)
     createdById: Mapped[str | None] = mapped_column(String)
-    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class HiraRegulationMap(Base, IdMixin):
@@ -44,9 +46,12 @@ class HiraRegulationMap(Base, IdMixin):
     note: Mapped[str | None] = mapped_column(Text)
     isActive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sortOrder: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updatedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
-                                                onupdate=func.now(), nullable=False)
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updatedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class HiraCopilotShadowRun(Base, IdMixin):
@@ -54,7 +59,9 @@ class HiraCopilotShadowRun(Base, IdMixin):
 
     __tablename__ = "hira_copilot_shadow_runs"
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     plant_id: Mapped[str | None] = mapped_column(String, index=True)
     entry_id: Mapped[str | None] = mapped_column(String, index=True)
     surface: Mapped[str] = mapped_column(String, nullable=False)  # REVIEW | ASSISTANT | COPILOT_DRAFT

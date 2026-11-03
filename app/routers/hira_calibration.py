@@ -52,15 +52,19 @@ async def _require(db: AsyncSession, user: User, code: str, plant_id: str | None
 def _validate(cfg: dict[str, Any]) -> None:
     unknown = set(cfg) - _TOP_KEYS
     if unknown:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown settings: {', '.join(sorted(unknown))}")
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown settings: {', '.join(sorted(unknown))}"
+        )
     th = cal_config.deep_merge(cal_config.DEFAULT_CONFIG, cfg)["thresholds"]
     try:
         ok = 1 <= int(th["lowMax"]) < int(th["moderateMax"]) < int(th["highMax"]) < 25
     except (TypeError, ValueError, KeyError):
         ok = False
     if not ok:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            "thresholds must be whole numbers with lowMax < moderateMax < highMax < 25")
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "thresholds must be whole numbers with lowMax < moderateMax < highMax < 25",
+        )
 
 
 @router.get("/calibration/config")
@@ -71,8 +75,15 @@ async def get_calibration_config(
 ) -> dict[str, Any]:
     await _require(db, user, "HIRA.READ", plant_id)
     cfg, mode, versions = await cal_config.load(db, plant_id)
-    return {"flag": cal_config.FLAG, "plantId": plant_id, "mode": mode, "config": cfg, "versions": versions,
-            "engineVersion": cal_config.ENGINE_VERSION, "schemaReady": await loader.calibration_schema_ready(db)}
+    return {
+        "flag": cal_config.FLAG,
+        "plantId": plant_id,
+        "mode": mode,
+        "config": cfg,
+        "versions": versions,
+        "engineVersion": cal_config.ENGINE_VERSION,
+        "schemaReady": await loader.calibration_schema_ready(db),
+    }
 
 
 @router.put("/calibration/config")
@@ -85,21 +96,39 @@ async def put_calibration_config(
 
     await _require(db, user, "HIRA.LIBRARY_MANAGE", payload.plantId)
     if not await cal_config.table_exists(db, "HiraCalibrationConfig"):
-        raise HTTPException(status.HTTP_409_CONFLICT,
-                            "The calibration tables are not created yet: run "
-                            "`npx tsx prisma/apply-hira-calibration-ddl.ts` in safeops_360 first.")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "The calibration tables are not created yet: run "
+            "`npx tsx prisma/apply-hira-calibration-ddl.ts` in safeops_360 first.",
+        )
     _validate(payload.config)
     q = select(func.max(HiraCalibrationConfig.version))
-    q = q.where(HiraCalibrationConfig.plantId.is_(None)) if payload.plantId is None \
+    q = (
+        q.where(HiraCalibrationConfig.plantId.is_(None))
+        if payload.plantId is None
         else q.where(HiraCalibrationConfig.plantId == payload.plantId)
+    )
     current = (await db.execute(q)).scalar() or 0
-    row = HiraCalibrationConfig(plantId=payload.plantId, version=current + 1, mode=payload.mode,
-                                config=payload.config, isActive=True, note=payload.note, createdById=user.id)
+    row = HiraCalibrationConfig(
+        plantId=payload.plantId,
+        version=current + 1,
+        mode=payload.mode,
+        config=payload.config,
+        isActive=True,
+        note=payload.note,
+        createdById=user.id,
+    )
     db.add(row)
     await db.commit()
     cfg, mode, versions = await cal_config.load(db, payload.plantId)
-    return {"flag": cal_config.FLAG, "plantId": payload.plantId, "mode": mode, "config": cfg, "versions": versions,
-            "engineVersion": cal_config.ENGINE_VERSION}
+    return {
+        "flag": cal_config.FLAG,
+        "plantId": payload.plantId,
+        "mode": mode,
+        "config": cfg,
+        "versions": versions,
+        "engineVersion": cal_config.ENGINE_VERSION,
+    }
 
 
 @router.get("/calibration/shadow-runs")
@@ -121,10 +150,22 @@ async def calibration_shadow_runs(
     v2_status = Counter(((r.summary or {}).get("v2") or {}).get("status") for r in rows)
     recs = [((r.summary or {}).get("v2") or {}).get("recommendations") or 0 for r in rows]
     return {
-        "runs": [{"id": r.id, "at": r.created_at.isoformat() if r.created_at else None, "surface": r.surface,
-                  "entryId": r.entry_id, "plantId": r.plant_id, "summary": r.summary} for r in rows],
-        "stats": {"count": len(rows), "v2Status": dict(v2_status),
-                  "avgV2Recommendations": round(sum(recs) / len(recs), 2) if recs else None},
+        "runs": [
+            {
+                "id": r.id,
+                "at": r.created_at.isoformat() if r.created_at else None,
+                "surface": r.surface,
+                "entryId": r.entry_id,
+                "plantId": r.plant_id,
+                "summary": r.summary,
+            }
+            for r in rows
+        ],
+        "stats": {
+            "count": len(rows),
+            "v2Status": dict(v2_status),
+            "avgV2Recommendations": round(sum(recs) / len(recs), 2) if recs else None,
+        },
     }
 
 
@@ -147,6 +188,14 @@ async def apply_calibration(
         raise HTTPException(status.HTTP_403_FORBIDDEN, check.reason or "Access denied")
     _, mode, _ = await cal_config.load(db, study.plantId)
     if mode != "ON":
-        await _require(db, user, "HIRA.LIBRARY_MANAGE", study.plantId)  # preview only, for calibration managers
-    return await service.apply(db, entry_id, parts=list(payload.parts), change_reason=payload.changeReason, user=user,
-                               selected_recommendations=payload.recommendationIds)
+        await _require(
+            db, user, "HIRA.LIBRARY_MANAGE", study.plantId
+        )  # preview only, for calibration managers
+    return await service.apply(
+        db,
+        entry_id,
+        parts=list(payload.parts),
+        change_reason=payload.changeReason,
+        user=user,
+        selected_recommendations=payload.recommendationIds,
+    )

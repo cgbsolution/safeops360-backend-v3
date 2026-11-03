@@ -20,8 +20,19 @@ FLAG = "hira.calibration.v2"
 MODES = ("OFF", "SHADOW", "ON")
 
 # Frequency words that mark a likelihood scale as "how often" (vs a plant index).
-_FREQUENCY_WORDS = ("rare", "unlikely", "possible", "likely", "almost certain", "remote", "improbable",
-                    "occasional", "frequent", "probable", "certain")
+_FREQUENCY_WORDS = (
+    "rare",
+    "unlikely",
+    "possible",
+    "likely",
+    "almost certain",
+    "remote",
+    "improbable",
+    "occasional",
+    "frequent",
+    "probable",
+    "certain",
+)
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "schema": 1,
@@ -47,8 +58,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         # Credible worst case per hazard family: min = understated below this,
         # max = overstated above this. s5Keywords lift the floor to 5.
         "rubric": {
-            "LIFTING": {"min": 4, "s5Keywords": ["1 t", "1t ", "tonne", "ton ", "fatal", "over people", "crushed by"]},
-            "HEIGHT": {"min": 4, "s5Keywords": ["fatal", "into the bin", "bin opening", "engulf", "over 2", "2 m", "2m"]},
+            "LIFTING": {
+                "min": 4,
+                "s5Keywords": ["1 t", "1t ", "tonne", "ton ", "fatal", "over people", "crushed by"],
+            },
+            "HEIGHT": {
+                "min": 4,
+                "s5Keywords": ["fatal", "into the bin", "bin opening", "engulf", "over 2", "2 m", "2m"],
+            },
             "MOLTEN": {"min": 4},
             "ELECTRICAL": {"min": 4},
             "CONFINED_SPACE": {"min": 4, "s5Keywords": ["oxygen", "toxic", "engulf", "entrap", "fatal"]},
@@ -70,16 +87,66 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "maxTotalSteps": 3,
         "ppeMaxSeverity": 3,  # PPE earns L-1 only for hazards rated S <= this
         # Baseline site rules: recorded, never credited, never recommended.
-        "baselineKeywords": ["helmet", "hard hat", "safety shoe", "safety shoes", "safety boot", "gumboot",
-                             "hi-vis", "hi vis", "high visibility", "reflective jacket", "reflective vest",
-                             "hand gloves", "cotton gloves", "leather gloves", "gloves", "induction",
-                             "general work permit", "work permit system", "general permit", "ppe as per norms",
-                             "basic ppe", "standard ppe", "uniform", "ppe"],
+        "baselineKeywords": [
+            "helmet",
+            "hard hat",
+            "safety shoe",
+            "safety shoes",
+            "safety boot",
+            "gumboot",
+            "hi-vis",
+            "hi vis",
+            "high visibility",
+            "reflective jacket",
+            "reflective vest",
+            "hand gloves",
+            "cotton gloves",
+            "leather gloves",
+            "gloves",
+            "induction",
+            "general work permit",
+            "work permit system",
+            "general permit",
+            "ppe as per norms",
+            "basic ppe",
+            "standard ppe",
+            "uniform",
+            "ppe",
+        ],
         # A PPE item naming one of these is task-specific, not baseline.
-        "specificQualifiers": ["cut", "heat", "alumin", "chemical", "insulat", "nitrile", "rubber", "respirat",
-                               "ffp", "n95", "p2", "p3", "face shield", "harness", "lanyard", "arc", "flame",
-                               "fr ", "welding", "leg guard", "apron", "earmuff", "ear muff", "ear plug", "goggle",
-                               "visor", "kevlar", "anti-vibration", "full body", "breathing apparatus", "scba"],
+        "specificQualifiers": [
+            "cut",
+            "heat",
+            "alumin",
+            "chemical",
+            "insulat",
+            "nitrile",
+            "rubber",
+            "respirat",
+            "ffp",
+            "n95",
+            "p2",
+            "p3",
+            "face shield",
+            "harness",
+            "lanyard",
+            "arc",
+            "flame",
+            "fr ",
+            "welding",
+            "leg guard",
+            "apron",
+            "earmuff",
+            "ear muff",
+            "ear plug",
+            "goggle",
+            "visor",
+            "kevlar",
+            "anti-vibration",
+            "full body",
+            "breathing apparatus",
+            "scba",
+        ],
     },
     "tolerability": {
         "alarpBandEnabled": True,
@@ -102,9 +169,21 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "PPE": "Safety Officer",
         },
         "costWeight": {"LOW": 1, "MEDIUM": 2, "HIGH": 4, "VERY_HIGH": 8},
-        "genericFiller": ["awareness training", "awareness programme", "awareness program", "update sop",
-                          "revise sop", "update the sop", "toolbox talk", "sensitisation", "sensitization",
-                          "safety awareness", "be careful", "follow sop", "proper supervision"],
+        "genericFiller": [
+            "awareness training",
+            "awareness programme",
+            "awareness program",
+            "update sop",
+            "revise sop",
+            "update the sop",
+            "toolbox talk",
+            "sensitisation",
+            "sensitization",
+            "safety awareness",
+            "be careful",
+            "follow sop",
+            "proper supervision",
+        ],
         "dedupeSimilarity": 0.5,
     },
     "findings": {"maxBlockersShown": 3, "defaultShown": 3},
@@ -138,14 +217,18 @@ def matrix_rule(matrix: Any, cfg: dict[str, Any], likelihood_labels: list[str] |
     scale = cfg["likelihood"].get("scale", "AUTO")
     if scale == "AUTO":
         labels = [(l or "").lower() for l in (likelihood_labels or [])]
-        scale = "FREQUENCY" if (not labels or any(any(w in l for w in _FREQUENCY_WORDS) for l in labels)) \
+        scale = (
+            "FREQUENCY"
+            if (not labels or any(any(w in l for w in _FREQUENCY_WORDS) for l in labels))
             else "PLANT_INDEX"
+        )
     strict = cfg["tolerability"].get("moderateNotAcceptable")
     if strict is None:
         bands = getattr(matrix, "alarpBands", None) or {}
         acc = getattr(matrix, "acceptableResidual", None) or {}
-        strict = bands.get("MODERATE") == "UNACCEPTABLE" or (acc.get("routine") == "LOW" and bands.get(
-            "MODERATE") not in ("TOLERABLE", "BROADLY_ACCEPTABLE"))
+        strict = bands.get("MODERATE") == "UNACCEPTABLE" or (
+            acc.get("routine") == "LOW" and bands.get("MODERATE") not in ("TOLERABLE", "BROADLY_ACCEPTABLE")
+        )
     return MatrixRule(code=code, likelihood_scale=scale, moderate_not_acceptable=bool(strict))
 
 
@@ -164,8 +247,11 @@ async def table_exists(db: Any, name: str) -> bool:
     hit = _TABLES.get(name)
     if hit and time.monotonic() - hit[1] < 300:
         return hit[0]
-    n = (await db.execute(text("SELECT count(*) FROM information_schema.tables WHERE table_name = :t"),
-                          {"t": name})).scalar()
+    n = (
+        await db.execute(
+            text("SELECT count(*) FROM information_schema.tables WHERE table_name = :t"), {"t": name}
+        )
+    ).scalar()
     _TABLES[name] = (bool(n), time.monotonic())
     return bool(n)
 
@@ -178,22 +264,50 @@ async def load(db: Any, plant_id: str | None) -> tuple[dict[str, Any], str, dict
 
     if not await table_exists(db, "HiraCalibrationConfig"):  # DDL not applied yet: behave as OFF
         return copy.deepcopy(DEFAULT_CONFIG), "OFF", {"tenant": None, "plant": None, "engine": ENGINE_VERSION}
-    rows = (await db.execute(
-        select(HiraCalibrationConfig)
-        .where(HiraCalibrationConfig.isActive.is_(True))
-        .where(or_(HiraCalibrationConfig.plantId.is_(None), HiraCalibrationConfig.plantId == plant_id))
-        .order_by(HiraCalibrationConfig.version.desc())
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(HiraCalibrationConfig)
+                .where(HiraCalibrationConfig.isActive.is_(True))
+                .where(
+                    or_(HiraCalibrationConfig.plantId.is_(None), HiraCalibrationConfig.plantId == plant_id)
+                )
+                .order_by(HiraCalibrationConfig.version.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     tenant = next((r for r in rows if r.plantId is None), None)
     plant = next((r for r in rows if r.plantId == plant_id), None) if plant_id else None
     cfg = deep_merge(DEFAULT_CONFIG, tenant.config if tenant else None)
     cfg = deep_merge(cfg, plant.config if plant else None)
-    mode = (plant.mode if plant and plant.mode else None) or (tenant.mode if tenant and tenant.mode else None) or "OFF"
+    mode = (
+        (plant.mode if plant and plant.mode else None)
+        or (tenant.mode if tenant and tenant.mode else None)
+        or "OFF"
+    )
     if mode not in MODES:
         mode = "OFF"
-    return cfg, mode, {"tenant": tenant.version if tenant else None, "plant": plant.version if plant else None,
-                       "engine": ENGINE_VERSION}
+    return (
+        cfg,
+        mode,
+        {
+            "tenant": tenant.version if tenant else None,
+            "plant": plant.version if plant else None,
+            "engine": ENGINE_VERSION,
+        },
+    )
 
 
-__all__ = ["DEFAULT_CONFIG", "ENGINE_VERSION", "FLAG", "MODES", "MatrixRule", "deep_merge", "load", "matrix_rule",
-           "table_exists"]
+__all__ = [
+    "DEFAULT_CONFIG",
+    "ENGINE_VERSION",
+    "FLAG",
+    "MODES",
+    "MatrixRule",
+    "deep_merge",
+    "load",
+    "matrix_rule",
+    "table_exists",
+]

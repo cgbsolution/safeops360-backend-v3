@@ -41,8 +41,15 @@ def flag(monkeypatch):
 @pytest.fixture
 def built(monkeypatch):
     async def build(db, entry_id, cfg):
-        return {"input": entry1(ENTRY1_EXISTING), "rule": STD, "evidence": eng.Evidence(), "plant": rv.PlantData(),
-                "entry": None, "study": None, "schemaReady": False}
+        return {
+            "input": entry1(ENTRY1_EXISTING),
+            "rule": STD,
+            "evidence": eng.Evidence(),
+            "plant": rv.PlantData(),
+            "entry": None,
+            "study": None,
+            "schemaReady": False,
+        }
 
     async def build_for_draft(db, *, study, area_id, families, cfg):
         return {"rule": STD, "evidence": eng.Evidence(), "plant": rv.PlantData()}
@@ -109,8 +116,15 @@ def test_residual_hook_clears_residual_for_inherent_only(flag, monkeypatch):
     flag["mode"] = "ON"
 
     async def build(db, entry_id, cfg):
-        return {"input": entry1(), "rule": STD, "evidence": eng.Evidence(), "plant": rv.PlantData(), "entry": None,
-                "study": None, "schemaReady": False}
+        return {
+            "input": entry1(),
+            "rule": STD,
+            "evidence": eng.Evidence(),
+            "plant": rv.PlantData(),
+            "entry": None,
+            "study": None,
+            "schemaReady": False,
+        }
 
     monkeypatch.setattr(service.loader, "build", build)
 
@@ -136,39 +150,72 @@ def test_residual_hook_clears_residual_for_inherent_only(flag, monkeypatch):
 def _assistant_suggestion():
     ids = [h.key for h in ENTRY1_HAZARDS]
     return {
-        "suggested_hazards": [{"hazard_master_id": i, "relevance_confidence": 0.9, "reasoning": "x",
-                               "suggested_for_addition": True} for i in ids],
-        "control_suggestions": [{"hazard_id": ids[0], "engineering_controls": [
-            {"description": "Overload limit switch on EOT crane"}] * 3,
-            "administrative_controls": [{"description": "Awareness training"}] * 4, "ppe_controls": [
-            {"description": "Dust mask"}]}],
-        "risk_calibration": {"initial_likelihood_suggestion": {"score": 4, "reasoning": "daily"},
-                             "initial_severity_suggestion": {"score": 5, "reasoning": "fatal"},
-                             "residual_likelihood_guidance": "should reduce to 1",
-                             "residual_severity_guidance": "PPE reduces severity to 2"},
+        "suggested_hazards": [
+            {
+                "hazard_master_id": i,
+                "relevance_confidence": 0.9,
+                "reasoning": "x",
+                "suggested_for_addition": True,
+            }
+            for i in ids
+        ],
+        "control_suggestions": [
+            {
+                "hazard_id": ids[0],
+                "engineering_controls": [{"description": "Overload limit switch on EOT crane"}] * 3,
+                "administrative_controls": [{"description": "Awareness training"}] * 4,
+                "ppe_controls": [{"description": "Dust mask"}],
+            }
+        ],
+        "risk_calibration": {
+            "initial_likelihood_suggestion": {"score": 4, "reasoning": "daily"},
+            "initial_severity_suggestion": {"score": 5, "reasoning": "fatal"},
+            "residual_likelihood_guidance": "should reduce to 1",
+            "residual_severity_guidance": "PPE reduces severity to 2",
+        },
     }
 
 
 def _context():
-    lib = [{"hazard_master_id": h.key, "name": h.name, "code": h.code, "category": h.category} for h in ENTRY1_HAZARDS]
-    return {"activity": {"description": "Bag-to-bin feeding by crane", "routine": "ROUTINE", "frequency": "DAILY"},
-            "team_already_added": {"existingEntryHazards": [], "existingControls": []},
-            "context": {"applicable_hazard_library": lib}}
+    lib = [
+        {"hazard_master_id": h.key, "name": h.name, "code": h.code, "category": h.category}
+        for h in ENTRY1_HAZARDS
+    ]
+    return {
+        "activity": {
+            "description": "Bag-to-bin feeding by crane",
+            "routine": "ROUTINE",
+            "frequency": "DAILY",
+        },
+        "team_already_added": {"existingEntryHazards": [], "existingControls": []},
+        "context": {"applicable_hazard_library": lib},
+    }
 
 
 def test_assistant_off_and_shadow_leave_the_answer_unchanged(flag, built):
     s = _assistant_suggestion()
-    assert run(service.calibrate_assistant_output(None, entry_id="e1", suggestion=s, context=_context(),
-                                                  user_id="u")) is s
+    assert (
+        run(
+            service.calibrate_assistant_output(
+                None, entry_id="e1", suggestion=s, context=_context(), user_id="u"
+            )
+        )
+        is s
+    )
     flag["mode"] = "SHADOW"
-    out = run(service.calibrate_assistant_output(None, entry_id="e1", suggestion=s, context=_context(), user_id="u"))
+    out = run(
+        service.calibrate_assistant_output(None, entry_id="e1", suggestion=s, context=_context(), user_id="u")
+    )
     assert out is s and flag["shadow"][0]["surface"] == "ASSISTANT"
 
 
 def test_assistant_on_caps_hazards_controls_and_owns_the_residual(flag, built):
     flag["mode"] = "ON"
-    out = run(service.calibrate_assistant_output(None, entry_id="e1", suggestion=_assistant_suggestion(),
-                                                 context=_context(), user_id="u"))
+    out = run(
+        service.calibrate_assistant_output(
+            None, entry_id="e1", suggestion=_assistant_suggestion(), context=_context(), user_id="u"
+        )
+    )
     assert len(out["suggested_hazards"]) <= 5
     n_controls = sum(len(b[k]) for b in out["control_suggestions"] for k in b if k.endswith("_controls"))
     assert n_controls <= 5
@@ -183,14 +230,32 @@ def test_assistant_on_caps_hazards_controls_and_owns_the_residual(flag, built):
 
 
 def _parsed(existing=True):
-    return {"activityDescription": "Bag-to-bin feeding by crane", "routine": "ROUTINE", "frequency": "DAILY",
-            "initialLikelihood": 4, "initialSeverity": 5,
-            "initialLikelihoodRationale": "Daily heavy lifts", "initialSeverityRationale": "Fatal if dropped",
-            "hazards": [{"hazardId": h.key, "consequence": h.consequence} for h in ENTRY1_HAZARDS],
-            "existingControls": ([{"hierarchy": c.hierarchy, "description": c.description, "effectiveness": None}
-                                  for c in ENTRY1_EXISTING] if existing else []),
-            "recommendedControls": [{"hierarchy": "ADMINISTRATIVE", "description": f"Awareness training {i}",
-                                     "estimatedCostBand": "LOW"} for i in range(8)]}
+    return {
+        "activityDescription": "Bag-to-bin feeding by crane",
+        "routine": "ROUTINE",
+        "frequency": "DAILY",
+        "initialLikelihood": 4,
+        "initialSeverity": 5,
+        "initialLikelihoodRationale": "Daily heavy lifts",
+        "initialSeverityRationale": "Fatal if dropped",
+        "hazards": [{"hazardId": h.key, "consequence": h.consequence} for h in ENTRY1_HAZARDS],
+        "existingControls": (
+            [
+                {"hierarchy": c.hierarchy, "description": c.description, "effectiveness": None}
+                for c in ENTRY1_EXISTING
+            ]
+            if existing
+            else []
+        ),
+        "recommendedControls": [
+            {
+                "hierarchy": "ADMINISTRATIVE",
+                "description": f"Awareness training {i}",
+                "estimatedCostBand": "LOW",
+            }
+            for i in range(8)
+        ],
+    }
 
 
 @pytest.fixture
@@ -211,20 +276,31 @@ def masters(monkeypatch):
 
 def test_copilot_draft_off_is_untouched(flag, built, masters):
     study = type("S", (), {"plantId": "plant-1", "id": "s1"})()
-    assert run(service.calibrate_copilot_draft(masters, study=study, area_id=None, parsed=_parsed(), expand=False,
-                                               user_id="u")) is None
+    assert (
+        run(
+            service.calibrate_copilot_draft(
+                masters, study=study, area_id=None, parsed=_parsed(), expand=False, user_id="u"
+            )
+        )
+        is None
+    )
 
 
 def test_copilot_draft_on_is_calibrated(flag, built, masters):
     flag["mode"] = "ON"
     study = type("S", (), {"plantId": "plant-1", "id": "s1"})()
-    cal = run(service.calibrate_copilot_draft(masters, study=study, area_id=None, parsed=_parsed(), expand=False,
-                                              user_id="u"))
+    cal = run(
+        service.calibrate_copilot_draft(
+            masters, study=study, area_id=None, parsed=_parsed(), expand=False, user_id="u"
+        )
+    )
     p = cal["parsed"]
     assert len(p["hazards"]) <= 5
     assert (p["initialLikelihood"], p["initialSeverity"]) == (3, 5)  # L4 capped: no recorded events
     assert len(p["recommendedControls"]) <= 5
-    assert not any("awareness" in r["description"].lower() for r in p["recommendedControls"])  # filler dropped
+    assert not any(
+        "awareness" in r["description"].lower() for r in p["recommendedControls"]
+    )  # filler dropped
     assert cal["summary"]["entryResidual"]["level"] != "CRITICAL"
     assert len(cal["hazardRatings"]) == len(p["hazards"])
 
@@ -232,7 +308,10 @@ def test_copilot_draft_on_is_calibrated(flag, built, masters):
 def test_copilot_draft_on_without_controls_is_inherent_only(flag, built, masters):
     flag["mode"] = "ON"
     study = type("S", (), {"plantId": "plant-1", "id": "s1"})()
-    cal = run(service.calibrate_copilot_draft(masters, study=study, area_id=None, parsed=_parsed(existing=False),
-                                              expand=False, user_id="u"))
+    cal = run(
+        service.calibrate_copilot_draft(
+            masters, study=study, area_id=None, parsed=_parsed(existing=False), expand=False, user_id="u"
+        )
+    )
     assert cal["summary"]["entryResidual"] is None
     assert cal["summary"]["residualLabel"] == "Inherent only. Existing controls not captured"
