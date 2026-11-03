@@ -157,6 +157,7 @@ async def evaluate_layer_a(
     persons_public: int = 0,
     plant_id: str | None = None,
     area_id: str | None = None,
+    likelihood_levels: list[tuple[int, str]] | None = None,
 ) -> LayerAResult:
     """Run the 10 deterministic HIRA Assistant rules over the given
     activity context. Returns the structured findings dict for inclusion
@@ -164,6 +165,12 @@ async def evaluate_layer_a(
 
     Pure I/O for HA-06 (historical incidents lookup); all other rules
     are pure functions of the input context.
+
+    `likelihood_levels` is the study matrix's (score, label) scale. When
+    given, HA-07 uses that matrix's "Likely" level as the floor, and is
+    skipped when the matrix has no such level (e.g. a plant index scale
+    such as SP x LH x DE, where a frequency floor has no meaning).
+    Without it, HA-07 assumes the standard 5-point scale (Likely = 4).
     """
     result = LayerAResult()
 
@@ -295,16 +302,28 @@ async def evaluate_layer_a(
                 for r in rows
             ]
 
-    # HA-07: routine + high frequency → likelihood floor
+    # HA-07: routine + high frequency → likelihood floor, on the study
+    # matrix's own scale. No "Likely" level → no frequency scale → no floor.
     if routine == "ROUTINE" and frequency in ("CONTINUOUS", "DAILY"):
-        result.findings.append(
-            LayerAFinding(
-                rule_code="HA-07",
-                rule_summary=f"Routine activity at high frequency ({frequency}) — likelihood baseline raised",
-                baseline_likelihood_min=4,  # "Likely" on a 5-scale
-                reviewer_note="Initial likelihood should not be scored below 'Likely' (4/5) for routine high-frequency exposure.",
+        if likelihood_levels is None:
+            floor: tuple[int, str] | None = (4, "Likely")  # standard 5-point scale
+            scale_size = 5
+        else:
+            floor = next(((s, lbl) for s, lbl in likelihood_levels
+                          if (lbl or "").strip().lower() == "likely"), None)
+            scale_size = len(likelihood_levels)
+        if floor is not None:
+            result.findings.append(
+                LayerAFinding(
+                    rule_code="HA-07",
+                    rule_summary=f"Routine activity at high frequency ({frequency}) — likelihood baseline raised",
+                    baseline_likelihood_min=floor[0],
+                    reviewer_note=(
+                        f"Initial likelihood should not be scored below '{floor[1]}' "
+                        f"({floor[0]}/{scale_size}) for routine high-frequency exposure."
+                    ),
+                )
             )
-        )
 
     # HA-08: contractors among persons exposed
     if persons_contractors > 0:

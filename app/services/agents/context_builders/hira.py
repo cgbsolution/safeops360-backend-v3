@@ -35,6 +35,7 @@ from app.models.hira import (
     HiraEntryHazard,
     HiraHazard,
     HiraStudy,
+    RiskMatrix,
 )
 from app.models.incident import Incident
 from app.services.agents.hira_layer_a import evaluate_layer_a
@@ -109,6 +110,21 @@ async def build_context(db: AsyncSession, record_id: str) -> dict[str, Any]:
     materials = _as_str_list(entry.materialsUsed)
     energy_sources = _as_str_list(entry.energySourcesPresent)
 
+    # The study's own matrix. Scores are on ITS scales, which are not always
+    # the standard 5x5 (e.g. a plant index such as SP x LH x DE).
+    matrix = None
+    if study is not None and study.riskMatrixId:
+        matrix = (
+            await db.execute(
+                select(RiskMatrix)
+                .where(RiskMatrix.id == study.riskMatrixId)
+                .options(selectinload(RiskMatrix.likelihoods), selectinload(RiskMatrix.severities))
+            )
+        ).scalar_one_or_none()
+    likelihood_scale = (
+        sorted(((l.score, l.label) for l in matrix.likelihoods), key=lambda x: x[0]) if matrix else None
+    )
+
     # ── Layer A — deterministic rules (the mandatory floor) ──────────────
     layer_a = await evaluate_layer_a(
         db,
@@ -124,6 +140,7 @@ async def build_context(db: AsyncSession, record_id: str) -> dict[str, Any]:
         persons_public=entry.personsPublic,
         plant_id=study.plantId if study else None,
         area_id=entry.areaId,
+        likelihood_levels=likelihood_scale,
     )
 
     # ── CONTEXT: similar past entries (cross-study/plant grounding) ──────
@@ -266,6 +283,8 @@ async def build_context(db: AsyncSession, record_id: str) -> dict[str, Any]:
                 "severityScore": entry.initialSeverityScore,
                 "riskScore": entry.initialRiskScore,
                 "riskLevel": entry.initialRiskLevel,
+                "likelihoodRationale": entry.initialLikelihoodRationale,
+                "severityRationale": entry.initialSeverityRationale,
             },
             "residualRisk": (
                 {
@@ -279,6 +298,26 @@ async def build_context(db: AsyncSession, record_id: str) -> dict[str, Any]:
                 else None
             ),
         },
+        "riskMatrix": (
+            {
+                "code": matrix.code,
+                "name": matrix.name,
+                "description": matrix.description,
+                "likelihoodLevels": [
+                    {"score": l.score, "label": l.label, "description": l.description}
+                    for l in sorted(matrix.likelihoods, key=lambda x: x.score)
+                ],
+                "severityLevels": [
+                    {"score": sv.score, "label": sv.label, "description": sv.description}
+                    for sv in sorted(matrix.severities, key=lambda x: x.score)
+                ],
+                "_note": "Suggest likelihood and severity scores on THIS matrix's levels, as described "
+                         "here. Do not assume a standard 5x5 frequency scale when the levels are defined "
+                         "differently.",
+            }
+            if matrix
+            else None
+        ),
         "layer_a_rules_findings": layer_a.to_prompt_dict(),
         "context": {
             "similar_past_entries": [

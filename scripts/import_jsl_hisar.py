@@ -628,6 +628,15 @@ def ensure_person(cur, plant_id, name: str, designation: str) -> str:
     return uid
 
 
+# Level names shown in the app ("Likelihood: Plant index 2", "Severity: CN 4").
+# The sheet has no word scale for these factors, so the name is the plant value.
+LIKELIHOOD_LABEL = "Plant index {n}"
+LIKELIHOOD_DESC = ("Plant likelihood index = SP (spread) x LH (likelihood) x DE (detectability), "
+                   "from QSD/24/F. It is not a frequency scale.")
+SEVERITY_LABEL = "CN {n}"
+SEVERITY_DESC = "Consequence (CN) as rated in QSD/24/F"
+
+
 def ensure_matrix(cur) -> str:
     """The plant's QSD/24/F scoring as a SafeOps matrix: likelihood = SP x LH x DE,
     severity = CN, score = GT. GT <= 3 is acceptable (below the significant score
@@ -639,6 +648,11 @@ def ensure_matrix(cur) -> str:
         # level above LOW is "tolerable with ALARP".
         cur.execute('UPDATE "RiskMatrix" SET "alarpBands"=%s, "updatedAt"=%s WHERE id=%s',
                     (psycopg2.extras.Json(ALARP_BANDS), NOW, mid))
+        for n in range(1, 6):
+            cur.execute('UPDATE "RiskMatrixLikelihood" SET label=%s, description=%s WHERE "matrixId"=%s AND score=%s',
+                        (LIKELIHOOD_LABEL.format(n=n), LIKELIHOOD_DESC, mid, n))
+            cur.execute('UPDATE "RiskMatrixSeverity" SET label=%s, description=%s WHERE "matrixId"=%s AND score=%s',
+                        (SEVERITY_LABEL.format(n=n), SEVERITY_DESC, mid, n))
         return mid
     mid = new_id()
     insert_many(cur, "RiskMatrix", [dict(
@@ -654,11 +668,11 @@ def ensure_matrix(cur) -> str:
         alarpBands=ALARP_BANDS,
     )])
     insert_many(cur, "RiskMatrixLikelihood", [dict(
-        id=new_id(), matrixId=mid, score=n, label=f"SP x LH x DE = {n}",
-        description="Plant index: spread x likelihood x detectability (QSD/24/F)", frequencyGuidance=None, sortOrder=n - 1)
+        id=new_id(), matrixId=mid, score=n, label=LIKELIHOOD_LABEL.format(n=n),
+        description=LIKELIHOOD_DESC, frequencyGuidance=None, sortOrder=n - 1)
         for n in range(1, 6)])
     insert_many(cur, "RiskMatrixSeverity", [dict(
-        id=new_id(), matrixId=mid, score=n, label=f"CN {n}", description="Consequence as rated in QSD/24/F",
+        id=new_id(), matrixId=mid, score=n, label=SEVERITY_LABEL.format(n=n), description=SEVERITY_DESC,
         sortOrder=n - 1) for n in range(1, 6)])
     bands = [(3, "LOW", "#10B981", "Acceptable: GT within the significant score 3.33 (unless a concern is Y)", 365),
              (6, "MODERATE", "#F59E0B", "Significant (GT > 3.33): control strategy required in QSD/25/F", 90),
@@ -732,6 +746,7 @@ def import_hira(cur, path, plant_id, user_id, replace=False):
     existing = [n for (n,) in cur.fetchall()]
     if existing:
         if not replace:
+            ensure_matrix(cur)  # still refresh the matrix settings and level names
             print(f"  = {len(existing)} HIRA studies already exist, skipped (use --replace-hira to rebuild)")
             return None
         cur.execute('DELETE FROM "HiraStudy" WHERE "plantId"=%s', (plant_id,))

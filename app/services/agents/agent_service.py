@@ -30,6 +30,7 @@ when the operations dashboard lands.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sys
 from dataclasses import dataclass
@@ -59,6 +60,11 @@ from app.services.ai.anthropic_client import (
     ToolLoopResult,
     complete_with_tools,
 )
+
+# Model, tokens, cost and run time of every AI run go to this log (and stay
+# on the AgentInvocation row for the admin agent pages). The assistant cards
+# that end users see no longer show them.
+log = logging.getLogger("safeops360.agents")
 
 # ─── Pricing table (USD per million tokens) ────────────────────────────
 # Approximate Anthropic public pricing at time of writing. Update as
@@ -375,6 +381,14 @@ async def run_invocation(
 
         invocation.status = "PENDING_REVIEW"
         await db.commit()
+        log.info(
+            "agent run %s done: agent=%s source=%s/%s model=%s tokens_in=%s tokens_out=%s "
+            "cost_usd=%.4f latency_s=%.1f tool_calls=%s warning=%s",
+            invocation.invocationNumber, agent.code, invocation.sourceModule, invocation.sourceRecordId,
+            invocation.modelUsed, invocation.inputTokens, invocation.outputTokens,
+            float(invocation.totalCostUsd or 0), (invocation.latencyMs or 0) / 1000,
+            len(getattr(loop_result, "tool_calls", None) or []), invocation.errorType or "-",
+        )
     except Exception as e:  # noqa: BLE001
         await _mark_errored(
             db, invocation, "INTERNAL", f"Failed to persist agent result: {e}"
@@ -859,6 +873,7 @@ async def _mark_errored(
     attribute on an async session raises MissingGreenlet.)
     """
     invocation_id = invocation.id  # read BEFORE the rollback expires it
+    log.warning("agent run %s errored: %s: %s", invocation_id, error_type, (detail or "")[:500])
 
     try:
         await db.rollback()

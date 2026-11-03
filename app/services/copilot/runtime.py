@@ -420,6 +420,11 @@ class CopilotTurn:
                     "errorType": "API_ERROR" if error else None,
                     "errorDetails": error[:2000] if error else None,
                 }
+                log.info(
+                    "copilot turn %s %s: model=%s tokens_in=%s tokens_out=%s cost_usd=%.4f latency_s=%.1f tool_calls=%s",
+                    row_id, values["status"], self.model, values["inputTokens"], values["outputTokens"],
+                    float(values["totalCostUsd"] or 0), values["latencyMs"] / 1000, len(self.tool_records),
+                )
                 await db.execute(update(AgentInvocation).where(AgentInvocation.id == row_id).values(**values))
                 for i, rec in enumerate(self.tool_records, start=1):
                     db.add(AgentToolCall(invocationId=row_id, sequence=i, **rec))
