@@ -63,6 +63,7 @@ from app.routers import (
     programme,
     flra,
     hira,
+    hira_calibration,
     incidents,
     insights,
     inspection_findings,
@@ -151,7 +152,7 @@ _ROUTERS = {
     # SafeOps Copilot — the conversational front door to the agents above.
     # Same AI_ASSIST licence module as the agent routers.
     "copilot": copilot,
-    "hira": hira, "capa": capa, "eai": eai,
+    "hira": hira, "hira_calibration": hira_calibration, "capa": capa, "eai": eai,
     "erm": erm, "erm_attachments": erm_attachments, "erm_p2": erm_p2, "erm_p3": erm_p3, "erm_t3": erm_t3, "competency": competency,
     # Training & Competency Engine (Trigger + Assignment + Content Adapter +
     # Correlation). Mounted ungated (insights/capture precedent) — per-endpoint

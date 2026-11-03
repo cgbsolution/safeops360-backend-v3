@@ -40,6 +40,7 @@ ROUTER_MODULE: dict[str, str | None] = {
     "incidents": "INCIDENT",
     # ── Risk Management ──
     "hira": "HIRA",
+    "hira_calibration": "HIRA",
     "eai": "EAI",
     "capa": "CAPA",
     "moc": "MOC",
