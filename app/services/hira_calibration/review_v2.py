@@ -161,6 +161,47 @@ def evaluate(
     unsupported_l, sev_under, sev_over, unrated_same = [], [], [], False
     provisional_any = False
     estimated = not entry.hazard_ratings_stored
+    inherent_only = not basis_with_controls and not real_controls
+
+    # ── existing controls first (R6) ──
+    proposals = []
+    for p in plant.existing_control_proposals:
+        if any(
+            rec.same_control(
+                p["hierarchy"], p["description"], c.hierarchy, c.description, cfg["recommendations"]["dedupeSimilarity"]
+            )
+            for c in entry.controls
+            if not c.planned
+        ):
+            continue
+        if any(rec.similarity(p["description"], q["description"]) >= 0.8 for q in proposals):
+            continue
+        relevant = [
+            h.key
+            for h in entry.hazards
+            if eng.applies_to(eng.Control(None, p["hierarchy"], p["description"]), h)[0]
+        ]
+        if not relevant:
+            continue
+        proposals.append({**p, "effectiveness": "NOT_VERIFIED", "hazardKeys": relevant})
+
+    # With no controls recorded, recommendations are worked out as if the
+    # proposed existing controls were accepted (so accepting them raises no new
+    # demands), and against the inherent rating when there are none.
+    provisional_controls = [
+        *entry.controls,
+        *(
+            eng.Control(
+                key=f"proposal-{i}",
+                hierarchy=pr["hierarchy"],
+                description=pr["description"],
+                effectiveness="NOT_VERIFIED",
+                verification_method=pr.get("verificationMethod"),
+                hazard_keys=tuple(pr["hazardKeys"]),
+            )
+            for i, pr in enumerate(proposals)
+        ),
+    ]
 
     for h in entry.hazards:
         fam = h.family
@@ -284,16 +325,30 @@ def evaluate(
             "regulationSuggestion": reg,
         }
         hazard_out.append(item)
-        rec_input.append(
-            {
-                **item,
-                "hazard": h,
-                "controls": entry.controls,
-                "basis": (L, S),
-                "basisIncludesControls": basis_with_controls,
-                "credibleS": credible_s,
-            }
-        )
+        rec_item = {
+            **item,
+            "hazard": h,
+            "controls": entry.controls,
+            "basis": (L, S),
+            "basisIncludesControls": basis_with_controls,
+            "credibleS": credible_s,
+        }
+        if inherent_only:
+            pr = eng.residual_from_controls(L, S, provisional_controls, cfg, hazard=h)
+            prov = eng.rate(pr["likelihood"], pr["severity"], cfg)
+            rec_item.update(
+                residual=prov,
+                controls=provisional_controls,
+                tolerability=eng.tolerability(
+                    prov,
+                    credible_s=credible_s,
+                    alarp=alarp,
+                    strict=rule.moderate_not_acceptable,
+                    cfg=cfg,
+                    overridden=entry.override_active,
+                ),
+            )
+        rec_input.append(rec_item)
         if (
             residual
             and real_controls
@@ -304,7 +359,6 @@ def evaluate(
             unrated_same = True
 
     rating = eng.entry_rating([h for h in hazard_out if h.get("inherent")])
-    inherent_only = not basis_with_controls and not real_controls
     entry_level = (rating["residual"] or rating["inherent"] or {}).get("level")
 
     # ── recommendations (R8) ──
@@ -321,43 +375,40 @@ def evaluate(
     for r in recs["recommendations"]:
         r["dueDate"] = (due_base + timedelta(days=r["dueDays"])).isoformat()
 
-    # ── existing controls first (R6) ──
-    proposals = []
-    for p in plant.existing_control_proposals:
-        if any(
-            rec.similarity(p["description"], c.description) >= cfg["recommendations"]["dedupeSimilarity"]
-            for c in entry.controls
-            if not c.planned
-        ):
-            continue
-        if any(rec.similarity(p["description"], q["description"]) >= 0.8 for q in proposals):
-            continue
-        relevant = [
-            h.key
-            for h in entry.hazards
-            if eng.applies_to(eng.Control(None, p["hierarchy"], p["description"]), h)[0]
-        ]
-        if not relevant:
-            continue
-        proposals.append({**p, "effectiveness": "NOT_VERIFIED", "hazardKeys": relevant})
-
     # ── findings (R9) ──
+    targeted = {t["key"] for r in recs["recommendations"] for t in r["targetHazards"]}
+    uncovered = {u["key"]: u for u in recs.get("uncovered") or []}
+    prov_open = [
+        ri["key"]
+        for ri in rec_input
+        if inherent_only
+        and not ri["collapsed"]
+        and ri.get("tolerability")
+        and not eng.resolved(ri["tolerability"])
+        and ri["tolerability"]["route"] != "OVERRIDE"
+        and not ri["plannedCovers"]
+        and ri["key"] in targeted
+    ]
     if inherent_only and rating["inherent"] and rating["inherent"]["level"] != "LOW":
         findings.append(
             _finding(
                 "NO_CONTROLS",
-                BLOCKER,
+                BLOCKER if (proposals or prov_open) else ADVISORY,
                 "Inherent only. Existing controls not captured",
                 "No controls are recorded, so the residual cannot be assessed (it is not the same as the inherent risk).",
                 (
                     f"Use these {len(proposals)} existing controls from plant records, then rate their effectiveness."
                     if proposals
-                    else "Record the controls already in place (SOP / work instruction, inspections, guards)."
+                    else "Record the controls already in place (SOP / work instruction, inspections, guards), "
+                    "or add the recommended controls."
+                    if prov_open
+                    else "Record the controls already in place so the residual can be assessed; the planned "
+                    "controls cover the open hazards."
                 ),
-                action="USE_EXISTING_CONTROLS" if proposals else None,
+                action="USE_EXISTING_CONTROLS" if proposals else ("ADD_RECOMMENDATIONS" if prov_open else None),
             )
         )
-    open_controls = [
+    open_all = [
         h
         for h in hazard_out
         if h.get("tolerability")
@@ -365,6 +416,7 @@ def evaluate(
         and not h["plannedCovers"]
         and not h["tolerability"]["overridden"]
     ]
+    open_controls = [h for h in open_all if h["key"] in targeted]
     if open_controls:
         findings.append(
             _finding(
@@ -377,7 +429,7 @@ def evaluate(
                 action="ADD_RECOMMENDATIONS",
             )
         )
-    eng_missing = [
+    eng_missing_all = [
         h
         for h in hazard_out
         if h.get("tolerability")
@@ -385,6 +437,26 @@ def evaluate(
         and "engineeringInPlaceOrPlanned" in h["tolerability"]["missing"]
         and not h["plannedCovers"]
     ]
+    eng_missing = [h for h in eng_missing_all if h["key"] in targeted]
+    # Hazards still open with no action this review can offer (no practicable
+    # control in the catalogue, or the entry cap is reached): they go to the
+    # elevated override at approval, never back to "add more controls".
+    no_action = [h for h in [*open_all, *eng_missing_all] if h["key"] not in targeted]
+    if no_action:
+        reasons = sorted({(uncovered.get(h["key"]) or {}).get("reason", "no practicable control found") for h in no_action})
+        findings.append(
+            _finding(
+                "NO_FURTHER_CONTROL",
+                ADVISORY,
+                f"{len(no_action)} hazard(s) left for the override or a split",
+                "; ".join(f"{h['name']}: {eng.rating_text(h['residual'])}" for h in no_action[:4])
+                + f" ({', '.join(reasons)}).",
+                "Use the elevated override at approval with a dated review, or split the activity so each part "
+                "can be controlled.",
+                [h["key"] for h in no_action],
+                action="OVERRIDE",
+            )
+        )
     if eng_missing:
         findings.append(
             _finding(
@@ -618,9 +690,10 @@ def evaluate(
     review_due = (entry.today + timedelta(days=30 * cfg["tolerability"]["reviewMonths"])).isoformat()
     # Any serious hazard (S>=4, as rated or credible) that is not yet acceptable
     # will need the ALARP record once its controls are in place: draft it now.
+    # (for an entry with no controls yet, judged on the provisional residual)
     needs_alarp_record = [
         h["name"]
-        for h in hazard_out
+        for h in rec_input
         if h.get("tolerability")
         and not eng.resolved(h["tolerability"])
         and max(h["residual"]["severity"], h["severity"].get("credibleMin") or 0) >= 4
@@ -732,6 +805,7 @@ def evaluate(
         "recommendations": recs["recommendations"],
         "recommendationCap": recs["cap"],
         "linkedCapas": recs["linkedCapas"],
+        "uncoveredHazards": recs.get("uncovered") or [],
         "skippedCandidates": recs["skipped"],
         "existingControlProposals": proposals,
         "suggestedDefaults": defaults,

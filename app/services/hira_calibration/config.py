@@ -60,7 +60,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "rubric": {
             "LIFTING": {
                 "min": 4,
-                "s5Keywords": ["1 t", "1t ", "tonne", "ton ", "fatal", "over people", "crushed by"],
+                "s5Keywords": ["1 t ", "1t ", "tonne", "ton ", "fatal", "over people", "crushed by"],
             },
             "HEIGHT": {
                 "min": 4,
@@ -72,11 +72,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "VEHICLE": {"min": 4},
             "PRESSURE": {"min": 4},
             "FIRE_EXPLOSION": {"min": 4},
-            "MACHINERY": {"min": 3},
+            "MACHINERY": {"min": 3, "max": 4, "uncapKeywords": ["fatal", "drawn into", "crushed to death"]},
             "FALLING_OBJECT": {"max": 4},
-            "CHEMICAL": {"min": 3},
+            "HEAT": {"max": 4, "uncapKeywords": ["fatal"]},
+            "THERMAL": {"max": 3, "uncapKeywords": ["steam", "molten", "fatal"]},
+            "CHEMICAL": {"min": 3, "max": 4, "uncapKeywords": ["toxic gas", "h2s", "hydrogen sulphide", "hydrogen sulfide", "chlorine", "ammonia", "fatal", "asphyx", "carbon monoxide", "cyanide"]},
             "SHARP": {"max": 3},
-            "DUST": {"max": 3},
+            "DUST": {"max": 3, "uncapKeywords": ["asbestos", "silica", "mesothelioma", "carcinogen", "silicosis", "benzene", "cancer"]},
             "MANUAL_HANDLING": {"max": 3},
             "SLIP_TRIP": {"max": 3},
             "NOISE": {"max": 3},
@@ -100,6 +102,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "reflective jacket",
             "reflective vest",
             "hand gloves",
+            "glove",
             "cotton gloves",
             "leather gloves",
             "gloves",
@@ -184,7 +187,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "follow sop",
             "proper supervision",
         ],
-        "dedupeSimilarity": 0.5,
+        "dedupeSimilarity": 0.4,  # Jaccard, same hierarchy group
+        "linkSimilarity": 0.6,  # share of the shorter text's words (min 3), for open CAPAs / siblings
     },
     "findings": {"maxBlockersShown": 3, "defaultShown": 3},
     "assistant": {"maxHazardsRoutine": 5, "maxHazardsNonRoutine": 7},

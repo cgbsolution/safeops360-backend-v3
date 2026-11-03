@@ -16,6 +16,7 @@ Rules implemented here (numbering from the calibration brief):
 
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -316,6 +317,19 @@ CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "flame",
         "spark",
         "flashback",
+        "lpg",
+        "png",
+        "gas leak",
+        "gas line",
+        "fuel line",
+        "isolation valve",
+        "shut-off",
+        "shut off",
+        "regulator",
+        "burner",
+        "cylinder bank",
+        "leak test",
+        "soap test",
     ),
     "PRESSURE": ("relief valve", "pressure", "gauge", "hose", "whip", "depressur", "bleed"),
     "NOISE": ("noise", "acoustic", "silencer", "earmuff", "ear muff", "ear plug"),
@@ -344,7 +358,7 @@ GENERIC_KEYWORDS = (
     "permit",
 )
 MITIGATING_KEYWORDS = (
-    "arrest",
+    "fall arrest",
     "net",
     "catch",
     "airbag",
@@ -363,11 +377,37 @@ MITIGATING_KEYWORDS = (
     "rccb",
     "bund",
     "spill tray",
+    "extinguisher",
+    "hydrant",
+    "fire blanket",
 )
 
 
 def _norm(t: str | None) -> str:
     return " " + re.sub(r"\s+", " ", (t or "").lower()) + " "
+
+
+_KW: dict[tuple[str, str], re.Pattern[str]] = {}
+
+
+def _has(text: str, kw: str, mode: str = "stem") -> bool:
+    """Keyword at a word start ("ppe" never matches "tipper"). mode "stem": the
+    keyword may continue ("respirat" -> respirator); a keyword ending in a space
+    must end the word; mode "word": whole word, plural allowed."""
+    pat = _KW.get((kw, mode))
+    if pat is None:
+        k = re.escape(kw.strip())
+        if mode == "word":
+            tail = r"(?:s|es)?(?![a-z0-9])"
+        else:
+            tail = r"(?![a-z0-9])" if kw.endswith(" ") else ""
+        pat = re.compile(r"(?<![a-z0-9])" + k + tail)
+        _KW[(kw, mode)] = pat
+    return bool(pat.search(text))
+
+
+def _any(text: str, kws: Any, mode: str = "stem") -> bool:
+    return any(_has(text, k, mode) for k in kws)
 
 
 def hazard_family(code: str | None, category: str | None, text: str | None) -> str:
@@ -376,7 +416,7 @@ def hazard_family(code: str | None, category: str | None, text: str | None) -> s
     if code and code in FAMILY_BY_CODE:
         return FAMILY_BY_CODE[code]
     t = _norm(text)
-    if any(k in t for k in FAMILY_KEYWORDS[0][1]) and (category or "") in (
+    if _any(t, FAMILY_KEYWORDS[0][1]) and (category or "") in (
         "",
         "fire_explosion",
         "thermal",
@@ -387,24 +427,24 @@ def hazard_family(code: str | None, category: str | None, text: str | None) -> s
     if category and category in FAMILY_BY_CATEGORY:
         return FAMILY_BY_CATEGORY[category]
     for fam, kws in FAMILY_KEYWORDS:
-        if any(k in t for k in kws):
+        if _any(t, kws):
             return fam
     return "GENERAL"
 
 
 def control_families(description: str | None) -> set[str]:
     t = _norm(description)
-    return {fam for fam, kws in CONTROL_KEYWORDS.items() if any(k in t for k in kws)}
+    return {fam for fam, kws in CONTROL_KEYWORDS.items() if _any(t, kws)}
 
 
 def is_generic_control(description: str | None) -> bool:
     t = _norm(description)
-    return any(k in t for k in GENERIC_KEYWORDS)
+    return _any(t, GENERIC_KEYWORDS)
 
 
 def engineering_kind(description: str | None) -> str:
     t = _norm(description)
-    return "MITIGATING" if any(k in t for k in MITIGATING_KEYWORDS) else "PREVENTIVE"
+    return "MITIGATING" if _any(t, MITIGATING_KEYWORDS) else "PREVENTIVE"
 
 
 def is_baseline(hierarchy: str | None, description: str | None, cfg: dict[str, Any]) -> bool:
@@ -421,9 +461,9 @@ def is_baseline(hierarchy: str | None, description: str | None, cfg: dict[str, A
         return False
     for item in items:
         it = f" {item} "
-        if any(q in it for q in cc["specificQualifiers"]):
+        if _any(it, cc["specificQualifiers"]):
             return False
-        if not any(k in it for k in cc["baselineKeywords"]):
+        if not _any(it, cc["baselineKeywords"], "word"):
             return False
     return True
 
@@ -479,13 +519,15 @@ def calibrate_likelihood(
     evidence: Evidence,
     scale: str,
     cfg: dict[str, Any],
+    draft: bool = False,
 ) -> dict[str, Any]:
     """Cap a proposed likelihood by the evidence. L4 needs a recorded event in
     the window or a documented control failure; L5 needs 2+ events in 12 months.
-    Exposure frequency can justify L3 over L2 but never L4 by itself.
-    Plant-index scales (not frequency) are passed through unchanged."""
+    Without evidence, exposure decides: daily / continuous routine exposure can
+    justify L3, anything else L2. A team's rating on a plant-index scale (not a
+    frequency scale) passes through; an LLM draft (draft=True) is capped too."""
     lk = cfg["likelihood"]
-    if scale != "FREQUENCY":
+    if scale != "FREQUENCY" and not draft:
         v = proposed if proposed else default_likelihood(routine, frequency, cfg)
         return {
             "value": v,
@@ -511,18 +553,18 @@ def calibrate_likelihood(
                 f"L4 is supported by: {ev_txt}.",
             }
         p = 4  # fall through to the L4 test
-    if p == 4:
-        if evidence.has_any:
-            return {"value": 4, "proposed": proposed, "capped": False, "reason": f"L4 supported: {ev_txt}."}
-        cap = lk["capWithoutEvidence"]
-        return {
-            "value": cap,
-            "proposed": proposed,
-            "capped": True,
-            "reason": f"Capped at L{cap}: {ev_txt}. Daily exposure is not the same as a likely event; "
-            f"L4 needs a recorded incident/near miss on this activity or area, or a documented "
-            f"control failure (overdue statutory exam, failed inspection).",
-        }
+    if p == 4 and evidence.has_any:
+        return {"value": 4, "proposed": proposed, "capped": False, "reason": f"L4 supported: {ev_txt}."}
+    cap = min(lk["capWithoutEvidence"], default_likelihood(routine, frequency, cfg))
+    if p > cap and not evidence.has_any:
+        why = (
+            "Daily exposure is not the same as a likely event; L4 needs a recorded incident/near miss on "
+            "this activity or area, or a documented control failure (overdue statutory exam, failed inspection)."
+            if cap >= 3
+            else "The task is not a daily routine exposure, so with no recorded event L3 is not supported "
+            "(L3 needs daily exposure or a recorded event; L4 a recorded event or a control failure)."
+        )
+        return {"value": cap, "proposed": proposed, "capped": True, "reason": f"Capped at L{cap}: {ev_txt}. {why}"}
     return {
         "value": p,
         "proposed": proposed,
@@ -538,8 +580,10 @@ def credible_severity(family: str, text: str | None, cfg: dict[str, Any]) -> tup
     rule = (cfg["severity"]["rubric"] or {}).get(family) or {}
     lo, hi = rule.get("min"), rule.get("max")
     t = _norm(text)
-    if lo and any(k in t for k in rule.get("s5Keywords") or []):
+    if lo and _any(t, rule.get("s5Keywords") or []):
         lo = 5
+    if hi and _any(t, rule.get("uncapKeywords") or []):
+        hi = None  # e.g. asbestos dust, toxic gas, steam: the ceiling does not apply
     return lo, hi
 
 
@@ -744,18 +788,47 @@ def residual_from_controls(
             for c in by["PPE"]:
                 credits.append(_credit(c, None, 0, "NO_CREDIT", f"PPE gets no credit for S{s} hazards"))
 
-    budget = cc["maxTotalSteps"]
-    dl = ds = 0
-    for ctrls, axis, steps, provisional, reason in grants:
-        room = (l - 1 - dl) if axis == "L" else (s - 1 - ds)
-        take = max(0, min(steps, budget, room))
+    # The 3-step budget is spent in the order that gives the lowest residual
+    # (score, then severity), so adding a control can never make it worse.
+    # Grants on the same axis keep their order of strength.
+    def allocate(order: list[int]) -> tuple[int, int, dict[int, int]]:
+        budget, dl_, ds_, takes = cc["maxTotalSteps"], 0, 0, {}
+        for i in order:
+            _c, axis_, steps_, _p, _r = grants[i]
+            room = (l - 1 - dl_) if axis_ == "L" else (s - 1 - ds_)
+            take_ = max(0, min(steps_, budget, room))
+            takes[i] = take_
+            budget -= take_
+            if axis_ == "L":
+                dl_ += take_
+            else:
+                ds_ += take_
+        return dl_, ds_, takes
+
+    l_idx = [i for i, g in enumerate(grants) if g[1] == "L"]
+    s_idx = [i for i, g in enumerate(grants) if g[1] == "S"]
+    best: tuple[tuple[int, int, int, int], list[int], int, int, dict[int, int]] | None = None
+    for n, s_pos in enumerate(itertools.combinations(range(len(grants)), len(s_idx))):
+        li, si, order = iter(l_idx), iter(s_idx), []
+        for pos in range(len(grants)):
+            order.append(next(si) if pos in s_pos else next(li))
+        dl_, ds_, takes = allocate(order)
+        rl_, rs_ = max(1, l - dl_), max(1, s - ds_)
+        key = (rl_ * rs_, rs_, rl_, n)
+        if best is None or key < best[0]:
+            best = (key, order, dl_, ds_, takes)
+    order, dl, ds, takes = (best[1], best[2], best[3], best[4]) if best else ([], 0, 0, {})
+    budget_left = cc["maxTotalSteps"] - dl - ds
+    for i in order:
+        ctrls, axis, steps, provisional, reason = grants[i]
+        take = takes[i]
         status = "PROVISIONAL" if provisional else "CREDITED"
         if take == 0:
             status, why = (
                 "NO_CREDIT",
                 (
                     "cap of 3 levels reached"
-                    if budget == 0
+                    if budget_left == 0
                     else "likelihood already at L1"
                     if axis == "L"
                     else "severity already at S1"
@@ -765,21 +838,16 @@ def residual_from_controls(
             why = reason + (
                 " (unverified: rate its effectiveness or record how it is checked)" if provisional else ""
             )
-        for i, c in enumerate(ctrls):
+        for j, c in enumerate(ctrls):
             credits.append(
                 _credit(
                     c,
-                    axis if take and i == 0 else None,
-                    take if i == 0 else 0,
-                    status if i == 0 or take == 0 else "COUNTED_WITH_ABOVE",
+                    axis if take and j == 0 else None,
+                    take if j == 0 else 0,
+                    status if j == 0 or take == 0 else "COUNTED_WITH_ABOVE",
                     why,
                 )
             )
-        budget -= take
-        if axis == "L":
-            dl += take
-        else:
-            ds += take
     rl, rs = max(1, l - dl), max(1, s - ds)
     provisional = any(cr["status"] == "PROVISIONAL" for cr in credits)
     return {

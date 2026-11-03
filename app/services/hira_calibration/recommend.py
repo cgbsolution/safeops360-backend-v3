@@ -299,6 +299,54 @@ CATALOG: list[tuple[str, str, str, str, str]] = [
     ("TH-ENG-1", "THERMAL", "ENGINEERING", "MEDIUM", "Insulation or guarding on hot surfaces"),
 ]
 
+CATALOG += [
+    (
+        "FO-ENG-2",
+        "FALLING_OBJECT",
+        "ENGINEERING",
+        "MEDIUM",
+        "Load backrest extension on the forklift and loads secured / stretch-wrapped before travel",
+    ),
+    (
+        "FO-ADM-2",
+        "FALLING_OBJECT",
+        "ADMINISTRATIVE",
+        "LOW",
+        "No one in the load path; stack height and tilt-back rules in the operating procedure",
+    ),
+    (
+        "PR-ENG-2",
+        "PRESSURE",
+        "ENGINEERING",
+        "LOW",
+        "Burst sleeves / shields on high-pressure hydraulic hoses and fittings",
+    ),
+    (
+        "PR-ADM-2",
+        "PRESSURE",
+        "ADMINISTRATIVE",
+        "LOW",
+        "Never feel for hydraulic leaks by hand; isolate and bleed the circuit before work",
+    ),
+]
+
+# A catalogue item is offered only when the hazard text names its setting.
+REQUIRES: dict[str, tuple[str, ...]] = {
+    "FO-ENG-1": ("platform", "height", "edge", "scaffold", "bin", "overhead", "roof", "opening", "above", "stack",
+                 "rack", "mezzanine"),
+    "FO-ENG-2": ("fork", "forklift", "pallet", "stack", "reach truck"),
+    "FO-ADM-2": ("fork", "forklift", "pallet", "stack", "reach truck"),
+    "PR-ENG-1": ("gas", "air", "compressed", "steam", "vessel", "cylinder", "pneumatic", "receiver", "boiler"),
+    "PR-ENG-2": ("hydraulic", "hose", "oil", "injection"),
+    "PR-ADM-2": ("hydraulic", "injection"),
+    "LIFT-ENG-4": ("crane", "eot", "hoist"),
+    "HT-ENG-1": ("platform", "edge", "opening", "bin", "pit", "floor", "mezzanine", "walkway"),
+}
+# Never put water near molten metal (steam explosion).
+_WATER = ("water", "mist", "wet ", "wetting", "spray")
+_MOLTEN = ("molten", "hot metal", "liquid metal", "slag", "ladle", "furnace", "tapping", "steam explosion")
+_GROUP = {"ELIMINATION": "E", "SUBSTITUTION": "E", "ENGINEERING": "ENG", "ADMINISTRATIVE": "ADM", "PPE": "PPE"}
+
 INTERIM = {
     "LIFTING": "Interim: supervisor present for every lift and no one under the load until it is installed",
     "HEIGHT": "Interim: harness tied off to a temporary anchor and a second person present",
@@ -409,10 +457,27 @@ def tokens(text: str | None) -> set[str]:
 
 
 def similarity(a: str | None, b: str | None) -> float:
+    """Jaccard similarity of the normalised word sets (synonyms folded)."""
     ta, tb = tokens(a), tokens(b)
     if not ta or not tb:
         return 0.0
-    return len(ta & tb) / min(len(ta), len(tb))
+    return len(ta & tb) / len(ta | tb)
+
+
+def linked(a: str | None, b: str | None, threshold: float) -> bool:
+    """A CAPA or a sibling's control is the same action when most of the shorter
+    text's words (at least 3) appear in the other."""
+    ta, tb = tokens(a), tokens(b)
+    common = ta & tb
+    return len(common) >= 3 and len(common) / max(1, min(len(ta), len(tb))) >= threshold
+
+
+def same_control(cand_hierarchy: str, cand_text: str, c_hierarchy: str | None, c_text: str | None,
+                 threshold: float) -> bool:
+    """An existing control covers a candidate when both are in the same hierarchy
+    group (a camera is not a banksman) and their wording overlaps enough."""
+    return _GROUP.get((cand_hierarchy or "").upper()) == _GROUP.get((c_hierarchy or "").upper()) and \
+        similarity(cand_text, c_text) >= threshold
 
 
 @dataclass
@@ -461,6 +526,13 @@ def recommend(
     picks: dict[str, dict[str, Any]] = {}
     linked_capas: dict[str, dict[str, Any]] = {}
     skipped: list[dict[str, Any]] = []
+    needing: dict[str, dict[str, Any]] = {}
+    per_hazard: list[tuple[eng.Hazard, str, dict[str, Any], dict[str, Any], list[dict[str, Any]]]] = []
+    molten_entry = any(
+        hr["hazard"].family == "MOLTEN" or any(w in hr["hazard"].text.lower() for w in _MOLTEN)
+        for hr in hazard_results
+        if hr.get("hazard") is not None
+    )
 
     for hr in hazard_results:
         tol = hr.get("tolerability")
@@ -475,7 +547,9 @@ def recommend(
         fam = h.family
         controls: list[eng.Control] = hr["controls"]
         res = hr["residual"] or hr["inherent"]
-        pool = [c for c in catalogue_for(fam)]
+        needing[h.key] = {"key": h.key, "name": h.name, "residual": res}
+        htext = h.text.lower()
+        pool = [c for c in catalogue_for(fam) if not REQUIRES.get(c.id) or any(w in htext for w in REQUIRES[c.id])]
         for x in extra_candidates or []:
             if (
                 x.family in (fam, "GENERAL")
@@ -487,12 +561,16 @@ def recommend(
         for cand in pool:
             if need_eng_only and cand.hierarchy != "ENGINEERING":
                 continue
-            # already in place (same family wording)?
+            if molten_entry and any(w in f" {cand.description.lower()} " for w in _WATER):
+                skipped.append({"candidate": cand.description, "reason": "water near molten metal"})
+                continue
+            # already in place (same hierarchy group, similar wording)?
             dup = next(
                 (
                     c
                     for c in controls
-                    if similarity(cand.description, c.description) >= rc["dedupeSimilarity"]
+                    if same_control(cand.hierarchy, cand.description, c.hierarchy, c.description,
+                                    rc["dedupeSimilarity"])
                 ),
                 None,
             )
@@ -505,7 +583,7 @@ def recommend(
                 (
                     k
                     for k in open_capas
-                    if similarity(cand.description, k.get("text")) >= rc["dedupeSimilarity"]
+                    if linked(cand.description, k.get("text"), rc.get("linkSimilarity", 0.6))
                 ),
                 None,
             )
@@ -579,27 +657,50 @@ def recommend(
         if not scored:
             continue
         hidx = {x: i for i, x in enumerate(eng.HIERARCHY)}
+        per_hazard.append((h, fam, res, tol, scored))
+        # A serious hazard (S>=4) needs an engineering control for ALARP anyway:
+        # prefer one over a cheaper procedure that would leave that gap open.
+        serious = max(res["severity"], hr.get("credibleS") or 0) >= 4 and not hr["alarp"].get(
+            "engineeringInPlaceOrPlanned"
+        )
         scored.sort(
             key=lambda x: (
                 not eng.resolved(x["tolAfter"]) and x["tolAfter"]["route"] != "OVERRIDE",
+                serious and x["cand"].hierarchy not in ("ELIMINATION", "SUBSTITUTION", "ENGINEERING"),
                 -x["per_effort"],
                 hidx.get(x["cand"].hierarchy, 9),
                 x["cand"].id,
             )
         )
-        for best in scored[: rc["maxPerHazard"]]:
+
+    # Pick per hazard, most serious first. When the one-capex-per-entry limit
+    # rules out a hazard's best item, take its next-best affordable one, so no
+    # hazard is left over for a later pass.
+    capex_seen = 0
+    per_hazard.sort(key=lambda x: (-x[2]["score"], -x[2]["severity"], x[0].name))
+    for h, fam, res, tol, scored in per_hazard:
+        taken = 0
+        for best in scored:
+            if taken >= rc["maxPerHazard"]:
+                break
             cand = best["cand"]
             key = cand.id if cand.source == "catalogue" else f"llm:{cand.description.lower()[:60]}"
+            capex = cand.cost in ("HIGH", "VERY_HIGH")
+            if capex and key not in picks and capex_seen >= rc["maxCapexPerEntry"]:
+                skipped.append({"candidate": cand.description, "reason": "only one capex proposal per entry"})
+                continue
+            taken += 1
             moves_out = not eng.resolved(tol) and (
                 eng.resolved(best["tolAfter"]) or best["tolAfter"]["route"] == "OVERRIDE"
             )
             if key in picks:
-                p = picks[key]
-                p["targetHazards"].append({"key": h.key, "name": h.name})
-                p["raisesCapa"] = p["raisesCapa"] or moves_out
-                p["_rank"] = max(p["_rank"], (res["score"], best["per_effort"]))
+                pk = picks[key]
+                pk["targetHazards"].append({"key": h.key, "name": h.name})
+                pk["raisesCapa"] = pk["raisesCapa"] or moves_out
+                pk["kind"] = "CAPA" if pk["raisesCapa"] else "IMPROVEMENT_NOTE"
+                pk["_rank"] = max(pk["_rank"], (res["score"], best["per_effort"]))
                 continue
-            level = res["level"]
+            capex_seen += int(capex)
             picks[key] = {
                 "id": key,
                 "hierarchy": cand.hierarchy,
@@ -609,42 +710,45 @@ def recommend(
                 "residualAfter": best["after"],
                 "costBand": cand.cost,
                 "ownerRole": rc["ownerRoles"].get(cand.hierarchy, "Section Head"),
-                "dueDays": rc["dueDays"].get(level, 90),
+                "dueDays": rc["dueDays"].get(res["level"], 90),
                 "raisesCapa": moves_out,
                 "kind": "CAPA" if moves_out else "IMPROVEMENT_NOTE",
                 "source": cand.source,
                 "family": fam,
-                "interimMeasure": INTERIM.get(
-                    fam, "Interim: supervisor check before each task until in place"
-                )
-                if cand.cost in ("HIGH", "VERY_HIGH")
+                "interimMeasure": INTERIM.get(fam, "Interim: supervisor check before each task until in place")
+                if capex
                 else None,
                 "_rank": (res["score"], best["per_effort"]),
             }
 
-    recs = sorted(picks.values(), key=lambda r: (-r["_rank"][0], -r["_rank"][1], r["id"]))
-    # at most one capex item per entry
-    capex_seen = 0
-    kept = []
-    for r in recs:
-        if r["costBand"] in ("HIGH", "VERY_HIGH"):
-            capex_seen += 1
-            if capex_seen > rc["maxCapexPerEntry"]:
-                skipped.append({"candidate": r["description"], "reason": "only one capex proposal per entry"})
-                continue
-        kept.append(r)
+    kept = sorted(picks.values(), key=lambda r: (-r["_rank"][0], -r["_rank"][1], r["id"]))
     cap = (
         rc["maxPerEntryHighCritical"] if entry_level in ("HIGH", "CRITICAL") else rc["maxPerEntryLowModerate"]
     )
-    for r in kept[cap:]:
+    # Controls already planned (with a date) count toward the cap, so acting on
+    # the recommendations never produces a fresh batch on the next pass.
+    planned = {
+        c.description.strip().lower()
+        for hr in hazard_results
+        for c in hr.get("controls") or []
+        if c.planned and c.planned_date
+    }
+    room = max(0, cap - len(planned))
+    for r in kept[room:]:
         skipped.append({"candidate": r["description"], "reason": f"entry cap of {cap} reached"})
-    kept = kept[:cap]
+    kept = kept[:room]
+    targeted = {t["key"] for r in kept for t in r["targetHazards"]}
+    uncovered = [
+        {**n, "reason": "entry cap reached" if (len(planned) + len(kept)) >= cap else "no practicable control found"}
+        for k, n in needing.items()
+        if k not in targeted
+    ]
     for r in kept:
         r.pop("_rank", None)
         shared = [
             s
             for s in sibling_recommended
-            if similarity(r["description"], s.get("text")) >= rc["dedupeSimilarity"]
+            if linked(r["description"], s.get("text"), rc.get("linkSimilarity", 0.6))
         ]
         r["studyLevel"] = bool(shared)
         r["sharedWith"] = sorted({s.get("label") or "" for s in shared})[:5]
@@ -653,7 +757,9 @@ def recommend(
         "linkedCapas": list(linked_capas.values()),
         "skipped": skipped,
         "cap": cap,
+        "uncovered": uncovered,
     }
 
 
-__all__ = ["CATALOG", "Candidate", "catalogue_for", "is_filler", "recommend", "similarity", "tokens"]
+__all__ = ["CATALOG", "Candidate", "catalogue_for", "is_filler", "linked", "recommend", "same_control", "similarity",
+           "tokens"]

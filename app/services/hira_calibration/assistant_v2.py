@@ -73,6 +73,7 @@ def calibrate_draft(
             evidence=evidence.for_family(fam),
             scale=rule.likelihood_scale,
             cfg=cfg,
+            draft=True,  # an LLM draft is capped by evidence even on a plant-index scale
         )
         scal = eng.calibrate_severity(h.get("severity"), family=fam, text=hz.text, cfg=cfg, adjust=True)
         if scal["value"] is None:
