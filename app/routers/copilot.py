@@ -70,18 +70,30 @@ async def copilot_status(user: User = Depends(get_current_user)) -> dict[str, An
 @router.get("/hira-review/{entry_id}")
 async def hira_entry_review(
     entry_id: str,
+    preview: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """The copilot's review of one HIRA entry: what is wrong, what to correct in
     the residual risk, and what to improve. Deterministic (no AI call), so the
-    entry page can show it as soon as the activity is opened."""
+    entry page can show it as soon as the activity is opened.
+
+    Feature flag hira.calibration.v2 (per plant): OFF -> v1; SHADOW -> v1 shown,
+    v1 and v2 logged side by side; ON -> v2. `?preview=v2` returns v2 for
+    calibration managers (HIRA.LIBRARY_MANAGE) whatever the flag."""
     from app.services.agents.source_access import assert_source_access
-    from app.services.copilot.hira_review import review_entry
+    from app.services.hira_calibration import service as calibration
+    from app.services.permissions import PermissionContext, can
 
     await assert_source_access(db, user, "HIRA", entry_id)
+    want_preview = (preview or "").lower() == "v2"
+    if want_preview:
+        plant_id = await calibration.plant_of_entry(db, entry_id)
+        check = await can(db, user.id, "HIRA.LIBRARY_MANAGE", PermissionContext(plant_id=plant_id))
+        if not check.allowed:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Preview of the calibrated review needs HIRA.LIBRARY_MANAGE")
     try:
-        return await review_entry(db, entry_id)
+        return await calibration.review(db, entry_id, user_id=user.id, preview=want_preview)
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 

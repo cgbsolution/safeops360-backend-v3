@@ -1616,6 +1616,22 @@ def _apply_residual_from_controls(
     entry.residualRiskColor = cell.colorHex if cell else None
 
 
+async def _calibrated_residual(
+    db: AsyncSession,
+    entry: HiraEntry,
+    likelihoods_by_score: dict[int, RiskMatrixLikelihood],
+    severities_by_score: dict[int, RiskMatrixSeverity],
+    cells: list[RiskMatrixCell],
+) -> bool:
+    """HIRA calibration v2: when the plant's flag hira.calibration.v2 is ON, the
+    auto residual comes from the v2 risk engine (per-hazard, control credit by
+    hierarchy, never residual = initial from an empty control list). Returns
+    False when the flag is OFF/SHADOW, and the v1 model below runs unchanged."""
+    from app.services.hira_calibration.service import apply_v2_residual
+
+    return await apply_v2_residual(db, entry, likelihoods_by_score, severities_by_score, cells)
+
+
 @router.patch("/entries/{entry_id}", response_model=HiraEntryOut)
 async def update_entry(
     entry_id: str,
@@ -1702,9 +1718,10 @@ async def update_entry(
         # Derive the residual from the entry's existing controls. Any residual
         # L/S the client sent is ignored while in auto mode.
         cells, liks_by_score, sevs_by_score = await _load_matrix_scales(db, entry.study.riskMatrixId)
-        _apply_residual_from_controls(
-            entry, list(entry.existingControls), cells, liks_by_score, sevs_by_score
-        )
+        if not await _calibrated_residual(db, entry, liks_by_score, sevs_by_score, cells):
+            _apply_residual_from_controls(
+                entry, list(entry.existingControls), cells, liks_by_score, sevs_by_score
+            )
         data.pop("residualLikelihoodId", None)
         data.pop("residualSeverityId", None)
     # Manual residual recompute
@@ -2473,7 +2490,8 @@ async def replace_existing_controls(
     if entry.residualAutoCalculated is True:
         matrix = await db.get(RiskMatrix, entry.study.riskMatrixId)
         cells, liks_by_score, sevs_by_score = await _load_matrix_scales(db, entry.study.riskMatrixId)
-        _apply_residual_from_controls(entry, list(rows), cells, liks_by_score, sevs_by_score)
+        if not await _calibrated_residual(db, entry, liks_by_score, sevs_by_score, cells):
+            _apply_residual_from_controls(entry, list(rows), cells, liks_by_score, sevs_by_score)
         if entry.residualRiskLevel:
             region = _alarp_region(entry.residualRiskLevel, matrix.alarpBands if matrix else None)
             threshold = (
