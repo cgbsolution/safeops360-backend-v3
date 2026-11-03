@@ -305,9 +305,11 @@ async def apply(
         if "CONFIRM_ROUTINE_CONTROLS" in parts
         else {}
     )
-    if "CONFIRM_ROUTINE_CONTROLS" in parts:
-        parts = [*parts, "EXISTING_CONTROLS"]
-    if "EXISTING_CONTROLS" in parts or eff or confirm:
+    # Each button adds only its own group: plant proposals (EXISTING_CONTROLS)
+    # or routine controls (CONFIRM_ROUTINE_CONTROLS).
+    add_plant = "EXISTING_CONTROLS" in parts
+    add_routine = "CONFIRM_ROUTINE_CONTROLS" in parts
+    if add_plant or add_routine or eff or confirm:
         current = [
             {
                 k: getattr(c, k, None)
@@ -332,8 +334,8 @@ async def apply(
                 c["effectiveness"] = eff[c["_id"]]
             if c["_id"] in confirm and not (c["verificationMethod"] or "").strip():
                 c["verificationMethod"] = confirm[c["_id"]]
-        if "EXISTING_CONTROLS" in parts:
-            for p in result["existingControlProposals"]:
+        for p in result["existingControlProposals"]:
+            if add_routine if p.get("routine") else add_plant:
                 current.append(
                     {
                         "controlId": None,

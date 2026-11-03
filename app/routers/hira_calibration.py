@@ -38,7 +38,9 @@ class CalibrationConfigIn(BaseModel):
 
 
 class CalibrationApplyIn(BaseModel):
-    parts: list[Literal["EXISTING_CONTROLS", "CONFIRM_ROUTINE_CONTROLS", "RECOMMENDATIONS", "DEFAULTS"]] = Field(min_length=1)
+    parts: list[Literal["EXISTING_CONTROLS", "CONFIRM_ROUTINE_CONTROLS", "RECOMMENDATIONS", "DEFAULTS"]] = (
+        Field(min_length=1)
+    )
     changeReason: str | None = Field(default=None, max_length=500)
     recommendationIds: list[str] | None = None
 
@@ -128,6 +130,30 @@ async def put_calibration_config(
         "config": cfg,
         "versions": versions,
         "engineVersion": cal_config.ENGINE_VERSION,
+    }
+
+
+@router.get("/calibration/scope")
+async def calibration_scope(
+    plant_id: str | None = Query(None, alias="plantId"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """What the calibrated review is validated for (the Copilot panel shows it),
+    and the plant's pack."""
+    from app.services.hira_calibration import rubric_packs  # noqa: PLC0415
+
+    await _require(db, user, "HIRA.READ", plant_id)
+    cfg, mode, _ = await cal_config.load(db, plant_id)
+    _, pack = rubric_packs.apply_pack(cfg, cfg.get("rubricPack"))
+    scope = rubric_packs.scope_for(pack, "TASK_BASED")
+    return {
+        "mode": mode,
+        "validatedFor": rubric_packs.validated_for(),
+        "pack": scope["pack"],
+        "validated": scope["validated"],
+        "banner": scope["banner"],
+        "packs": rubric_packs.list_packs(),
     }
 
 

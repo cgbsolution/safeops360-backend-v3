@@ -335,6 +335,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
                             "bale",
                             "sack",
                             "drum",
+                            "carboy",
                             "full bin",
                             "tube",
                             "roll",

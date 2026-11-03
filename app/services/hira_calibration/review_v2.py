@@ -444,6 +444,48 @@ def evaluate(
                 "overridden": False,
                 "note": "No control is captured for this low-severity hazard: confirm the routine controls.",
             }
+        # Controls in place but unverified: when verifying them would settle the
+        # hazard, ask for the verification, not another control (R6; round 2 J).
+        verify_first = False
+        if (
+            tol
+            and residual
+            and rating_credit
+            and provisional
+            and not eng.resolved(tol)
+            and tol["route"] in ("CONTROLS", "ALARP_CHECKLIST")
+        ):
+            as_verified = [
+                eng.Control(
+                    c.key,
+                    c.hierarchy,
+                    c.description,
+                    effectiveness="EFFECTIVE",
+                    evidence_attached=True,
+                    verification_method=c.verification_method or "verified",
+                    hazard_keys=c.hazard_keys,
+                )
+                if not c.planned and c.effectiveness != "INEFFECTIVE"
+                else c
+                for c in entry.controls
+            ]
+            rv_ = eng.residual_from_controls(L, S, as_verified, cfg, hazard=h)
+            t_v = tol_for(eng.rate(rv_["likelihood"], rv_["severity"], cfg), verified=True)
+            settles = t_v is not None and (
+                eng.resolved(t_v)
+                or t_v["route"] == "OVERRIDE"
+                or (t_v["route"] == "ALARP_CHECKLIST" and "engineeringInPlaceOrPlanned" not in t_v["missing"])
+            )
+            if settles:
+                verify_first = True
+                tol = {
+                    "state": eng.NOT_ACCEPTABLE,
+                    "route": "VERIFY_CONTROLS",
+                    "missing": ["controlVerification"],
+                    "overridden": False,
+                    "note": "The controls in place would settle this hazard once verified: record how each is "
+                    "checked (e.g. inspection register) instead of adding controls.",
+                }
         reg = None
         have_reg = entry.hazard_regulations.get(h.key) or (None, None)
         if not have_reg[0]:
@@ -481,7 +523,7 @@ def evaluate(
             "credibleS": credible_s,
             "ratingCredit": rating_credit,
             "_tol_for": tol_for,
-            "noRecommendations": uncontrolled_low,
+            "noRecommendations": uncontrolled_low or verify_first,
         }
         if inherent_only:
             pr = eng.residual_from_controls(L, S, provisional_controls, cfg, hazard=h)
@@ -553,6 +595,8 @@ def evaluate(
             if not ri["collapsed"] and max(ri["inherent"]["severity"], ri.get("credibleS") or 0) > low_max
         ]
         routine_only = not serious
+        n_plant = sum(1 for p in proposals if not p.get("routine"))
+        n_routine = len(proposals) - n_plant
         findings.append(
             _finding(
                 "NO_CONTROLS" if serious else "CONFIRM_ROUTINE_CONTROLS",
@@ -563,16 +607,34 @@ def evaluate(
                 else "No controls are recorded. These are low-severity hazards: confirm the routine controls "
                 "in place instead of adding new ones.",
                 (
-                    f"Use these {len(proposals)} existing / routine controls (one click), then rate their effectiveness."
-                    if proposals and not routine_only
-                    else f"Confirm these {len(proposals)} routine controls (one click)."
-                    if proposals
+                    f"Use these {n_plant} existing controls (one click), then rate their effectiveness."
+                    + (f" Confirm the {n_routine} routine controls too." if n_routine else "")
+                    if n_plant and not routine_only
+                    else f"Confirm these {n_routine} routine controls (one click)."
+                    if n_routine
                     else "Record the controls already in place (SOP / work instruction, inspections, guards)."
                 ),
                 [h["key"] for h in hazard_out if h.get("inherent")],
-                action=("USE_EXISTING_CONTROLS" if serious else "CONFIRM_ROUTINE_CONTROLS")
+                action=(
+                    "USE_EXISTING_CONTROLS" if n_plant and not routine_only else "CONFIRM_ROUTINE_CONTROLS"
+                )
                 if proposals
                 else None,
+            )
+        )
+    verify = [
+        h for h in hazard_out if h.get("tolerability") and h["tolerability"]["route"] == "VERIFY_CONTROLS"
+    ]
+    if verify:
+        findings.append(
+            _finding(
+                "VERIFY_CONTROLS",
+                ADVISORY,
+                "Verify the controls in place",
+                "; ".join(f"{h['name']}: {eng.rating_text(h['residual'])}" for h in verify[:4])
+                + ". Once verified, these controls settle the hazard: no further control is needed.",
+                "Record how each control is checked (inspection register, signed checklist) or rate it effective.",
+                [h["key"] for h in verify],
             )
         )
     confirm = [

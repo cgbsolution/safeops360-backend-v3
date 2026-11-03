@@ -631,7 +631,9 @@ def test_existing_controls_offered_once_and_unverified():
     assert len(plant_props) == 2  # plus the routine controls offered for confirmation (round 2 C)
     assert all(p["effectiveness"] == "NOT_VERIFIED" for p in r["existingControlProposals"])
     nc = next(f for f in r["findings"] if f["code"] == "NO_CONTROLS")
-    assert nc["action"] == "USE_EXISTING_CONTROLS" and "existing / routine controls" in nc["fix"]
+    assert nc["action"] == "USE_EXISTING_CONTROLS" and "Use these 2 existing controls" in nc["fix"]
+    if len(r["existingControlProposals"]) > 2:  # the routine group has its own button
+        assert "routine controls too" in nc["fix"]
 
 
 @pytest.mark.parametrize(

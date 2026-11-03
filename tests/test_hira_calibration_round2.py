@@ -121,8 +121,11 @@ def test_a_entry_state_is_the_worst_hazard_and_alarp_needs_an_s4_hazard():
         ("HEAT", "Radiant heat in the crane cabin above the ladle", None, 3, "HEAT_AMBIENT_S3"),
         ("HEAT", "Radiant heat at close range to the taphole", 4, 4, "HEAT_RADIANT_CLOSE_S4"),
         # (b) manual handling: repetitive strain / routine lifts S2 (recoverable); heavy loads S3 (LTI-level)
-        ("MANUAL_HANDLING", "Repetitive feeding of blanks", None, 2, None),
+        ("MANUAL_HANDLING", "Repetitive feeding of blanks", None, 2, "MANUAL_HANDLING_FAMILY_DEFAULT"),
         ("MANUAL_HANDLING", "Lifting a 30 kg roll", None, 3, "MANUAL_HEAVY_LOAD_S3"),
+        # a load given in litres counts at 1 kg per litre
+        ("MANUAL_HANDLING", "Back strain moving 50 L acid carboys by hand", None, 3, "MANUAL_HEAVY_LOAD_S3"),
+        ("MANUAL_HANDLING", "Wrist strain decanting 5 l cans", None, 2, "MANUAL_HANDLING_FAMILY_DEFAULT"),
         # (c) height: ladder / step-stool below the threshold S3 (LTI-level); at / above it, edges,
         # openings, fragile surfaces S4-S5 (fatal falls credible)
         ("HEIGHT", "Step stool to reach the top shelf", None, 3, "HEIGHT_LADDER_BELOW_THRESHOLD_S3"),
@@ -136,7 +139,7 @@ def test_a_entry_state_is_the_worst_hazard_and_alarp_needs_an_s4_hazard():
         ),
         # (d) fire: routine grinding / cutting sparks S3 (local burns) unless flammable inventory is named
         ("FIRE_EXPLOSION", "Grinding sparks igniting combustibles", None, 3, "FIRE_ROUTINE_SPARKS_S3"),
-        ("FIRE_EXPLOSION", "Cutting sparks near a diesel drum", 4, None, None),
+        ("FIRE_EXPLOSION", "Cutting sparks near a diesel drum", 4, None, "FIRE_EXPLOSION_FAMILY_DEFAULT"),
         # conditional floor: a low-voltage office board does not get the live-panel floor
         (
             "ELECTRICAL",
@@ -145,7 +148,7 @@ def test_a_entry_state_is_the_worst_hazard_and_alarp_needs_an_s4_hazard():
             None,
             "ELECTRICAL_FLOOR_NOT_TRIGGERED",
         ),
-        ("ELECTRICAL", "Contact with a live 415 V busbar", 4, None, None),
+        ("ELECTRICAL", "Contact with a live 415 V busbar", 4, None, "ELECTRICAL_FAMILY_DEFAULT"),
     ],
 )
 def test_b_rubric_rules(family, text, lo, hi, rule):

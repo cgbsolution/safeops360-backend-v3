@@ -649,6 +649,8 @@ _HEIGHT_LADDER = (
 )
 _METRES = re.compile(r"(\d+(?:\.\d+)?)\s*(?:m|metre|metres|meter|meters)(?![a-z0-9])")
 _KG = re.compile(r"(\d+(?:\.\d+)?)\s*kg(?![a-z0-9])")
+# a load stated in litres counts at 1 kg per litre (water; acids and oils are close or heavier)
+_LITRES = re.compile(r"(\d+(?:\.\d+)?)\s*(?:l|lt|ltr|litre|litres|liter|liters)(?![a-z0-9])")
 
 
 def severity_rule(family: str, text: str | None, cfg: dict[str, Any]) -> dict[str, Any]:
@@ -672,7 +674,7 @@ def severity_rule(family: str, text: str | None, cfg: dict[str, Any]) -> dict[st
     for r in rule.get("rules") or []:
         hit = _any(t, r.get("when") or [])
         if r.get("heavyKg"):
-            hit = hit or any(float(x) >= float(r["heavyKg"]) for x in _KG.findall(t))
+            hit = hit or any(float(x) >= float(r["heavyKg"]) for x in (*_KG.findall(t), *_LITRES.findall(t)))
         if hit and not _any(t, r.get("unless") or []):
             if r.get("noFloor"):
                 lo = None
@@ -688,6 +690,8 @@ def severity_rule(family: str, text: str | None, cfg: dict[str, Any]) -> dict[st
         hi = None  # e.g. asbestos dust, toxic gas, steam: the ceiling does not apply
     if lo and hi and lo > hi:
         hi = lo
+    if rid is None and (lo or hi):
+        rid = f"{family}_FAMILY_DEFAULT"  # the family's own range, no scenario rule
     return {"min": lo, "max": hi, "rule": rid}
 
 

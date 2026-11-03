@@ -115,7 +115,8 @@
         {"hierarchy": "ADMINISTRATIVE", "description": "Periodic electrical audit of office wiring"},
         {"hierarchy": "ADMINISTRATIVE", "description": "Stretching break every 2 hours"}
       ],
-      "expected": {"inherentBand": "MODERATE", "residualBand": "LOW"}
+      "expected": {"inherentBand": "MODERATE", "residualBand": "LOW"},
+      "expectedProposed": {"inherent": "MODERATE (6)", "residualPass1": "MODERATE (4)", "endStateOnePass": "ACCEPTABLE", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "High"}
     },
     {
       "id": "LOW-02",
@@ -149,6 +150,7 @@
         {"hierarchy": "ADMINISTRATIVE", "description": "Toolbox talk before every shift"}
       ],
       "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "NOT_ASSESSED"},
+      "expectedProposed": {"inherent": "HIGH (9)", "residualPass1": "NOT_ASSESSED (baseline controls only)", "endStateOnePass": "ACCEPTABLE after routine controls are confirmed (0-2 recommendations)", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"},
       "notes": "Only baseline PPE recorded: realistic for a contract housekeeping crew."
     },
     {
@@ -184,7 +186,8 @@
         {"hierarchy": "ENGINEERING", "description": "Repair and replace broken trench covers"},
         {"hierarchy": "ENGINEERING", "description": "Speed breakers on internal roads"}
       ],
-      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"}
+      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"},
+      "expectedProposed": {"inherent": "HIGH (12)", "residualPass1": "MODERATE (4-6) only if the fixture controls include marked or segregated crossings and crane-bay exclusion", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Low"}
     },
     {
       "id": "LOW-04",
@@ -218,7 +221,8 @@
         {"hierarchy": "ADMINISTRATIVE", "description": "Ladder inspection checklist"},
         {"hierarchy": "ADMINISTRATIVE", "description": "5S housekeeping in stores"}
       ],
-      "expected": {"inherentBand": "HIGH", "residualBand": "TODO(HSE lead)"}
+      "expected": {"inherentBand": "HIGH", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "HIGH (9)", "residualPass1": "LOW (3)", "endStateOnePass": "ACCEPTABLE", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "LOW-05",
@@ -254,7 +258,8 @@
         {"hierarchy": "ENGINEERING", "description": "Replace rubber hoses with steel-braided LPG hoses"},
         {"hierarchy": "ADMINISTRATIVE", "description": "Quarterly fire mock drill"}
       ],
-      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"}
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"},
+      "expectedProposed": {"inherent": "CRITICAL (15)", "residualPass1": "MODERATE (5-6)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "High"}
     },
     {
       "id": "LOW-06",
@@ -287,7 +292,8 @@
         {"hierarchy": "ADMINISTRATIVE", "description": "ORS and hydration schedule"},
         {"hierarchy": "ENGINEERING", "description": "Raised platform for load checking"}
       ],
-      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"}
+      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"},
+      "expectedProposed": {"inherent": "HIGH (10)", "residualPass1": "MODERATE (5-6)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "LOW-07",
@@ -321,7 +327,8 @@
         {"hierarchy": "PPE", "description": "Cut resistant gloves"},
         {"hierarchy": "ADMINISTRATIVE", "description": "Awareness training"}
       ],
-      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"}
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"},
+      "expectedProposed": {"inherent": "HIGH (12)", "residualPass1": "MODERATE (4)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "High"}
     },
     {
       "id": "LOW-08",
@@ -395,7 +402,8 @@
         {"hierarchy": "ENGINEERING", "description": "Spot coolers at the furnace platform"}
       ],
       "evidence": {"byFamily": {"MOLTEN": {"window": 1, "12m": 1, "items": ["NM-2026-0412: slag splash over the ladle rim during heat 6614 tapping, no injury"]}}},
-      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"}
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "CRITICAL (20)", "residualPass1": "HIGH (10)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "High"}
     },
     {
       "id": "HH-02",
@@ -436,6 +444,7 @@
         "siblingRecommended": [{"label": "S.No 3", "text": "Hard-barricaded exclusion zone under the crane travel path"}]
       },
       "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "CRITICAL (15)", "residualPass1": "HIGH (10)", "endStateOnePass": "OVERRIDE", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"},
       "notes": "Plant-index likelihood: the evidence cap does not apply, so the LLM's L4 passes through."
     },
     {
@@ -478,7 +487,8 @@
       "plantData": {
         "siblingRecommended": [{"label": "#4 Conveyor belt jointing", "text": "Fixed or interlocked guards on rotating parts and nip points"}]
       },
-      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"}
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"},
+      "expectedProposed": {"inherent": "CRITICAL (15)", "residualPass1": "MODERATE (5)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "HH-04",
@@ -518,7 +528,8 @@
         {"hierarchy": "ADMINISTRATIVE", "description": "Neutralise and flush the tank before entry"},
         {"hierarchy": "PPE", "description": "Full body harness with lifeline"}
       ],
-      "expected": {"inherentBand": "CRITICAL", "residualBand": "HIGH"}
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "HIGH"},
+      "expectedProposed": {"inherent": "CRITICAL (15)", "residualPass1": "HIGH (10)", "endStateOnePass": "TOLERABLE_ALARP after a second engineering control", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "HH-05",
@@ -565,6 +576,7 @@
       },
       "evidence": {"byFamily": {"HEIGHT": {"window": 1, "12m": 0, "items": ["IR-2025-031: contractor fell through a skylight sheet at the RMHS shed (fracture, lost-time injury)"]}}},
       "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "CRITICAL (20)", "residualPass1": "NOT_ASSESSED (baseline only)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"},
       "notes": "Only baseline PPE in the draft; the plant SOP register holds the fragile roof SOP."
     },
     {
@@ -648,7 +660,8 @@
         {"hierarchy": "ENGINEERING", "description": "Acoustic enclosure for the press", "costBand": "HIGH"},
         {"hierarchy": "ADMINISTRATIVE", "description": "Job rotation every 2 hours"}
       ],
-      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"}
+      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"},
+      "expectedProposed": {"inherent": "HIGH (12)", "residualPass1": "MODERATE (6)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "HH-08",
@@ -690,7 +703,8 @@
         {"hierarchy": "PPE", "description": "Dust mask"},
         {"hierarchy": "ENGINEERING", "description": "Dead-man switch grinders"}
       ],
-      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"}
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"},
+      "expectedProposed": {"inherent": "HIGH (12)", "residualPass1": "MODERATE (6)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "HH-09",
@@ -730,7 +744,8 @@
         ],
         "openCapas": [{"id": "capa-2026-077", "number": "CAPA-2026-077", "text": "Insulating shrouds / barriers over live parts in MCC-3 panels"}]
       },
-      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"}
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "CRITICAL (15)", "residualPass1": "MODERATE (5-6)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "HH-10",
@@ -807,7 +822,8 @@
       "evidence": {"byFamily": {"FIRE_EXPLOSION": {"window": 0, "12m": 0,
         "failures": ["Safety audit SA-2026-09 (Aug 2026): flashback arrestor missing at the torch end on 2 of 6 cutting sets"],
         "items": ["Safety audit SA-2026-09 (Aug 2026): flashback arrestor missing at the torch end on 2 of 6 cutting sets"]}}},
-      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"}
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "CRITICAL (20)", "residualPass1": "HIGH (10)", "endStateOnePass": "TOLERABLE_ALARP after a second control", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "HH-12",
@@ -848,6 +864,7 @@
         ]
       },
       "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "CRITICAL (15)", "residualPass1": "NOT_ASSESSED (no controls recorded)", "endStateOnePass": "TOLERABLE_ALARP", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"},
       "notes": "No controls in the draft; the plant registers hold two."
     },
     {
@@ -885,13 +902,16 @@
         {"hierarchy": "ENGINEERING", "description": "Acoustic enclosure for the compressor", "costBand": "HIGH"},
         {"hierarchy": "ADMINISTRATIVE", "description": "Annual calibration of the relief valve"}
       ],
+      "statutoryCurrent": false,
+      "statutoryCurrentNote": "Fixture input (round 2 J): air receiver AR-2 hydraulic test overdue since 15 Jul 2026, as recorded in plantData and evidence.",
       "plantData": {
         "statutoryOverdue": {"PRESSURE": ["Air receiver AR-2: hydraulic test due 15 Jul 2026, not done"]}
       },
       "evidence": {"byFamily": {"PRESSURE": {"window": 0, "12m": 0,
         "failures": ["Air receiver AR-2 statutory hydraulic test overdue since 15 Jul 2026"],
         "items": ["Air receiver AR-2 statutory hydraulic test overdue since 15 Jul 2026"]}}},
-      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)"}
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "CRITICAL (16)", "residualPass1": "HIGH (8-12)", "endStateOnePass": "TOLERABLE_ALARP after a second control", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"}
     },
     {
       "id": "HH-14",
@@ -927,6 +947,7 @@
         {"hierarchy": "ADMINISTRATIVE", "description": "Dry pit check before every dump"}
       ],
       "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "expectedProposed": {"inherent": "CRITICAL (15)", "residualPass1": "HIGH (10)", "endStateOnePass": "OVERRIDE", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "Medium"},
       "notes": "The LLM's 'water sprinkling' idea is unsafe next to liquid slag; see whether it survives the filters."
     },
     {
@@ -964,7 +985,8 @@
         {"hierarchy": "PPE", "description": "Dust mask"}
       ],
       "evidence": {"byFamily": {"VEHICLE": {"window": 1, "12m": 1, "items": ["NM-2026-0310: tipper reversed without a banksman near hopper 2"]}}},
-      "expected": {"inherentBand": "CRITICAL", "residualBand": "MODERATE"}
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "MODERATE"},
+      "expectedProposed": {"inherent": "CRITICAL (20)", "residualPass1": "CRITICAL (15)", "endStateOnePass": "TOLERABLE_ALARP after two engineering controls", "status": "PROPOSED", "source": "Appendix A, round 2/3 brief", "confidence": "High"}
     }
   ]
 }

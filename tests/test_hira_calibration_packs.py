@@ -107,6 +107,8 @@ def test_draft_or_missing_pack_suppresses_residual_claims(code):
     assert all(h["residual"] is None and h["tolerability"] is None for h in out["hazards"])
     assert all(r["kind"] == "SUGGESTION" for r in out["recommendations"])
     assert not rv.blocker_codes(out)
+    assert out["suggestedDefaults"]["alarpRecord"] is None and out["alarpDraft"] is None
+    assert not {f["code"] for f in out["findings"]} & rp._TOLERABILITY_CODES
 
 
 def test_validated_for_lists_only_validated_packs():

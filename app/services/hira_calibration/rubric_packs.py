@@ -114,6 +114,7 @@ _TOLERABILITY_CODES = {
     "OVERRIDE_ROUTE",
     "NO_FURTHER_CONTROL",
     "CONFIRM_ROUTINE_CONTROLS",
+    "VERIFY_CONTROLS",
     "SAVED_RESIDUAL_LOWER",
     "NO_RATING_CREDIT",
 }
@@ -163,6 +164,8 @@ def apply_scope(result: dict[str, Any], scope: dict[str, Any]) -> dict[str, Any]
         "recommendations": recs,
         "controlsJustify": [],
         "alarpDraft": None,
+        # no ALARP record either: "Apply suggested defaults" must not write one
+        "suggestedDefaults": {**(result.get("suggestedDefaults") or {}), "alarpRecord": None},
         "uncoveredHazards": [],
     }
 

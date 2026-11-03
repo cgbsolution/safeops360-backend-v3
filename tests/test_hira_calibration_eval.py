@@ -167,3 +167,101 @@ def test_v1_baseline_is_what_the_brief_describes(rows):
     for i, a in ACTS.items():
         if not a["existingControls"]:
             assert rows[i]["v1"]["residual"] == rows[i]["v1"]["inherent"]  # v1: residual = initial
+
+
+# ── round 2 J: Appendix A, unverified controls, review CSV, draft packs ──
+
+APPENDIX_A = ROOT / "tests" / "eval" / "hira_calibration" / "expected_bands_proposed.csv"
+
+
+def test_appendix_a_is_loaded_as_proposed_and_leaves_expected_alone():
+    import csv  # noqa: PLC0415
+
+    with APPENDIX_A.open(encoding="utf-8", newline="") as f:
+        rows = {r["id"]: r for r in csv.DictReader(f)}
+    loaded = {i: a["expectedProposed"] for i, a in ACTS.items() if "expectedProposed" in a}
+    assert set(loaded) == set(rows) and len(loaded) == 20
+    for i, ep in loaded.items():
+        r = rows[i]
+        assert ep["status"] == "PROPOSED"
+        assert (ep["inherent"], ep["residualPass1"], ep["endStateOnePass"]) == (
+            r["proposed_inherent"],
+            r["proposed_residual_pass1"],
+            r["proposed_end_state_one_pass"],
+        )
+        assert set(ACTS[i]["expected"]) == {"inherentBand", "residualBand"}  # the round-1 values stay
+
+
+def test_statutory_current_is_a_fixture_input(rows):
+    assert ACTS["HH-13"]["statutoryCurrent"] is False  # AR-2 hydraulic test overdue in its plant data
+    assert harness.draft_for(ACTS["HH-13"])["statutoryCurrent"] is False
+    # a real gap, not missing data: the only open item is the statutory test
+    open_ = [h for h in rows["HH-13"]["final"]["hazards"] if h["route"] == "ALARP_CHECKLIST"]
+    assert open_ and all(h["missing"] == ["statutoryCurrent"] for h in open_)
+
+
+@pytest.mark.parametrize(
+    "exp,act,tol,want",
+    [
+        ("HIGH", "HIGH", True, "EXACT"),
+        ("HIGH", "CRITICAL", True, "TOLERANCE"),
+        ("MODERATE", "CRITICAL", True, "MISMATCH"),
+        ("HIGH", "CRITICAL", False, "MISMATCH"),
+        ("NOT_ASSESSED", "NOT_ASSESSED", False, "EXACT"),
+    ],
+)
+def test_scoring_rule(exp, act, tol, want):
+    assert harness.band_check(exp, act, tolerance=tol) == want
+
+
+def test_appendix_a_scoring_covers_every_row(rows):
+    scored = harness.score_appendix_a(list(rows.values()))
+    assert len(scored) == 20
+    assert {x["check"] for x in scored} <= {"EXACT", "TOLERANCE", "MISMATCH", "VERIFY_FIXTURE"}
+    low03 = next(x for x in scored if x["id"] == "LOW-03")
+    assert low03["residualCheck"] == "VERIFY_FIXTURE"  # the expectation is conditional on the fixture
+    assert all(x["recommendationsWithinCaps"] for x in scored)
+
+
+@pytest.mark.parametrize("aid", IDS)
+def test_unverified_controls_raise_no_new_blockers(rows, aid):
+    u = rows[aid]["unverified"]
+    assert not u["newBlockers"], u
+    assert u["provisionalCreditNotAboveVerified"]
+
+
+def test_verify_first_route_asks_for_verification_not_more_controls():
+    s, raw = harness.run_activity(ACTS["HH-09"], FIXTURE)
+    r1 = raw["pass1"]
+    verify = {h["key"] for h in r1["hazards"] if (h["tolerability"] or {}).get("route") == "VERIFY_CONTROLS"}
+    assert verify
+    assert not verify & {t["key"] for x in r1["recommendations"] for t in x["targetHazards"]}
+    f = next(f for f in r1["findings"] if f["code"] == "VERIFY_CONTROLS")
+    assert f["class"] == "ADVISORY"
+    fin = {h["key"]: h for h in s["final"]["hazards"]}
+    assert all(fin[k]["state"] in harness.REACHED or fin[k]["route"] == "OVERRIDE" for k in verify)
+
+
+def test_review_csv_keeps_the_hse_lead_status(rows, tmp_path, monkeypatch):
+    monkeypatch.setattr(harness, "REVIEW_CSV", tmp_path / "review.csv")
+    rs = list(rows.values())
+    review = harness.review_rows(rs, harness.score_appendix_a(rs))
+    assert [r["id"] for r in review] == IDS and list(review[0]) == harness.REVIEW_COLS
+    assert all(r["status"] == "TODO" for r in review)
+    review[3]["status"], review[3]["hse_lead_note"] = "agree", "checked on site"
+    harness.write_review_csv(review)
+    again = harness.review_rows(rs, harness.score_appendix_a(rs))
+    assert (again[3]["status"], again[3]["hse_lead_note"]) == ("agree", "checked on site")
+
+
+def test_draft_packs_show_no_residual_claims_and_expected_stays_todo():
+    packs = harness.evaluate_packs()
+    assert {p["pack"] for p in packs} == {"APPAREL_TEXTILE", "CHEMICAL_PHARMA", "WAREHOUSE_LOGISTICS"}
+    for p in packs:
+        assert p["status"] == "DRAFT" and len(p["activities"]) == 5
+        assert [a["class"] for a in p["activities"]] == ["LOW", "LOW", "HIGH", "HIGH", "HIGH"]
+        d = p["distribution"]
+        assert d["residualClaimsShown"] == 0 and d["blockersShown"] == 0, p["pack"]
+        assert d["expectedTodo"] == 5  # never fitted to the engine
+        for a in p["activities"]:
+            assert a["shown"]["banner"] and a["shown"]["recommendationKinds"] in ([], ["SUGGESTION"])
