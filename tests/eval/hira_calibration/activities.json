@@ -1,0 +1,970 @@
+{
+  "schema": 1,
+  "description": "HIRA calibration v2 evaluation set. 25 activities: 2 benchmarks (BENCH-1, BENCH-6) and 23 Indian manufacturing activities. For DRAFT activities the per-hazard likelihood/severity are what an uncalibrated LLM (the v1 Copilot) proposed; recommendedControls are the controls it proposed (v1 showed all of them). For STORED activities the rating is the team's own single entry rating. 'expected' is an HSE judgement made before running the engine; 'TODO(HSE lead)' means not yet agreed. Used by scripts/hira_calibration_eval.py.",
+  "matrices": {
+    "STD_5X5": {"likelihoodScale": "FREQUENCY", "moderateNotAcceptable": false,
+                "note": "Standard 5x5, frequency-anchored likelihood, MODERATE tolerable with ALARP."},
+    "JSL_QSD24_GT": {"likelihoodScale": "PLANT_INDEX", "moderateNotAcceptable": true,
+                     "note": "JSL Hisar plant method QSD/24 (GT > 3.33 significant): plant-index likelihood, MODERATE not acceptable."}
+  },
+  "activities": [
+    {
+      "id": "BENCH-1",
+      "title": "Bag-to-bin feeding by crane",
+      "study": "HIRA-2026-NW-007",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Bag-to-bin feeding by crane: 1 t alloy bags lifted by EOT crane to the bin top, cut open with a knife and discharged into the alloy bin",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE_ALL (v1: one L4 x S5 spread over every hazard)",
+      "hazards": [
+        {"key": "h1", "name": "Crane / lifting operations", "code": "MECH-008", "category": "lifting",
+         "consequence": "Rigger crushed by a falling 1 t bag: fatal", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Swinging load", "code": "VEH-010", "category": "lifting",
+         "consequence": "struck or pinned by a swinging bag: crush injury, possible fatality", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Fall from bin top", "code": "WAH-003", "category": "height",
+         "consequence": "falls into the bin opening: fatality, engulfment", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Falling object", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "struck by falling alloy lumps: head injury", "likelihood": 4, "severity": 5},
+        {"key": "h5", "name": "Sharp edge", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "hand cut by the knife", "likelihood": 4, "severity": 5},
+        {"key": "h6", "name": "Manual handling", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "back strain", "likelihood": 4, "severity": 5},
+        {"key": "h7", "name": "Airborne dust", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "chronic respiratory disease", "likelihood": 4, "severity": 5}
+      ],
+      "existingControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Third-party examination of EOT crane and lifting tackles (statutory)"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Work instruction for bag-to-bin feeding"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, hand gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Overload limit switch on EOT crane"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Pre-use check of slings and crane"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Third-party examination of crane"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Work instruction for bag feeding"},
+        {"hierarchy": "ENGINEERING", "description": "Guard rail at bin top"},
+        {"hierarchy": "PPE", "description": "Dust mask"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Awareness training"},
+        {"hierarchy": "PPE", "description": "Cut resistant gloves"}
+      ],
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "HIGH"},
+      "notes": "Benchmark: tests/test_hira_calibration_engine.py ENTRY1_HAZARDS / ENTRY1_EXISTING. No evidence, no plant data."
+    },
+    {
+      "id": "BENCH-6",
+      "title": "Placement of the bucket/bags at the top of the bin (JSL S.No 6)",
+      "study": "HIRA-JSL-SMS1-AFS",
+      "matrix": "JSL_QSD24_GT",
+      "mode": "STORED",
+      "ratingBasis": "WITH_CONTROLS",
+      "activity": "Placement of the bucket/bags at the top of the bin",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "reviewDateSet": true,
+      "entryRating": {"likelihood": 2, "severity": 3},
+      "savedResidual": [2, 3],
+      "hazards": [
+        {"key": "h1", "name": "Crane / lifting equipment failure - dropped load", "code": "MECH-008", "category": "lifting",
+         "consequence": "Person may get injured"}
+      ],
+      "existingControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Work instruction / SOP DOC No SM01/03/W"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Administrative control: Third party inspection of cranes"},
+        {"hierarchy": "PPE", "description": "PPE: Helmet, Safety shoes, Dust mask, hand gloves, Fire resistant jacket, face shield, safety goggles"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Overload limit and over-hoist/over-travel limit switches on the crane, tested each shift"},
+        {"hierarchy": "ENGINEERING", "description": "Hook safety latch and anti-collision devices on cranes serving hot metal bays"},
+        {"hierarchy": "ENGINEERING", "description": "Audible hooter with flashing beacon during every hot-metal or heavy lift travel"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Exclusion zone under the load path; no one under a suspended load (enforced by the signaller)"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Pre-use check of wire ropes, slings and ladle hooks; NDT of ladle trunnions and hooks at set intervals"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Lifting tackle register with SWL tags and third-party examination (Factories Act Sec. 29)"}
+      ],
+      "recommendedControlsSource": "v1 controlIdeas: app.services.copilot.hira_review._ideas(['EQUIPMENT_FAILURE'], existing)[:6] (source sheet row SMS1-HIRA-R328)",
+      "expected": {"inherentBand": "MODERATE", "residualBand": "MODERATE"},
+      "notes": "Benchmark: tests entry6(). Client sheet rates WITH existing controls (single rating L2 x S3). Evaluated as a stored team rating via review_v2.evaluate."
+    },
+    {
+      "id": "LOW-01",
+      "title": "Office data entry and document handling",
+      "study": "HIRA-2026-NW-021",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Computer-based data entry, filing and photocopying in the HR / admin office",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "REASONABLE",
+      "hazards": [
+        {"key": "h1", "name": "Prolonged sitting at the workstation", "code": "ERGO_AWKWARD_POSTURE", "category": "ergonomic",
+         "consequence": "Neck, shoulder and lower-back pain from long hours at a fixed-height desk and a non-adjustable chair", "likelihood": 3, "severity": 2},
+        {"key": "h2", "name": "Trailing cables and open drawers", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Trip over a trailing computer cable or an open drawer: bruises or a sprained ankle", "likelihood": 2, "severity": 2},
+        {"key": "h3", "name": "Damaged extension board", "code": "ELEC-001", "category": "electrical",
+         "consequence": "Electric shock from a cracked multi-plug extension board under the desk", "likelihood": 2, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Adjustable ergonomic chairs and monitor stands at every workstation", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Monthly housekeeping and cable management check by the admin supervisor", "verificationMethod": "Monthly checklist signed by the admin supervisor"},
+        {"hierarchy": "ENGINEERING", "description": "30 mA RCCB on the office distribution boards, trip-tested quarterly", "effectiveness": "EFFECTIVE"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Ergonomics awareness training for office staff"},
+        {"hierarchy": "ENGINEERING", "description": "Cable trays and cable management under desks"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Periodic electrical audit of office wiring"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Stretching break every 2 hours"}
+      ],
+      "expected": {"inherentBand": "MODERATE", "residualBand": "LOW"}
+    },
+    {
+      "id": "LOW-02",
+      "title": "Shop-floor housekeeping (contract crew)",
+      "study": "HIRA-2026-NW-014",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Sweeping, scrap collection and waste segregation in the rolling mill bay by the contract housekeeping crew",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "LIKELIHOOD_INFLATED (L4 because it is daily)",
+      "hazards": [
+        {"key": "h1", "name": "Oily / wet floor and scattered scale", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Slip on mill scale or an oil patch while sweeping: fall, wrist fracture", "likelihood": 4, "severity": 3},
+        {"key": "h2", "name": "Sharp scrap ends", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Hand laceration while picking up strip cut-ends and binding wire by hand", "likelihood": 4, "severity": 3},
+        {"key": "h3", "name": "Scale dust from dry sweeping", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "Eye irritation and inhalation of mill scale dust raised by dry sweeping", "likelihood": 4, "severity": 3},
+        {"key": "h4", "name": "Lifting full scrap bins", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Lower-back strain lifting a full scrap bin (about 30 kg) into the trolley", "likelihood": 3, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, cotton hand gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Housekeeping training for the contract crew"},
+        {"hierarchy": "PPE", "description": "Cut-resistant gloves for picking up scrap"},
+        {"hierarchy": "ENGINEERING", "description": "Wet sweeping or a vacuum sweeper instead of dry sweeping"},
+        {"hierarchy": "PPE", "description": "Dust mask"},
+        {"hierarchy": "ENGINEERING", "description": "Wheeled scrap bins"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Toolbox talk before every shift"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "NOT_ASSESSED"},
+      "notes": "Only baseline PPE recorded: realistic for a contract housekeeping crew."
+    },
+    {
+      "id": "LOW-03",
+      "title": "Routine safety walk-through by the shift in-charge",
+      "study": "HIRA-2026-NW-021",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Daily walk-through inspection of the mill, compressor house and dispatch area by the shift in-charge",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "MIXED",
+      "hazards": [
+        {"key": "h1", "name": "Crossing internal roads", "code": "TRANSPORT_VEHICLE_COLLISION", "category": "transportation",
+         "consequence": "Struck by a reversing trailer or forklift while crossing the internal road between bays", "likelihood": 3, "severity": 4},
+        {"key": "h2", "name": "Walking under crane bays", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "Struck by a tool or material dropped from an overhead crane or platform while walking under it", "likelihood": 2, "severity": 4},
+        {"key": "h3", "name": "Compressor house and mill noise", "code": "NOISE_HIGH_EXPOSURE", "category": "noise",
+         "consequence": "Temporary hearing threshold shift from short visits to the 95 dB(A) compressor house", "likelihood": 3, "severity": 2},
+        {"key": "h4", "name": "Broken trench covers on walkways", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Trip on a broken cable-trench cover on the walkway: sprain or fracture", "likelihood": 3, "severity": 2}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Marked pedestrian walkways with zebra crossings at road junctions"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "No entry under crane bays during lifting (signage and crane hooter)"},
+        {"hierarchy": "PPE", "description": "Ear plugs issued for the marked high-noise zones"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, reflective jacket"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Pedestrian safety awareness training"},
+        {"hierarchy": "ENGINEERING", "description": "Hooter and flashing light on all cranes"},
+        {"hierarchy": "PPE", "description": "Ear muffs"},
+        {"hierarchy": "ENGINEERING", "description": "Repair and replace broken trench covers"},
+        {"hierarchy": "ENGINEERING", "description": "Speed breakers on internal roads"}
+      ],
+      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"}
+    },
+    {
+      "id": "LOW-04",
+      "title": "Stores: issue of consumables",
+      "study": "HIRA-2026-NW-018",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Picking and issuing consumables (electrodes, bearings, gloves) from racks in the central stores",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "REASONABLE",
+      "hazards": [
+        {"key": "h1", "name": "Manual handling of cartons", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Back strain lifting cartons of electrodes and bearings (up to 25 kg) from the racks", "likelihood": 3, "severity": 3},
+        {"key": "h2", "name": "Items falling from upper racks", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "Struck on the head or shoulder by a box sliding off the upper rack while pulling items", "likelihood": 3, "severity": 4},
+        {"key": "h3", "name": "Climbing to the top rack", "code": "WAH-001", "category": "height",
+         "consequence": "Fall from a 1.8 m step-ladder while reaching the top rack: fracture", "likelihood": 3, "severity": 4},
+        {"key": "h4", "name": "Packing waste in aisles", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Trip over strapping and packing waste in the aisle: sprain", "likelihood": 2, "severity": 2}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Mobile platform ladder with handrails and locking castors", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Heavy items stored on the lower shelves; rack load limits displayed"},
+        {"hierarchy": "ENGINEERING", "description": "Hand pallet truck and trolley for moving cartons"},
+        {"hierarchy": "PPE", "description": "Safety shoes, cotton gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Manual handling training"},
+        {"hierarchy": "ENGINEERING", "description": "Anti-fall lip or mesh on the upper rack shelves"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Ladder inspection checklist"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "5S housekeeping in stores"}
+      ],
+      "expected": {"inherentBand": "HIGH", "residualBand": "TODO(HSE lead)"}
+    },
+    {
+      "id": "LOW-05",
+      "title": "Canteen cooking (LPG-fired kitchen)",
+      "study": "HIRA-2026-NW-030",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Cooking and frying for 600 meals per shift in the LPG-fired canteen kitchen (canteen contractor)",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "LIKELIHOOD_INFLATED",
+      "hazards": [
+        {"key": "h1", "name": "LPG leak from cylinder or hose", "code": "FIRE_LPG_LEAK", "category": "fire_explosion",
+         "consequence": "LPG leaking from a cracked rubber hose ignites at the burner: kitchen fire, burns to the cooks", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Hot oil and vessels", "code": "THERMAL_HOT_SURFACE", "category": "thermal",
+         "consequence": "Scald from a hot oil splash or contact with a hot kadhai while frying", "likelihood": 4, "severity": 3},
+        {"key": "h3", "name": "Knife work", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Finger cut while chopping vegetables", "likelihood": 4, "severity": 3},
+        {"key": "h4", "name": "Wet greasy floor", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Slip on the wet greasy kitchen floor: fall, wrist fracture", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "LPG cylinder bank outside the kitchen in a ventilated cage, copper piping and a main isolation valve", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ENGINEERING", "description": "DCP fire extinguisher and fire blanket in the kitchen"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Canteen contractor SOP: burner lighting sequence and night shut-off checklist"},
+        {"hierarchy": "PPE", "description": "Apron, head cap, hand gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Gas leak detector with automatic shut-off solenoid valve", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Fire safety training for canteen staff"},
+        {"hierarchy": "ENGINEERING", "description": "Anti-slip mats at the cooking range"},
+        {"hierarchy": "PPE", "description": "Cut-resistant gloves"},
+        {"hierarchy": "ENGINEERING", "description": "Replace rubber hoses with steel-braided LPG hoses"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Quarterly fire mock drill"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"}
+    },
+    {
+      "id": "LOW-06",
+      "title": "Main gate security duty and vehicle checking",
+      "study": "HIRA-2026-NW-030",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Security guard duty at the main gate: document check and load check of incoming and outgoing trucks",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Truck movement at the gate", "code": "VEH-001", "category": "transportation",
+         "consequence": "Guard struck by a truck creeping forward while he checks documents at the cab", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Outdoor duty in summer heat", "code": "ENV_HEAT_STRESS", "category": "environmental",
+         "consequence": "Heat exhaustion during afternoon duty at 45 C in May-June", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Climbing onto the truck footboard", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Slip from the truck footboard while checking the load: sprain or fracture", "likelihood": 3, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Boom barrier with a speed breaker before the checking point"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Gate SOP: vehicle stopped with engine off before checking"},
+        {"hierarchy": "ENGINEERING", "description": "Guard cabin with fan, shade and drinking water"},
+        {"hierarchy": "PPE", "description": "Reflective jacket, safety shoes"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Convex mirror at the gate"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Heat stress awareness for guards"},
+        {"hierarchy": "ENGINEERING", "description": "Wheel chocks for trucks under checking"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "ORS and hydration schedule"},
+        {"hierarchy": "ENGINEERING", "description": "Raised platform for load checking"}
+      ],
+      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"}
+    },
+    {
+      "id": "LOW-07",
+      "title": "Tool room bench work and pedestal grinder",
+      "study": "HIRA-2026-NW-018",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Bench fitting with hand tools (hacksaw, files) and tool sharpening on the pedestal grinder in the tool room",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "REASONABLE",
+      "hazards": [
+        {"key": "h1", "name": "Hacksaw and file work", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Hand cut from a hacksaw blade or burrs while filing", "likelihood": 3, "severity": 3},
+        {"key": "h2", "name": "Pedestal grinder fragments and sparks", "code": "MECH_PROJECTILE", "category": "mechanical",
+         "consequence": "Wheel fragment or a hot particle enters the eye while sharpening tools on the pedestal grinder", "likelihood": 3, "severity": 4},
+        {"key": "h3", "name": "Grinder wheel contact", "code": "MECH_UNGUARDED_ROTATING", "category": "mechanical",
+         "consequence": "Fingers drawn between the wheel and a worn tool rest: abrasion or fracture", "likelihood": 3, "severity": 4},
+        {"key": "h4", "name": "Standing bench work", "code": "ERGO_AWKWARD_POSTURE", "category": "ergonomic",
+         "consequence": "Shoulder and back fatigue from long periods at a low bench", "likelihood": 2, "severity": 2}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Pedestal grinder with wheel guard, eye shield and tool rest set at 3 mm", "effectiveness": "EFFECTIVE", "verificationMethod": "Weekly tool room check sheet"},
+        {"hierarchy": "PPE", "description": "Safety goggles at the grinder"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Only trained tool-room fitters use the grinder"},
+        {"hierarchy": "PPE", "description": "Safety shoes, cotton gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Ring test of grinding wheels before mounting"},
+        {"hierarchy": "PPE", "description": "Face shield"},
+        {"hierarchy": "PPE", "description": "Cut resistant gloves"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Awareness training"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"}
+    },
+    {
+      "id": "LOW-08",
+      "title": "Garden maintenance (horticulture contractor)",
+      "study": "HIRA-2026-NW-030",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Grass cutting with a petrol brush-cutter and hedge trimming with hand tools around the admin block",
+      "routine": "ROUTINE",
+      "frequency": "WEEKLY",
+      "llmStyle": "WORST_CASE_ALL",
+      "hazards": [
+        {"key": "h1", "name": "Stones thrown by the brush-cutter", "code": "MECH_PROJECTILE", "category": "mechanical",
+         "consequence": "Stone or debris thrown by the brush-cutter strikes the eye of the operator or a passer-by", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Brush-cutter noise", "code": "NOISE_HIGH_EXPOSURE", "category": "noise",
+         "consequence": "Noise-induced hearing loss from regular use of a petrol brush-cutter without hearing protection", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Outdoor work in summer", "code": "ENV_HEAT_STRESS", "category": "environmental",
+         "consequence": "Heat exhaustion during afternoon grass cutting in summer", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Sickle and hedge shears", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Hand cut from a sickle or hedge shears", "likelihood": 4, "severity": 5}
+      ],
+      "existingControls": [],
+      "recommendedControls": [
+        {"hierarchy": "PPE", "description": "Face shield or goggles for brush-cutter work"},
+        {"hierarchy": "PPE", "description": "Ear muffs"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Work-rest cycle in summer"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Barricade the area while brush-cutting"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "PPE", "description": "Gloves"}
+      ],
+      "expected": {"inherentBand": "HIGH", "residualBand": "NOT_ASSESSED"},
+      "notes": "No controls captured at all (contractor activity added from scratch)."
+    },
+    {
+      "id": "HH-01",
+      "title": "EAF tapping into the ladle",
+      "study": "HIRA-2026-NW-003",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Tapping liquid steel from the electric arc furnace (EBT) into the ladle on the transfer car",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Molten steel splash at tapping", "code": "FIRE_MOLTEN_METAL", "category": "fire_explosion",
+         "consequence": "Molten steel and slag splash on the tapping operator when the EBT taphole opens or the ladle holds moisture: severe burns, possible fatality", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Ladle transfer car movement", "code": "MECH_MOBILE_EQUIPMENT", "category": "mechanical",
+         "consequence": "Person in the tapping bay caught between the moving ladle transfer car and the furnace structure: crush, possible fatality", "likelihood": 3, "severity": 5},
+        {"key": "h3", "name": "Radiant heat below the furnace", "code": "ENV_HEAT_STRESS", "category": "environmental",
+         "consequence": "Heat exhaustion from radiant heat while checking the ladle position below the furnace", "likelihood": 4, "severity": 4},
+        {"key": "h4", "name": "Arc furnace noise", "code": "NOISE_HIGH_EXPOSURE", "category": "noise",
+         "consequence": "Noise-induced hearing loss from repeated exposure to arc noise above 100 dB(A)", "likelihood": 4, "severity": 4},
+        {"key": "h5", "name": "Furnace fumes at tapping", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "Inhalation of metal oxide fumes escaping the fourth-hole extraction during tapping", "likelihood": 4, "severity": 4}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Tapping controlled from the furnace pulpit (remote tilt); no person at the taphole during tapping", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Tapping SOP SMS/EAF/WI-07 with ladle pre-heat and dryness check", "verificationMethod": "Ladle pre-heat temperature signed in the shift log"},
+        {"hierarchy": "PPE", "description": "Aluminised jacket and trousers, face shield with melting goggles, leg guards"},
+        {"hierarchy": "ENGINEERING", "description": "Fourth-hole fume extraction and canopy hood"},
+        {"hierarchy": "PPE", "description": "Ear muffs on the furnace platform"},
+        {"hierarchy": "ENGINEERING", "description": "Hooter and flashing beacon interlocked with ladle transfer car travel"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Splash guard at the tapping area"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Moisture-free check of the ladle before tapping"},
+        {"hierarchy": "PPE", "description": "Aluminised PPE for the tapping crew"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Heat stress management programme"},
+        {"hierarchy": "PPE", "description": "Ear muffs"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Awareness training on molten metal hazards"},
+        {"hierarchy": "ENGINEERING", "description": "Spot coolers at the furnace platform"}
+      ],
+      "evidence": {"byFamily": {"MOLTEN": {"window": 1, "12m": 1, "items": ["NM-2026-0412: slag splash over the ladle rim during heat 6614 tapping, no injury"]}}},
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"}
+    },
+    {
+      "id": "HH-02",
+      "title": "Hot metal ladle handling by EOT crane (JSL)",
+      "study": "HIRA-JSL-SMS1-LADLE",
+      "matrix": "JSL_QSD24_GT",
+      "mode": "DRAFT",
+      "activity": "Lifting and travelling the 80 t liquid-steel ladle from the LRF to the caster turret by the hot-metal EOT crane",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Ladle drop / hook or brake failure", "code": "MECH-008", "category": "lifting",
+         "consequence": "Ladle with about 80 t of liquid steel drops or tilts if the hook, trunnion or brake fails: molten metal over people in the bay, multiple fatalities", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Swinging ladle during long travel", "code": "VEH-010", "category": "lifting",
+         "consequence": "Ladle swings into a column or platform during long travel and spills steel: fatal burns", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Steel splash at the turret", "code": "FIRE_MOLTEN_METAL", "category": "fire_explosion",
+         "consequence": "Steel splash when the ladle is seated on the turret or the slide gate opens: severe burns", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Radiant heat in the crane cabin", "code": "ENV_HEAT_STRESS", "category": "environmental",
+         "consequence": "Heat exhaustion of the crane operator in a cabin above the ladle", "likelihood": 3, "severity": 4}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Hot-metal duty EOT crane with dual brakes, redundant rope reeving and over-hoist limit switch", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Third party inspection of cranes and ladle hooks (Factories Act Sec. 29)", "verificationMethod": "Form 10 certificate on file"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Ladle movement SOP SM01/06/W: hooter on, no one under the travel path"},
+        {"hierarchy": "PPE", "description": "Aluminised jacket, face shield, leg guards for bay workers"},
+        {"hierarchy": "ENGINEERING", "description": "Air-conditioned crane cabin with a heat shield below"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "NDT of ladle trunnions and hooks every 6 months"},
+        {"hierarchy": "ENGINEERING", "description": "Anti-collision device on the crane"},
+        {"hierarchy": "ENGINEERING", "description": "Exclusion zone under the crane travel path"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Medical fitness check of crane operators"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training of crane operators"},
+        {"hierarchy": "ENGINEERING", "description": "Load cell on the hoist"}
+      ],
+      "plantData": {
+        "siblingRecommended": [{"label": "S.No 3", "text": "Hard-barricaded exclusion zone under the crane travel path"}]
+      },
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "notes": "Plant-index likelihood: the evidence cap does not apply, so the LLM's L4 passes through."
+    },
+    {
+      "id": "HH-03",
+      "title": "Belt conveyor idler replacement under LOTO",
+      "study": "HIRA-2026-NW-011",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Replacement of return idlers and tail pulley lagging on the RMHS belt conveyor under LOTO",
+      "routine": "NON_ROUTINE",
+      "frequency": "MONTHLY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Entanglement at the tail pulley", "code": "MECH_UNGUARDED_ROTATING", "category": "mechanical",
+         "consequence": "Fitter's arm drawn into the tail-pulley nip if the conveyor is started while the guard is off: amputation or fatality", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Unexpected energisation", "code": "ELEC-003", "category": "electrical",
+         "consequence": "Conveyor drive energised from the field push-button station during idler replacement: shock or sudden start", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Belt lifting with jacks", "code": "MECH_PINCH_POINT", "category": "mechanical",
+         "consequence": "Fingers crushed between the belt and the idler frame while the belt is jacked up", "likelihood": 4, "severity": 4},
+        {"key": "h4", "name": "Carrying idler rolls", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Back strain carrying 30 kg idler rolls along the gallery", "likelihood": 4, "severity": 3},
+        {"key": "h5", "name": "Coal spillage on the gallery", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Slip on spilled coal on the conveyor gallery walkway: fall, fracture", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "LOTO procedure with personal padlocks and danger tags at the MCC", "verificationMethod": "LOTO register signed by the electrician and the fitter"},
+        {"hierarchy": "ENGINEERING", "description": "Pull-cord emergency stop switches along the conveyor", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Maintenance work permit"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, hand gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "LOTO training for fitters"},
+        {"hierarchy": "ENGINEERING", "description": "Guard on the tail pulley"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Try-out start after isolation"},
+        {"hierarchy": "ENGINEERING", "description": "Belt lifting device"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Housekeeping of the gallery"},
+        {"hierarchy": "PPE", "description": "Gloves"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Proper supervision"}
+      ],
+      "plantData": {
+        "siblingRecommended": [{"label": "#4 Conveyor belt jointing", "text": "Fixed or interlocked guards on rotating parts and nip points"}]
+      },
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"}
+    },
+    {
+      "id": "HH-04",
+      "title": "Confined space entry into an acid storage tank",
+      "study": "HIRA-2026-NW-016",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Entry into the 30 m3 HCl storage tank to remove sludge and inspect the rubber lining",
+      "routine": "NON_ROUTINE",
+      "frequency": "QUARTERLY",
+      "llmStyle": "WORST_CASE_ALL",
+      "hazards": [
+        {"key": "h1", "name": "Oxygen deficiency", "code": "CONFINED_OXYGEN_DEFICIENCY", "category": "confined_space",
+         "consequence": "Oxygen-deficient atmosphere after nitrogen purging: worker collapses inside the tank, fatal", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Toxic acid vapour and H2S", "code": "CONFINED_TOXIC_ATMOSPHERE", "category": "confined_space",
+         "consequence": "HCl vapour and H2S released when the sludge is disturbed: toxic inhalation, fatal", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Residual acid sludge", "code": "CHEM_CORROSIVE_CONTACT", "category": "chemical",
+         "consequence": "Skin and eye burns from residual acid sludge while scooping", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Descent through the top manhole", "code": "WAH-005", "category": "height",
+         "consequence": "Fall from the 4 m internal ladder while descending through the top manhole: fatal", "likelihood": 4, "severity": 5},
+        {"key": "h5", "name": "Portable lighting in a wet tank", "code": "ELEC-007", "category": "electrical",
+         "consequence": "Shock from a 230 V hand lamp used inside the wet tank", "likelihood": 4, "severity": 5}
+      ],
+      "existingControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Confined space entry permit with gas test (O2, LEL, H2S) before entry", "verificationMethod": "Gas readings recorded on the permit"},
+        {"hierarchy": "ENGINEERING", "description": "Forced ventilation by air blower through the bottom manhole"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Trained attendant at the manhole throughout the entry"},
+        {"hierarchy": "PPE", "description": "Acid-resistant PVC suit, rubber gloves, gumboots, chemical goggles"},
+        {"hierarchy": "ENGINEERING", "description": "24 V hand lamps through an isolation transformer", "effectiveness": "EFFECTIVE"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Continuous multi-gas monitor carried by the entrant"},
+        {"hierarchy": "ENGINEERING", "description": "Tripod and winch rescue set at the manhole"},
+        {"hierarchy": "PPE", "description": "SCBA at the entry point"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Confined space rescue drill"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training of entrants"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Neutralise and flush the tank before entry"},
+        {"hierarchy": "PPE", "description": "Full body harness with lifeline"}
+      ],
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "HIGH"}
+    },
+    {
+      "id": "HH-05",
+      "title": "Fragile roof sheet replacement (contractor)",
+      "study": "HIRA-2026-NW-019",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Replacement of broken asbestos-cement roof sheets and skylights on the RMHS shed (9 m) by a roofing contractor",
+      "routine": "NON_ROUTINE",
+      "frequency": "OCCASIONAL",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Fall through a fragile sheet", "code": "HEIGHT_FRAGILE_ROOF", "category": "height",
+         "consequence": "Contractor steps on a brittle AC sheet or skylight and falls 9 m to the shed floor: fatal", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Fall from the roof edge", "code": "HEIGHT_FALL_OVER_2M", "category": "height",
+         "consequence": "Fall from the unprotected roof edge while handling a new sheet in wind: fatal", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Sheets and tools dropped on the bay below", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "Sheet or tool dropped from the roof strikes a worker in the bay below: head injury", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Hot roof surface in summer", "code": "ENV_HEAT_STRESS", "category": "environmental",
+         "consequence": "Heat exhaustion working on a hot roof at midday", "likelihood": 4, "severity": 4},
+        {"key": "h5", "name": "Asbestos fibres from old sheets", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "Inhalation of asbestos fibres when old AC sheets break during removal: asbestosis or mesothelioma years later", "likelihood": 3, "severity": 5},
+        {"key": "h6", "name": "Cut sheet edges", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Hand cut from the cut edge of a GI sheet", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, hand gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Crawling boards and roof ladders across the sheets"},
+        {"hierarchy": "ENGINEERING", "description": "Safety net below the work area"},
+        {"hierarchy": "PPE", "description": "Full body harness with lifeline"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Work at height permit"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Barricade the area below"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Medical fitness of height workers"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Toolbox talk"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Asbestos handling procedure"}
+      ],
+      "plantData": {
+        "existingControlProposals": [
+          {"hierarchy": "ADMINISTRATIVE", "description": "Fragile roof work SOP-WAH-05: crawling boards mandatory, no stepping on sheets, height permit",
+           "source": "Plant SOP register"}
+        ]
+      },
+      "evidence": {"byFamily": {"HEIGHT": {"window": 1, "12m": 0, "items": ["IR-2025-031: contractor fell through a skylight sheet at the RMHS shed (fracture, lost-time injury)"]}}},
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "notes": "Only baseline PPE in the draft; the plant SOP register holds the fragile roof SOP."
+    },
+    {
+      "id": "HH-06",
+      "title": "Forklift loading of coil packets into trucks",
+      "study": "HIRA-2026-NW-024",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Loading packed cold-rolled coils into trucks with a 5 t diesel forklift at dispatch bay 2",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Forklift - pedestrian collision", "code": "TRANSPORT_VEHICLE_COLLISION", "category": "transportation",
+         "consequence": "Loader or truck driver struck by a reversing 5 t forklift in the congested dispatch bay: crush injury, possible fatality", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Forklift overturn on the ramp", "code": "MECH_MOBILE_EQUIPMENT", "category": "mechanical",
+         "consequence": "Forklift tips over on the loading ramp with a raised load: operator crushed", "likelihood": 3, "severity": 5},
+        {"key": "h3", "name": "Load sliding off the forks", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "Unsecured coil packet slides off the forks onto the helper guiding it", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Truck moves during loading", "code": "VEH-003", "category": "transportation",
+         "consequence": "Truck driver moves off while the forklift is on the trailer bed: forklift falls from the trailer", "likelihood": 3, "severity": 5}
+      ],
+      "existingControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Only licensed and authorised forklift operators (operator ID card)"},
+        {"hierarchy": "ENGINEERING", "description": "Reverse alarm, blue-spot light and rear-view mirror on all forklifts", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Speed limit 10 km/h in the dispatch bay (signage)"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Truck keys collected by the dispatch supervisor during loading"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, reflective jacket"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Pedestrian segregation in the dispatch bay"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Forklift operator refresher training"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Seat belt use by forklift operators"},
+        {"hierarchy": "ENGINEERING", "description": "Wheel chocks for trucks during loading"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Load securing check before travel"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Safety awareness programme"}
+      ],
+      "plantData": {
+        "openCapas": [{"id": "capa-2026-118", "number": "CAPA-2026-118", "text": "Physically segregated pedestrian walkway with barriers at dispatch bay 2"}]
+      },
+      "evidence": {"byFamily": {"VEHICLE": {"window": 2, "12m": 1, "items": [
+        "NM-2026-0233: forklift reversed within 1 m of a helper at dispatch bay 2",
+        "NM-2025-0871: forklift brushed a truck driver's leg at dispatch (first aid)"]}}},
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "HIGH"}
+    },
+    {
+      "id": "HH-07",
+      "title": "Mechanical power press operation",
+      "study": "HIRA-2026-NW-027",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Blanking of 2 mm sheet on a 100 t mechanical power press with manual feeding",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Hand in the die area", "code": "MECH-002", "category": "mechanical",
+         "consequence": "Operator's hand in the die area when the press strokes during manual feeding: finger or hand amputation", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Flywheel and belt drive", "code": "MECH_UNGUARDED_ROTATING", "category": "mechanical",
+         "consequence": "Clothing caught in the flywheel belt drive at the back of the press", "likelihood": 3, "severity": 5},
+        {"key": "h3", "name": "Press impact noise", "code": "NOISE_HIGH_EXPOSURE", "category": "noise",
+         "consequence": "Noise-induced hearing loss from 92 dB(A) impact noise over the shift", "likelihood": 4, "severity": 4},
+        {"key": "h4", "name": "Sharp blank edges", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Laceration from sharp blank edges while stacking", "likelihood": 4, "severity": 3},
+        {"key": "h5", "name": "Repetitive feeding", "code": "ERGO_AWKWARD_POSTURE", "category": "ergonomic",
+         "consequence": "Wrist and shoulder strain from repetitive feeding at 20 strokes per minute", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Two-hand control with anti-tie-down on the press", "effectiveness": "EFFECTIVE", "verificationMethod": "Daily function test log"},
+        {"hierarchy": "ENGINEERING", "description": "Fixed guard on the flywheel and belt drive", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Die-setting SOP with LOTO"},
+        {"hierarchy": "PPE", "description": "Ear plugs (SNR 29) in the press shop"},
+        {"hierarchy": "PPE", "description": "Cut-resistant gloves for handling blanks"},
+        {"hierarchy": "PPE", "description": "Safety shoes, helmet"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Light curtain on the press", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training of press operators"},
+        {"hierarchy": "PPE", "description": "Ear muffs"},
+        {"hierarchy": "ENGINEERING", "description": "Hand tools for feeding small blanks"},
+        {"hierarchy": "ENGINEERING", "description": "Acoustic enclosure for the press", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Job rotation every 2 hours"}
+      ],
+      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"}
+    },
+    {
+      "id": "HH-08",
+      "title": "Angle grinding of weld joints",
+      "study": "HIRA-2026-NW-027",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Grinding of weld joints on fabricated structures with a 180 mm angle grinder in the fabrication shop",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Disc burst", "code": "MECH_PROJECTILE", "category": "mechanical",
+         "consequence": "Grinding disc shatters at 8,500 rpm and a fragment strikes the face or eye", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Kickback", "code": "MECH_UNGUARDED_ROTATING", "category": "mechanical",
+         "consequence": "Grinder kicks back when the disc snags and cuts the thigh or hand", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Damaged grinder cable", "code": "ELEC-005", "category": "electrical",
+         "consequence": "Shock from a damaged 230 V grinder cable on the wet fabrication floor", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Sparks igniting combustibles", "code": "FIRE_HOT_WORK_IGNITION", "category": "fire_explosion",
+         "consequence": "Grinding sparks ignite oil-soaked cotton waste near the job: fire", "likelihood": 3, "severity": 4},
+        {"key": "h5", "name": "Grinding noise", "code": "NOISE_HIGH_EXPOSURE", "category": "noise",
+         "consequence": "Hearing loss from grinding noise around 100 dB(A)", "likelihood": 4, "severity": 3},
+        {"key": "h6", "name": "Grinding dust", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "Inhalation of metal grinding dust and disc particles", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Wheel guard and side handle fitted on every grinder"},
+        {"hierarchy": "PPE", "description": "Face shield over safety goggles"},
+        {"hierarchy": "ENGINEERING", "description": "Portable tools powered through a 30 mA ELCB distribution board"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Monthly inspection of portable power tools with colour-code tag", "verificationMethod": "Colour-code tag register"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, leather gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Use only discs rated above the grinder rpm"},
+        {"hierarchy": "ENGINEERING", "description": "Fire extinguisher at the job"},
+        {"hierarchy": "PPE", "description": "Ear plugs"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Remove combustibles within 10 m before grinding (hot work permit)"},
+        {"hierarchy": "PPE", "description": "Dust mask"},
+        {"hierarchy": "ENGINEERING", "description": "Dead-man switch grinders"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "MODERATE"}
+    },
+    {
+      "id": "HH-09",
+      "title": "LT MCC panel maintenance",
+      "study": "HIRA-2026-NW-012",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Cleaning and tightening of terminations in the 415 V MCC feeders of the cold mill",
+      "routine": "NON_ROUTINE",
+      "frequency": "MONTHLY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Contact with a live busbar", "code": "ELEC_LIVE_PARTS_LV", "category": "electrical",
+         "consequence": "Electrician contacts a live 415 V busbar of an adjacent feeder while tightening terminations: electrocution", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Arc flash", "code": "ELEC_HV_ARC_FLASH", "category": "electrical",
+         "consequence": "Arc flash when a spanner bridges phases in the MCC: severe burns to face and hands", "likelihood": 3, "severity": 5},
+        {"key": "h3", "name": "Open cable trench behind the panel", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Trip into an open cable trench behind the panel: sprain or fracture", "likelihood": 3, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Electrical work permit with LOTO at the incomer", "verificationMethod": "Permit counter-signed by the shift electrical in-charge"},
+        {"hierarchy": "PPE", "description": "Arc-rated face shield and Class 0 electrical insulating gloves"},
+        {"hierarchy": "ENGINEERING", "description": "Rubber insulating mat in front of the MCC"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Insulated tools"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Electrical safety training"},
+        {"hierarchy": "ENGINEERING", "description": "Shrouding of busbars"},
+        {"hierarchy": "ENGINEERING", "description": "Voltage detector"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Licensed electricians only"}
+      ],
+      "plantData": {
+        "existingControlProposals": [
+          {"hierarchy": "ADMINISTRATIVE", "description": "Zero-voltage verification with a tested voltage detector (live-dead-live) recorded on the permit",
+           "source": "Electrical safety rules register ESR-04", "verificationMethod": "Recorded on each electrical permit"}
+        ],
+        "openCapas": [{"id": "capa-2026-077", "number": "CAPA-2026-077", "text": "Insulating shrouds / barriers over live parts in MCC-3 panels"}]
+      },
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"}
+    },
+    {
+      "id": "HH-10",
+      "title": "HCl handling at the pickling tank",
+      "study": "HIRA-2026-NW-016",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Topping up hydrochloric acid in the pickling tank from the bulk storage and from 50 L carboys",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Acid splash during transfer", "code": "CHEM_CORROSIVE_CONTACT", "category": "chemical",
+         "consequence": "HCl splash into the eyes while topping up the pickling tank: severe eye burns, possible loss of sight", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Acid fumes above the tank", "code": "CHEM_TOXIC_INHALATION", "category": "chemical",
+         "consequence": "Inhalation of HCl fumes above the pickling tank: respiratory irritation", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Handling acid carboys", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Back strain or crushed foot while moving 50 L acid carboys by hand", "likelihood": 3, "severity": 3},
+        {"key": "h4", "name": "Acid-wet floor", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Slip on the acid-wet floor near the tank: fall with chemical burn", "likelihood": 4, "severity": 4}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Closed transfer by acid-resistant pump from the bulk tank", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ENGINEERING", "description": "Eyewash and safety shower within 10 m of the tank, tested weekly", "effectiveness": "EFFECTIVE", "verificationMethod": "Weekly test tag"},
+        {"hierarchy": "ENGINEERING", "description": "Fume extraction hood over the pickling tank"},
+        {"hierarchy": "PPE", "description": "Chemical goggles, face shield, PVC apron, rubber gloves, gumboots"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "SDS displayed and acid handling SOP"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Neutralising agent kept ready near the tank"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training on the SDS"},
+        {"hierarchy": "ENGINEERING", "description": "Anti-slip acid-resistant flooring"},
+        {"hierarchy": "PPE", "description": "Respirator with acid gas cartridge"},
+        {"hierarchy": "ENGINEERING", "description": "Carboy trolley"}
+      ],
+      "expected": {"inherentBand": "HIGH", "residualBand": "MODERATE"}
+    },
+    {
+      "id": "HH-11",
+      "title": "Gas cutting of scrap",
+      "study": "HIRA-2026-NW-005",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Oxy-LPG cutting of heavy melting scrap to charge size in the scrap yard",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Hose leak or flashback", "code": "FIRE_LPG_LEAK", "category": "fire_explosion",
+         "consequence": "Flashback into the oxygen / LPG hose or a leaking hose ignites: hose fire or cylinder explosion, burns", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Ignition of combustibles in scrap", "code": "FIRE_HOT_WORK_IGNITION", "category": "fire_explosion",
+         "consequence": "Cutting sparks ignite oily scrap and rubber in the scrap yard: fire", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Hot slag and cut pieces", "code": "THERMAL_HOT_SURFACE", "category": "thermal",
+         "consequence": "Burns from hot slag droplets and freshly cut pieces", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Fumes from coated scrap", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "Metal fume fever from cutting galvanised and painted scrap", "likelihood": 4, "severity": 4},
+        {"key": "h5", "name": "Cut sections falling", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "Heavy cut section falls on the cutter's foot", "likelihood": 4, "severity": 4}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Flashback arrestors at torch and regulator ends", "effectiveness": "PARTIALLY_EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Hot work permit for the scrap cutting area"},
+        {"hierarchy": "PPE", "description": "Welding goggles, leather apron, leather hand gloves, leg guards"},
+        {"hierarchy": "ENGINEERING", "description": "Fire extinguisher and water drum at the cutting area"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Flashback arrestors on all cutting sets"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Daily hose inspection"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Fire watch during cutting"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "PPE", "description": "Respirator when cutting galvanised scrap"},
+        {"hierarchy": "ENGINEERING", "description": "Cylinder trolley with chain"}
+      ],
+      "evidence": {"byFamily": {"FIRE_EXPLOSION": {"window": 0, "12m": 0,
+        "failures": ["Safety audit SA-2026-09 (Aug 2026): flashback arrestor missing at the torch end on 2 of 6 cutting sets"],
+        "items": ["Safety audit SA-2026-09 (Aug 2026): flashback arrestor missing at the torch end on 2 of 6 cutting sets"]}}},
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"}
+    },
+    {
+      "id": "HH-12",
+      "title": "Scaffold erection for vessel maintenance",
+      "study": "HIRA-2026-NW-019",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Erection of a 12 m tube-and-clamp scaffold around the LRF fume duct for shutdown maintenance",
+      "routine": "NON_ROUTINE",
+      "frequency": "OCCASIONAL",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Fall from the scaffold during erection", "code": "WAH-002", "category": "height",
+         "consequence": "Scaffolder falls from the 12 m scaffold while fixing ledgers before handrails are in place: fatal", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Scaffold collapse", "code": "WAH-008", "category": "height",
+         "consequence": "Scaffold collapses due to missing ties or base plates on soft ground: workers and materials fall", "likelihood": 3, "severity": 5},
+        {"key": "h3", "name": "Dropped tubes and clamps", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "Clamp or tube dropped from height strikes a worker below: head injury", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Handling 6 m tubes", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Shoulder strain passing 6 m tubes hand to hand", "likelihood": 3, "severity": 3}
+      ],
+      "existingControls": [],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Scafftag inspection system"},
+        {"hierarchy": "PPE", "description": "Full body harness with double lanyard"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Barricade the area below"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Only trained scaffolders"},
+        {"hierarchy": "ENGINEERING", "description": "Base plates and sole boards"},
+        {"hierarchy": "ENGINEERING", "description": "Toe boards on working platforms"},
+        {"hierarchy": "PPE", "description": "Tool lanyards"}
+      ],
+      "plantData": {
+        "existingControlProposals": [
+          {"hierarchy": "ADMINISTRATIVE", "description": "Scaffold erected and inspected by certified scaffolders with scafftag (green / red) per plant WAH standard",
+           "source": "Plant WAH standard SOP-WAH-02", "verificationMethod": "Scafftag inspection record before each shift"},
+          {"hierarchy": "PPE", "description": "Full body harness with double lanyard, 100% tie-off during erection",
+           "source": "Work-at-height permit checklist"}
+        ]
+      },
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "notes": "No controls in the draft; the plant registers hold two."
+    },
+    {
+      "id": "HH-13",
+      "title": "Air compressor and hydraulic power pack maintenance",
+      "study": "HIRA-2026-NW-012",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Monthly maintenance of the plant air compressor, air receiver and the hydraulic power pack of the shear",
+      "routine": "NON_ROUTINE",
+      "frequency": "MONTHLY",
+      "llmStyle": "MIXED",
+      "hazards": [
+        {"key": "h1", "name": "Air receiver rupture", "code": "PRESS_VESSEL_RUPTURE", "category": "pressure",
+         "consequence": "Air receiver (10 bar, 2 m3) ruptures from internal corrosion: blast injury, fatal", "likelihood": 3, "severity": 5},
+        {"key": "h2", "name": "Hydraulic oil injection", "code": "PRESS_HYDRAULIC_INJECTION", "category": "pressure",
+         "consequence": "Pin-hole leak in a 200 bar hydraulic hose injects oil into the fitter's hand while checking for leaks", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Compressor house noise", "code": "NOISE_HIGH_EXPOSURE", "category": "noise",
+         "consequence": "Hearing damage from 96 dB(A) in the compressor house", "likelihood": 4, "severity": 3},
+        {"key": "h4", "name": "Hot discharge pipes", "code": "THERMAL_HOT_SURFACE", "category": "thermal",
+         "consequence": "Contact burn from the 150 C compressor discharge pipe", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Depressurise, bleed and isolate before opening any line (maintenance SOP MP-11)"},
+        {"hierarchy": "ENGINEERING", "description": "Safety relief valve on the air receiver, set at 10.5 bar"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Statutory hydraulic test and thickness survey of the air receiver"},
+        {"hierarchy": "PPE", "description": "Ear muffs in the compressor house"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, hand gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Hydraulic test of the air receiver"},
+        {"hierarchy": "ENGINEERING", "description": "Whip-check restraints on hydraulic hoses"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "ENGINEERING", "description": "Insulation of hot discharge pipes"},
+        {"hierarchy": "ENGINEERING", "description": "Acoustic enclosure for the compressor", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Annual calibration of the relief valve"}
+      ],
+      "plantData": {
+        "statutoryOverdue": {"PRESSURE": ["Air receiver AR-2: hydraulic test due 15 Jul 2026, not done"]}
+      },
+      "evidence": {"byFamily": {"PRESSURE": {"window": 0, "12m": 0,
+        "failures": ["Air receiver AR-2 statutory hydraulic test overdue since 15 Jul 2026"],
+        "items": ["Air receiver AR-2 statutory hydraulic test overdue since 15 Jul 2026"]}}},
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)"}
+    },
+    {
+      "id": "HH-14",
+      "title": "Slag pot handling and dumping (JSL)",
+      "study": "HIRA-JSL-SMS1-EAF",
+      "matrix": "JSL_QSD24_GT",
+      "mode": "DRAFT",
+      "activity": "Carrying full slag pots from the EAF to the slag yard with the slag pot carrier and dumping in the pit",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Slag pot carrier movement", "code": "MECH_MOBILE_EQUIPMENT", "category": "mechanical",
+         "consequence": "Slag pot carrier reversing in the slag yard strikes a worker: crush, fatal", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Slag explosion on wet ground", "code": "FIRE_MOLTEN_METAL", "category": "fire_explosion",
+         "consequence": "Liquid slag dumped on wet ground causes a steam explosion and throws slag over 15 m: severe burns", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Radiant heat at the dump", "code": "ENV_HEAT_STRESS", "category": "environmental",
+         "consequence": "Heat exhaustion of the carrier operator during dumping", "likelihood": 4, "severity": 4},
+        {"key": "h4", "name": "Slag dust", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "Slag dust inhalation during dumping and loading", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Slag pot carrier with reversing camera, reverse alarm and air-conditioned cabin", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Slag yard SOP SM01/09/W: dump only in the dry demarcated pit, no person within 25 m"},
+        {"hierarchy": "PPE", "description": "Aluminised jacket and face shield for yard helpers"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, dust mask, hand gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Water sprinkling of the slag yard for dust suppression"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Banksman for reversing"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Heat stress management"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Dry pit check before every dump"}
+      ],
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "TODO(HSE lead)"},
+      "notes": "The LLM's 'water sprinkling' idea is unsafe next to liquid slag; see whether it survives the filters."
+    },
+    {
+      "id": "HH-15",
+      "title": "Tipper unloading at the RMHS ground hopper",
+      "study": "HIRA-2026-NW-011",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Unloading coal from tipper trucks into the RMHS ground hopper",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Reversing tipper", "code": "TRANSPORT_VEHICLE_COLLISION", "category": "transportation",
+         "consequence": "Reversing tipper runs over the unloading helper at the hopper approach: fatal", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Tipper topples at the hopper edge", "code": "VEH-004", "category": "transportation",
+         "consequence": "Tipper with a raised body topples at the hopper edge or touches the overhead conveyor", "likelihood": 3, "severity": 5},
+        {"key": "h3", "name": "Fall into the hopper", "code": "WAH-006", "category": "height",
+         "consequence": "Helper slips through the hopper grizzly opening while clearing a jam: engulfment in coal, fatal", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Coal dust", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "Coal dust inhalation during tipping", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Wheel stopper / bund at the hopper edge", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ENGINEERING", "description": "Grizzly grating (200 mm) over the hopper", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Banksman guides every reversing tipper"},
+        {"hierarchy": "ENGINEERING", "description": "Dry fog dust suppression at the hopper"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, reflective jacket, dust mask"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Reversing camera on tippers"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training of drivers"},
+        {"hierarchy": "ENGINEERING", "description": "Height barrier for the raised tipper body"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "No manual jam clearing: use a poker from the platform"},
+        {"hierarchy": "PPE", "description": "Dust mask"}
+      ],
+      "evidence": {"byFamily": {"VEHICLE": {"window": 1, "12m": 1, "items": ["NM-2026-0310: tipper reversed without a banksman near hopper 2"]}}},
+      "expected": {"inherentBand": "CRITICAL", "residualBand": "MODERATE"}
+    }
+  ]
+}
