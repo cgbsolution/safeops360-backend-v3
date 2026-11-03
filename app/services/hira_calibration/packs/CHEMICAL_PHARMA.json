@@ -1,0 +1,41 @@
+{
+  "code": "CHEMICAL_PHARMA",
+  "name": "Chemical and pharma",
+  "status": "DRAFT",
+  "statusNote": "DRAFT: seed content is illustrative and must be validated by the HSE lead before any plant relies on it. Status is changed by a person editing this file, never by code.",
+  "industries": ["chemicals", "pharmaceuticals", "API", "specialty chemicals"],
+  "defaultHazardFamilies": ["CHEMICAL", "FIRE_EXPLOSION", "CONFINED_SPACE", "PRESSURE", "DUST", "MANUAL_HANDLING", "HEIGHT"],
+  "regulationKeys": ["FACTORIES_ACT_1948"],
+  "seedHazards": [
+    "solvent handling (transfer, drumming)",
+    "reactor charging (manhole charging of powders and solvents)",
+    "dust explosion (milling, sifting, dryer discharge)",
+    "cleaning in place (CIP) with caustic / acid"
+  ],
+  "overrides": {
+    "severity": {
+      "rubric": {
+        "CHEMICAL": {
+          "min": 3,
+          "max": 4,
+          "floorWhen": ["corrosive", "acid", "alkali", "caustic", "burn", "eye", "splash", "toxic", "vapour", "solvent"],
+          "uncapKeywords": ["toxic gas", "h2s", "chlorine", "ammonia", "phosgene", "fatal", "asphyx", "carbon monoxide", "cyanide", "runaway"]
+        },
+        "FIRE_EXPLOSION": {
+          "min": 4,
+          "floorWhen": ["solvent", "vapour", "flammable", "reactor", "dust explosion", "combustible dust", "static", "drum", "lpg", "hydrogen", "nitrogen blanket", "flash fire"],
+          "s5Keywords": ["explosion", "flash fire", "fatal", "runaway", "dust explosion"],
+          "rules": [{"id": "CHEM_ROUTINE_SPARKS_S3", "when": ["spark", "grinding", "welding"], "unless": ["solvent", "vapour", "flammable", "dust", "reactor", "drum"], "max": 3, "noFloor": true}]
+        },
+        "DUST": {"max": 3, "uncapKeywords": ["api", "potent", "cytotoxic", "carcinogen", "sensitiser", "sensitizer"]}
+      }
+    },
+    "controlCredit": {
+      "baselineKeywords": ["helmet", "safety shoe", "safety shoes", "safety goggles", "hand gloves", "gloves", "induction", "uniform", "lab coat", "ppe", "basic ppe", "standard ppe"]
+    },
+    "routineControls": {
+      "CHEMICAL": [["ADMINISTRATIVE", "SDS at point of use and chemical handling SOP briefed to the crew"]],
+      "FIRE_EXPLOSION": [["ENGINEERING", "Earthing and bonding of drums and vessels, checked before every transfer"]]
+    }
+  }
+}

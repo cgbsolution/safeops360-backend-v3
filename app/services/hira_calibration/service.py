@@ -45,12 +45,17 @@ async def mode_for_plant(
 async def evaluate_entry(
     db: AsyncSession, entry_id: str, cfg: dict[str, Any] | None = None
 ) -> dict[str, Any]:
+    from app.services.hira_calibration import rubric_packs  # noqa: PLC0415
+
     if cfg is None:
         cfg, _, _ = await cal_config.load(db, await plant_of_entry(db, entry_id))
+    cfg, pack = rubric_packs.apply_pack(cfg, cfg.get("rubricPack"))
     built = await loader.build(db, entry_id, cfg)
     out = rv.evaluate(
         built["input"], cfg=cfg, rule=built["rule"], evidence=built["evidence"], plant=built["plant"]
     )
+    # scope of validity (round 3 K / M / N): banner + no residual claims when not validated
+    out = rubric_packs.apply_scope(out, rubric_packs.scope_for(pack, built["input"].hira_type))
     out["schemaReady"] = built["schemaReady"]
     return out
 
@@ -579,9 +584,18 @@ async def calibrate_copilot_draft(
             for c in parsed["recommendedControls"]
         ],
     }
+    from app.services.hira_calibration import rubric_packs  # noqa: PLC0415
+
+    cfg, pack = rubric_packs.apply_pack(cfg, cfg.get("rubricPack"))
     cal = assistant_v2.calibrate_draft(
         draft, cfg=cfg, rule=built["rule"], evidence=built["evidence"], plant=built["plant"], expand=expand
     )
+    scope = rubric_packs.scope_for(pack, "TASK_BASED")
+    if not scope["validated"]:
+        cal["review"] = rubric_packs.apply_scope(cal["review"], scope)
+        cal["entry"] = cal["review"]["entry"]
+        cal["hazards"] = [{**h, "residual": None} for h in cal["hazards"]]
+        cal["recommendations"] = cal["review"]["recommendations"]
     summary = {
         "notes": cal["calibrationNotes"],
         "entryInherent": cal["entry"]["inherent"],
@@ -761,9 +775,18 @@ async def calibrate_assistant_output(
         ]
         draft["reviewDateSet"] = built["input"].review_date_set
         draft["eliminationConsidered"] = built["input"].elimination_considered
+        from app.services.hira_calibration import rubric_packs  # noqa: PLC0415
+
+        cfg, pack = rubric_packs.apply_pack(cfg, cfg.get("rubricPack"))
         cal = assistant_v2.calibrate_draft(
             draft, cfg=cfg, rule=built["rule"], evidence=built["evidence"], plant=built["plant"]
         )
+        scope = rubric_packs.scope_for(pack, built["input"].hira_type)
+        if not scope["validated"]:
+            cal["review"] = rubric_packs.apply_scope(cal["review"], scope)
+            cal["entry"] = cal["review"]["entry"]
+            cal["hazards"] = [{**h, "residual": None, "tolerability": None} for h in cal["hazards"]]
+            cal["recommendations"] = cal["review"]["recommendations"]
     except Exception as exc:  # noqa: BLE001 — never lose the Assistant's answer over calibration
         log.warning("assistant calibration failed for %s: %s", entry_id, exc)
         return suggestion

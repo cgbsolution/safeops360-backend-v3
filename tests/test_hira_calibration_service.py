@@ -24,7 +24,9 @@ def flag(monkeypatch):
     state = {"mode": "OFF", "shadow": []}
 
     async def load(db, plant_id):
-        return copy.deepcopy(cal_config.DEFAULT_CONFIG), state["mode"], {"tenant": 1, "plant": None}
+        cfg = copy.deepcopy(cal_config.DEFAULT_CONFIG)
+        cfg["rubricPack"] = state.get("pack", "STEEL_HEAVY")  # a configured steel plant
+        return cfg, state["mode"], {"tenant": 1, "plant": None}
 
     async def plant_of_entry(db, entry_id):
         return "plant-1"
@@ -315,3 +317,50 @@ def test_copilot_draft_on_without_controls_is_inherent_only(flag, built, masters
     )
     assert cal["summary"]["entryResidual"] is None
     assert cal["summary"]["residualLabel"] == "Inherent only. Existing controls not captured"
+
+
+# ── round 3 M / N: scope of validity ──
+
+
+@pytest.mark.parametrize("pack", [None, "APPAREL_TEXTILE", "UNKNOWN_PACK"])
+def test_no_pack_or_draft_pack_never_shows_a_residual_band(flag, built, v1, pack):
+    flag["mode"], flag["pack"] = "ON", pack
+    r = run(service.review(None, "e1", user_id="u"))
+    assert r["scope"]["validated"] is False
+    assert r["scope"]["banner"] == "Not validated for this industry: ratings are suggestions"
+    assert r["entry"]["residual"] is None and r["entry"]["state"] is None
+    assert all(h["residual"] is None and h["tolerability"] is None for h in r["hazards"])
+    assert all(x["kind"] == "SUGGESTION" and x["residualAfter"] is None for x in r["recommendations"])
+    assert r["canSubmit"] and all(f["class"] != "BLOCKER" for f in r["findings"])
+    assert r["entry"]["inherent"] is not None  # inherent plus suggested controls only
+
+
+def test_validated_pack_shows_residual_and_scope(flag, built, v1):
+    flag["mode"] = "ON"
+    r = run(service.review(None, "e1", user_id="u"))
+    assert r["scope"]["validated"] and r["scope"]["banner"] is None
+    assert r["scope"]["validatedFor"].startswith("task-based HIRA")
+    assert r["entry"]["residual"] is not None
+
+
+def test_unsupported_hira_type_never_shows_a_residual_band(flag, monkeypatch, v1):
+    flag["mode"] = "ON"
+
+    async def build(db, entry_id, cfg):
+        e = entry1(ENTRY1_EXISTING)
+        e.hira_type = "HAZOP_PHA"
+        return {
+            "input": e,
+            "rule": STD,
+            "evidence": eng.Evidence(),
+            "plant": rv.PlantData(),
+            "entry": None,
+            "study": None,
+            "schemaReady": False,
+        }
+
+    monkeypatch.setattr(service.loader, "build", build)
+    r = run(service.review(None, "e1", user_id="u"))
+    assert r["scope"]["calibrated"] is False
+    assert r["scope"]["banner"] == "Calibrated rules are not applied to this study type."
+    assert r["entry"]["residual"] is None and r["recommendations"] == []

@@ -1,0 +1,198 @@
+{
+  "code": "APPAREL_TEXTILE",
+  "name": "Apparel and textile",
+  "status": "DRAFT",
+  "statusNote": "DRAFT: seed content is illustrative and must be validated by the HSE lead before any plant relies on it. Status is changed by a person editing this file, never by code.",
+  "industries": [
+    "apparel",
+    "garments",
+    "textile",
+    "spinning",
+    "weaving"
+  ],
+  "defaultHazardFamilies": [
+    "SHARP",
+    "MACHINERY",
+    "THERMAL",
+    "FIRE_EXPLOSION",
+    "MANUAL_HANDLING",
+    "NOISE",
+    "DUST",
+    "SLIP_TRIP"
+  ],
+  "regulationKeys": [
+    "FACTORIES_ACT_1948"
+  ],
+  "seedHazards": [
+    "needle puncture at sewing machines",
+    "cutting machines and band knives",
+    "steam and ironing burns",
+    "lint and fabric fires",
+    "manual handling of bales",
+    "ergonomics (sustained sitting, repetitive sewing)",
+    "noise in weaving / cutting rooms"
+  ],
+  "overrides": {
+    "severity": {
+      "rubric": {
+        "SHARP": {
+          "max": 3,
+          "rules": [
+            {
+              "id": "APPAREL_NEEDLE_PUNCTURE_S2",
+              "when": [
+                "needle",
+                "sewing"
+              ],
+              "max": 2
+            }
+          ]
+        },
+        "MACHINERY": {
+          "min": 3,
+          "max": 4,
+          "floorWhen": [
+            "band knife",
+            "straight knife",
+            "cutting machine",
+            "entangle",
+            "caught",
+            "amputat",
+            "roller"
+          ],
+          "uncapKeywords": [
+            "fatal"
+          ]
+        },
+        "THERMAL": {
+          "max": 3,
+          "rules": [
+            {
+              "id": "APPAREL_IRON_BURN_S2",
+              "when": [
+                "iron",
+                "press",
+                "pressing"
+              ],
+              "unless": [
+                "boiler",
+                "steam line",
+                "steam pipe"
+              ],
+              "max": 2
+            }
+          ],
+          "uncapKeywords": [
+            "boiler",
+            "fatal"
+          ]
+        },
+        "FIRE_EXPLOSION": {
+          "min": 4,
+          "floorWhen": [
+            "lint",
+            "fabric",
+            "cotton dust",
+            "fibre",
+            "fiber",
+            "bale store",
+            "finished goods",
+            "warehouse",
+            "lpg",
+            "boiler"
+          ],
+          "s5Keywords": [
+            "fatal",
+            "trapped",
+            "blocked exit"
+          ]
+        },
+        "MANUAL_HANDLING": {
+          "max": 2,
+          "rules": [
+            {
+              "id": "APPAREL_BALE_S3",
+              "when": [
+                "bale",
+                "roll",
+                "heavy"
+              ],
+              "heavyKg": 20,
+              "max": 3
+            }
+          ]
+        }
+      }
+    },
+    "controlCredit": {
+      "baselineKeywords": [
+        "helmet",
+        "safety shoe",
+        "safety shoes",
+        "hand gloves",
+        "gloves",
+        "induction",
+        "uniform",
+        "apron",
+        "hair net",
+        "cap",
+        "ppe",
+        "basic ppe",
+        "standard ppe"
+      ],
+      "specificQualifiers": [
+        "cut",
+        "heat",
+        "alumin",
+        "chemical",
+        "insulat",
+        "nitrile",
+        "rubber",
+        "respirat",
+        "ffp",
+        "n95",
+        "p2",
+        "p3",
+        "face shield",
+        "harness",
+        "lanyard",
+        "arc",
+        "flame",
+        "fr ",
+        "welding",
+        "leg guard",
+        "earmuff",
+        "ear muff",
+        "ear plug",
+        "goggle",
+        "visor",
+        "kevlar",
+        "anti-vibration",
+        "full body",
+        "breathing apparatus",
+        "scba"
+      ],
+      "_note": "A cotton apron is baseline in apparel, so 'apron' is not a task-specific PPE word here."
+    },
+    "routineControls": {
+      "SHARP": [
+        [
+          "ENGINEERING",
+          "Needle guards / finger guards fitted on every sewing machine, checked at the start of shift"
+        ]
+      ],
+      "FIRE_EXPLOSION": [
+        [
+          "ADMINISTRATIVE",
+          "Lint removal and housekeeping schedule with no-smoking and fire watch"
+        ]
+      ],
+      "MANUAL_HANDLING": [
+        [
+          "ADMINISTRATIVE",
+          "Bale handling with trolleys and a two-person lift rule"
+        ]
+      ]
+    }
+  }
+}

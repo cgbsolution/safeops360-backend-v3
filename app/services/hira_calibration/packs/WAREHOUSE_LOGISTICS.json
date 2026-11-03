@@ -1,0 +1,35 @@
+{
+  "code": "WAREHOUSE_LOGISTICS",
+  "name": "Warehouse and logistics",
+  "status": "DRAFT",
+  "statusNote": "DRAFT: seed content is illustrative and must be validated by the HSE lead before any plant relies on it. Status is changed by a person editing this file, never by code.",
+  "industries": ["warehousing", "logistics", "distribution centre", "cold chain"],
+  "defaultHazardFamilies": ["VEHICLE", "FALLING_OBJECT", "MANUAL_HANDLING", "HEIGHT", "SLIP_TRIP"],
+  "regulationKeys": ["FACTORIES_ACT_1948"],
+  "seedHazards": [
+    "forklift and pedestrian interface",
+    "racking (collapse, falling loads from high bays)",
+    "manual handling (picking, cartons)",
+    "dock operations (dock leveller, trailer creep, truck drive-away)"
+  ],
+  "overrides": {
+    "severity": {
+      "rubric": {
+        "VEHICLE": {
+          "min": 4,
+          "floorWhen": ["forklift", "reach truck", "pedestrian", "truck", "trailer", "dock", "reversing", "struck", "run over", "crush", "drive-away", "drive away"],
+          "s5Keywords": ["fatal", "crushed", "run over", "drive-away", "drive away", "trailer creep"]
+        },
+        "FALLING_OBJECT": {"max": 4, "rules": [{"id": "WH_RACK_COLLAPSE_S5", "when": ["rack collapse", "racking collapse", "high bay", "top level"], "min": 4, "max": 5}]},
+        "MANUAL_HANDLING": {"max": 2, "rules": [{"id": "WH_HEAVY_CARTON_S3", "when": ["heavy", "carton", "sack", "drum", "awkward"], "heavyKg": 20, "max": 3}]}
+      }
+    },
+    "controlCredit": {
+      "baselineKeywords": ["helmet", "safety shoe", "safety shoes", "hi-vis", "hi vis", "high visibility", "reflective jacket", "reflective vest", "hand gloves", "gloves", "induction", "uniform", "ppe", "basic ppe", "standard ppe"]
+    },
+    "routineControls": {
+      "VEHICLE": [["ADMINISTRATIVE", "Marked pedestrian walkways and forklift speed limit, checked by the shift supervisor"]],
+      "FALLING_OBJECT": [["ADMINISTRATIVE", "Rack inspection register and load-limit signs on every bay"]]
+    }
+  }
+}

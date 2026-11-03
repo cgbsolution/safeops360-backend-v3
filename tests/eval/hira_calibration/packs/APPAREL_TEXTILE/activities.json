@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "pack": "APPAREL_TEXTILE",
+  "description": "DRAFT industry rubric pack APPAREL_TEXTILE: HIRA calibration v2 evaluation fixtures for an Indian garment / textile unit. 5 activities: 2 low-hazard (APP-01, APP-02) and 3 high-hazard (APP-03..APP-05). Same structure as tests/eval/hira_calibration/activities.json: for DRAFT activities the per-hazard likelihood/severity are what an uncalibrated LLM (the v1 Copilot) proposed, often over-stated; recommendedControls are the controls it proposed. Hazards are seeds for the HSE lead to validate. 'expected' is an HSE judgement still to be made ('TODO(HSE lead)'); it must not be fitted to engine output.",
+  "matrices": {
+    "STD_5X5": {"likelihoodScale": "FREQUENCY", "moderateNotAcceptable": false,
+                "note": "Standard 5x5, frequency-anchored likelihood, MODERATE tolerable with ALARP."},
+    "JSL_QSD24_GT": {"likelihoodScale": "PLANT_INDEX", "moderateNotAcceptable": true,
+                     "note": "JSL Hisar plant method QSD/24 (GT > 3.33 significant): plant-index likelihood, MODERATE not acceptable."}
+  },
+  "activities": [
+    {
+      "id": "APP-01",
+      "title": "Sewing on single-needle lockstitch machines",
+      "study": "HIRA-2026-APP-004",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Stitching shirt panels on single-needle lockstitch machines on the sewing line (piece-rate operators, 9-10 hour shifts)",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "LIKELIHOOD_INFLATED (L4 because it is continuous)",
+      "hazards": [
+        {"key": "h1", "name": "Needle puncture at the presser foot", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Operator's finger slips under the descending needle while guiding a small panel at the presser foot: needle pierces the fingertip or nail, sometimes leaving a broken needle tip in the finger", "likelihood": 4, "severity": 4},
+        {"key": "h2", "name": "Needle breakage", "code": "MECH_PROJECTILE", "category": "mechanical",
+         "consequence": "Needle snaps on a thick seam or a button and the fragment flies towards the operator's eye: eye injury", "likelihood": 3, "severity": 4},
+        {"key": "h3", "name": "Sustained sitting at the machine", "code": "ERGO_AWKWARD_POSTURE", "category": "ergonomic",
+         "consequence": "Operators sit 9-10 hours on fixed-height stools without backrests, bent over the machine bed: chronic neck, shoulder and lower-back pain", "likelihood": 4, "severity": 3},
+        {"key": "h4", "name": "Repetitive sewing operations", "code": "ERGO_REPETITIVE_STRAIN", "category": "ergonomic",
+         "consequence": "Repetitive pinching, guiding and thread trimming at about 1,200 operations an hour: wrist tendinitis or carpal tunnel syndrome developing over months", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Finger (needle) guard fitted on every single-needle lockstitch machine", "effectiveness": "EFFECTIVE", "verificationMethod": "Line-start machine checklist signed by the line supervisor each shift"},
+        {"hierarchy": "ENGINEERING", "description": "Transparent eye guard fitted at the needle bar on all machines", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Broken-needle policy: every fragment recovered, matched and logged before work resumes", "verificationMethod": "Needle register checked by the QA in-charge every shift"},
+        {"hierarchy": "ENGINEERING", "description": "Height-adjustable chairs with backrests on 4 of the 10 sewing lines"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Two 10-minute stretching breaks per shift, led by the line supervisor"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Needle guard on all machines"},
+        {"hierarchy": "ENGINEERING", "description": "Ergonomic chairs with backrest and footrest for all operators", "costBand": "MEDIUM"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Job rotation between sewing operations"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "PPE", "description": "Finger guards / thimbles for operators"},
+        {"hierarchy": "ENGINEERING", "description": "Servo motors with needle positioning on all machines", "costBand": "HIGH"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "APP-02",
+      "title": "Steam ironing and garment finishing",
+      "study": "HIRA-2026-APP-006",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Pressing finished garments with steam-electric irons on vacuum ironing tables in the finishing hall, steam supplied from the central boiler",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "MIXED",
+      "hazards": [
+        {"key": "h1", "name": "Steam leak from the iron hose", "code": "THERMAL_STEAM_BURN", "category": "thermal",
+         "consequence": "Steam escapes from a cracked iron hose or a loose hose clamp onto the presser's hand and forearm: scald, usually superficial", "likelihood": 4, "severity": 4},
+        {"key": "h2", "name": "Hot iron sole plate", "code": "THERMAL_HOT_SURFACE", "category": "thermal",
+         "consequence": "Presser's free hand or forearm touches the 150-180 C sole plate while smoothing the garment: contact burn (blister)", "likelihood": 4, "severity": 3},
+        {"key": "h3", "name": "Damaged iron cord", "code": "ELEC-002", "category": "electrical",
+         "consequence": "Presser gets a shock from a frayed iron cord or an un-earthed iron body while touching the metal vacuum table on a floor wet with steam condensate", "likelihood": 3, "severity": 4},
+        {"key": "h4", "name": "Hot finishing hall in summer", "code": "ENV_HEAT_STRESS", "category": "environmental",
+         "consequence": "Pressers stand 9 hours beside steam irons in a hall at 36-38 C in May-June: dehydration and heat exhaustion", "likelihood": 4, "severity": 4},
+        {"key": "h5", "name": "Standing all shift at the ironing table", "code": "ERGO_AWKWARD_POSTURE", "category": "ergonomic",
+         "consequence": "Standing all shift at a fixed-height ironing table: leg swelling and lower-back pain", "likelihood": 3, "severity": 2}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Thermostat-controlled steam irons with silicone heat-resistant iron rests"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Monthly check of iron cords, plugs and steam hoses by the maintenance electrician"},
+        {"hierarchy": "ENGINEERING", "description": "Exhaust fans and evaporative air coolers in the finishing hall"},
+        {"hierarchy": "PPE", "description": "Cotton glove on the non-ironing hand"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Steel-braided steam hoses with crimped fittings"},
+        {"hierarchy": "ENGINEERING", "description": "30 mA RCCB on the ironing table power circuits"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Heat stress awareness, ORS and drinking water at the finishing line"},
+        {"hierarchy": "ENGINEERING", "description": "Anti-fatigue mats at the ironing tables"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "APP-03",
+      "title": "Straight-knife and band-knife cutting of fabric lays",
+      "study": "HIRA-2026-APP-002",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Cutting 60-80 ply fabric lays with a straight-knife cutting machine and cutting small blocks to shape on the band-knife machine in the cutting room",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Straight-knife blade contact", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Cutter's free hand, pressing down the lay in front of the machine, meets the reciprocating straight-knife blade: deep laceration, cut tendons or a severed fingertip", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Band-knife blade contact", "code": "MECH_UNGUARDED_ROTATING", "category": "mechanical",
+         "consequence": "Operator's fingers follow a small fabric block into the running band-knife blade at the table slot: finger amputation", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Band-knife blade breakage", "code": "MECH-007", "category": "mechanical",
+         "consequence": "Band-knife blade snaps and whips out of the wheel housing: laceration to the operator's face or arm", "likelihood": 3, "severity": 4},
+        {"key": "h4", "name": "Trailing straight-knife cable", "code": "ELEC-001", "category": "electrical",
+         "consequence": "Straight-knife power cable dragged across the table is nicked by the blade and the cutter grips the bare conductor: electric shock", "likelihood": 3, "severity": 5},
+        {"key": "h5", "name": "Bending over the cutting table", "code": "ERGO_AWKWARD_POSTURE", "category": "ergonomic",
+         "consequence": "Cutters bend over a 90 cm table and push the straight knife through thick lays all shift: lower-back and shoulder strain", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "PPE", "description": "Stainless-steel chain-mail glove on the non-cutting hand for every straight-knife and band-knife cutter", "verificationMethod": "Glove issue register; cutting master checks at shift start"},
+        {"hierarchy": "ENGINEERING", "description": "Straight knives with an adjustable blade guard lowered to the lay height", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ENGINEERING", "description": "Band knife with enclosed upper and lower wheel guards, adjustable blade guard set just above the work, and push sticks for small pieces", "effectiveness": "EFFECTIVE", "verificationMethod": "Weekly machine guard checklist by maintenance"},
+        {"hierarchy": "ENGINEERING", "description": "Straight-knife cables run from an overhead festoon rail above the cutting table"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Only trained and authorised cutters operate the knives (authorisation list on the cutting room board)"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "PPE", "description": "Chain-mail gloves for all cutters"},
+        {"hierarchy": "ENGINEERING", "description": "Blade guards on all cutting machines"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training of cutters"},
+        {"hierarchy": "ENGINEERING", "description": "Anti-fatigue mats and height-adjustable cutting tables", "costBand": "MEDIUM"},
+        {"hierarchy": "ENGINEERING", "description": "Automatic CNC fabric cutter for long runs", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Daily inspection of band-knife blades for cracks"}
+      ],
+      "evidence": {"byFamily": {"SHARP": {"window": 2, "12m": 1, "items": [
+        "IR-2026-019: straight-knife cut to a cutter's left index finger at table 3 (4 stitches, no lost time)",
+        "FA-2025-144: straight-knife nick to the thumb while squaring a lay (first aid)"]}}},
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "APP-04",
+      "title": "Unloading and stacking of fabric rolls and bales",
+      "study": "HIRA-2026-APP-001",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Manual unloading of fabric rolls (40-70 kg) and compressed fabric / yarn bales from trucks and stacking them on the fabric store floor and racks",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Carrying rolls and bales", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Loaders carry 40-70 kg fabric rolls and bales on their shoulders from the truck to the store: lower-back injury (disc prolapse) or shoulder strain", "likelihood": 4, "severity": 4},
+        {"key": "h2", "name": "Rolls falling from floor stacks", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "A fabric roll from the top of a 6-high floor stack rolls off and strikes a loader's head or crushes a foot", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Fall from the truck bed", "code": "WAH-003", "category": "height",
+         "consequence": "Loader steps backwards off the 1.4 m truck bed edge while pulling a bale: fall onto the yard, fracture or head injury", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Truck reversing to the store shutter", "code": "VEH-005", "category": "transportation",
+         "consequence": "Truck reverses to the store shutter without a banksman and pins a loader against the plinth: crush injury, possible fatality", "likelihood": 3, "severity": 5},
+        {"key": "h5", "name": "Cotton fibre dust", "code": "ENV_DUST_AIRBORNE", "category": "environmental",
+         "consequence": "Loaders breathe cotton fibre dust when bale wrapping tears: respiratory irritation; byssinosis after years of exposure", "likelihood": 3, "severity": 4}
+      ],
+      "existingControls": [
+        {"hierarchy": "PPE", "description": "Safety shoes and cotton gloves for loaders"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Hand pallet truck and roll trolleys for moving rolls"},
+        {"hierarchy": "ENGINEERING", "description": "Roll racks with end stops; floor stacks limited to 4 high and chocked"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Banksman for reversing trucks"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Manual handling training"},
+        {"hierarchy": "PPE", "description": "Dust mask"},
+        {"hierarchy": "ENGINEERING", "description": "Mobile loading ramp at the store dock", "costBand": "HIGH"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"},
+      "notes": "Only baseline PPE recorded: loading crew supplied by a labour contractor."
+    },
+    {
+      "id": "APP-05",
+      "title": "Air-jet loom weaving and lint cleaning",
+      "study": "HIRA-2026-APP-009",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Running 120 air-jet looms, mending warp / weft breaks and blow-cleaning lint from the looms with compressed air in the humidified weaving shed",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Weaving shed noise", "code": "NOISE_HIGH_EXPOSURE", "category": "noise",
+         "consequence": "Weavers spend 12-hour shifts in 98-102 dB(A) air-jet loom noise: permanent noise-induced hearing loss", "likelihood": 4, "severity": 4},
+        {"key": "h2", "name": "Lint and fabric fire", "code": "FIRE_DUST_EXPLOSION", "category": "fire_explosion",
+         "consequence": "Lint layered on loom motors, light fittings and humidification ducts is ignited by an overheated motor bearing or an electrical spark and the fire flashes across the lint through the shed: burns to weavers, possible multiple casualties during evacuation", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Reed / sley beat-up", "code": "MECH_PINCH_POINT", "category": "mechanical",
+         "consequence": "Weaver's fingers caught between the beating reed and the cloth fell while mending a broken end without stopping the loom: crushed or fractured fingers", "likelihood": 4, "severity": 4},
+        {"key": "h4", "name": "Compressed-air blow cleaning", "code": "MECH_PROJECTILE", "category": "mechanical",
+         "consequence": "Lint, broken filament and grit blown off the loom at 6 bar strike the weaver's eye: eye injury", "likelihood": 4, "severity": 4},
+        {"key": "h5", "name": "Hot humid weaving shed", "code": "ENV_HEAT_STRESS", "category": "environmental",
+         "consequence": "Shed kept at 75-85% RH and 34-36 C in summer: heat exhaustion of weavers on 12-hour shifts", "likelihood": 3, "severity": 4}
+      ],
+      "existingControls": [],
+      "recommendedControls": [
+        {"hierarchy": "PPE", "description": "Ear plugs or ear muffs for all weavers"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Shift-wise lint cleaning with vacuum instead of compressed air"},
+        {"hierarchy": "ENGINEERING", "description": "Automatic fire detection and sprinklers in the weaving shed", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Stop the loom before mending breaks"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "PPE", "description": "Safety goggles during blow cleaning"}
+      ],
+      "plantData": {
+        "existingControlProposals": [
+          {"hierarchy": "ADMINISTRATIVE", "description": "Lint cleaning schedule: looms, motors and overhead fittings vacuum-cleaned every shift, humidification ducts weekly",
+           "source": "Weaving shed housekeeping SOP WV-SOP-04", "verificationMethod": "Shift cleaning checklist signed by the jobber"},
+          {"hierarchy": "PPE", "description": "Ear plugs (SNR 25) issued to all weavers, replaced monthly",
+           "source": "PPE issue register"}
+        ]
+      },
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"},
+      "notes": "No controls captured in the draft (weaving shed added from scratch); the plant registers hold two."
+    }
+  ]
+}

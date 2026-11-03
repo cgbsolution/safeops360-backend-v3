@@ -36,6 +36,10 @@ _FREQUENCY_WORDS = (
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "schema": 1,
+    # Industry rubric pack for the plant (round 3 M): STEEL_HEAVY | APPAREL_TEXTILE |
+    # CHEMICAL_PHARMA | WAREHOUSE_LOGISTICS. None = no pack: the review shows
+    # "Not validated for this industry" and no residual-band claims.
+    "rubricPack": None,
     # One set of bands for every 5x5 cell: score = L x S.
     "thresholds": {"lowMax": 3, "moderateMax": 6, "highMax": 12},
     "likelihood": {

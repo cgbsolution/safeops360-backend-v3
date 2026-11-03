@@ -1,0 +1,211 @@
+{
+  "schema": 1,
+  "pack": "WAREHOUSE_LOGISTICS",
+  "description": "DRAFT industry rubric pack WAREHOUSE_LOGISTICS: HIRA calibration v2 evaluation fixtures for an Indian FMCG / e-commerce distribution centre. 5 activities: 2 low-hazard (WH-01, WH-02) and 3 high-hazard (WH-03..WH-05). Same structure as tests/eval/hira_calibration/activities.json: for DRAFT activities the per-hazard likelihood/severity are what an uncalibrated LLM (the v1 Copilot) proposed, often over-stated; recommendedControls are the controls it proposed. Hazards are seeds for the HSE lead to validate. 'expected' is an HSE judgement still to be made ('TODO(HSE lead)'); it must not be fitted to engine output.",
+  "matrices": {
+    "STD_5X5": {"likelihoodScale": "FREQUENCY", "moderateNotAcceptable": false,
+                "note": "Standard 5x5, frequency-anchored likelihood, MODERATE tolerable with ALARP."},
+    "JSL_QSD24_GT": {"likelihoodScale": "PLANT_INDEX", "moderateNotAcceptable": true,
+                     "note": "JSL Hisar plant method QSD/24 (GT > 3.33 significant): plant-index likelihood, MODERATE not acceptable."}
+  },
+  "activities": [
+    {
+      "id": "WH-01",
+      "title": "Manual case picking from ground and first-level racking",
+      "study": "HIRA-2026-WH-003",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Picking cartons (5-20 kg) from floor-level pallet locations and the first rack beam onto a picking trolley against WMS pick lists in the distribution centre",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "LIKELIHOOD_INFLATED (L4 because it is continuous)",
+      "hazards": [
+        {"key": "h1", "name": "Lifting cartons from floor-level pallets", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Picker lifts 15-20 kg cartons from floor-level pallets about 400 times a shift: lower-back strain", "likelihood": 4, "severity": 3},
+        {"key": "h2", "name": "Bending and twisting at the pick face", "code": "ERGO_AWKWARD_POSTURE", "category": "ergonomic",
+         "consequence": "Repeated bending to pallet base level and twisting to place cartons on the trolley: chronic low-back pain", "likelihood": 4, "severity": 3},
+        {"key": "h3", "name": "Box cutter while opening cartons", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Box-cutter blade slips while opening outer cartons for each-picking: hand laceration", "likelihood": 4, "severity": 3},
+        {"key": "h4", "name": "Reach truck entering the pick aisle", "code": "VEH-001", "category": "transportation",
+         "consequence": "Picker stepping out of a pick face is struck by a reach truck turning into the aisle: leg fracture or crush injury", "likelihood": 3, "severity": 5},
+        {"key": "h5", "name": "Stretch film and pallet debris in aisles", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Trip on discarded stretch film or a broken pallet board in the pick aisle: sprain", "likelihood": 3, "severity": 2}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Pick aisles closed to reach trucks during picking waves by chain barriers at both ends", "effectiveness": "EFFECTIVE", "verificationMethod": "Wave-start checklist in the WMS signed by the shift lead"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Heavy SKUs (> 15 kg) slotted at waist height; slotting reviewed monthly", "verificationMethod": "Monthly slotting report"},
+        {"hierarchy": "ENGINEERING", "description": "Self-retracting safety cutters issued in place of open blades", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Waste stretch film collected in aisle-end bins every 2 hours"},
+        {"hierarchy": "PPE", "description": "Safety shoes, high-visibility vest, cut-resistant gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Manual handling training"},
+        {"hierarchy": "ENGINEERING", "description": "Height-adjustable picking trolleys / pallet lift tables", "costBand": "MEDIUM"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Job rotation between picking and packing"},
+        {"hierarchy": "PPE", "description": "Back support belts"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "5S of picking aisles"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "WH-02",
+      "title": "Packing, tape sealing and labelling at the packing stations",
+      "study": "HIRA-2026-WH-004",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Packing e-commerce orders into cartons, sealing them on the automatic carton sealer or with hand tape dispensers, and labelling them at the packing stations",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Carton sealer drive belts", "code": "MECH_PINCH_POINT", "category": "mechanical",
+         "consequence": "Packer's fingers drawn between the side drive belts of the automatic carton sealer while pushing an under-filled carton through: finger crush or fracture", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Tape dispenser blade", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Cut from the serrated blade of the hand tape dispenser or the sealer's tape knife: finger laceration", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Repetitive packing at a fixed-height table", "code": "ERGO_REPETITIVE_STRAIN", "category": "ergonomic",
+         "consequence": "Repetitive folding, taping and labelling of about 600 orders a shift at a fixed-height table: wrist and shoulder strain", "likelihood": 4, "severity": 3},
+        {"key": "h4", "name": "Cartons and strapping around the station", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Trip over flat-pack cartons and strapping around the packing station: sprain or bruise", "likelihood": 3, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "PPE", "description": "Safety shoes for packing staff"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Guards at the carton sealer drive belts with an emergency stop"},
+        {"hierarchy": "ENGINEERING", "description": "Height-adjustable packing tables", "costBand": "MEDIUM"},
+        {"hierarchy": "PPE", "description": "Cut-resistant gloves"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Housekeeping checklist at every packing station"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"},
+      "notes": "Only baseline PPE recorded: packing staff supplied by a manpower agency."
+    },
+    {
+      "id": "WH-03",
+      "title": "Forklift and reach-truck traffic in shared aisles and the cross-dock",
+      "study": "HIRA-2026-WH-001",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Moving pallets with 2.5 t electric forklifts and reach trucks between the inbound dock, cross-dock lanes and racking aisles shared with pickers and loaders, including battery charging",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Forklift - pedestrian interface", "code": "VEH-001", "category": "transportation",
+         "consequence": "Picker or loader in a cross-dock lane is struck by a forklift reversing or travelling with a load that blocks the driver's view: crush injury or fatality", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Forklift tip-over", "code": "VEH-002", "category": "transportation",
+         "consequence": "Forklift turns at speed with the load raised and tips over: driver crushed under the overhead guard", "likelihood": 3, "severity": 5},
+        {"key": "h3", "name": "Load falling from the forks", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "Unwrapped cartons slide off a raised pallet during travel onto a pedestrian or the driver: head or shoulder injury", "likelihood": 4, "severity": 4},
+        {"key": "h4", "name": "Battery electrolyte at the charging bay", "code": "CHEM_CORROSIVE_CONTACT", "category": "chemical",
+         "consequence": "Battery electrolyte (sulphuric acid) splashes into the eyes while topping up forklift batteries with water at the charging bay: chemical eye burn", "likelihood": 3, "severity": 4}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Pedestrian walkways separated by steel barriers at the cross-dock, with marked crossing points", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ENGINEERING", "description": "Blue-spot and red-zone lights, reverse alarm and an 8 km/h speed limiter on every forklift", "effectiveness": "EFFECTIVE", "verificationMethod": "Daily pre-use checklist in the forklift app; speed limiter tested monthly"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Only licensed, site-authorised drivers (operator card; refresher every 2 years)", "verificationMethod": "Authorisation register audited monthly by the EHS officer"},
+        {"hierarchy": "ENGINEERING", "description": "Seat belt with operator-presence interlock on all counterbalance forklifts", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ENGINEERING", "description": "Battery charging bay with eyewash station; single-point battery watering on 6 of 14 trucks"},
+        {"hierarchy": "PPE", "description": "High-visibility vest and safety shoes for everyone on the floor; face shield and PVC gloves at the charging bay"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Pedestrian segregation with barriers"},
+        {"hierarchy": "ENGINEERING", "description": "Proximity warning system (tags on pedestrians, alarm on the forklift)", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Forklift refresher training"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Stretch-wrap every pallet before moving"},
+        {"hierarchy": "ENGINEERING", "description": "Single-point watering on all forklift batteries"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Safety awareness campaign"}
+      ],
+      "evidence": {"byFamily": {"VEHICLE": {"window": 2, "12m": 1, "items": [
+        "NM-2026-0145: forklift reversed within 1 m of a picker in cross-dock lane 3",
+        "IR-2025-412: loader's foot run over by a forklift at the inbound dock (fracture, lost-time injury)"]}}},
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "WH-04",
+      "title": "Pallet put-away and retrieval in 10 m high-bay racking",
+      "study": "HIRA-2026-WH-002",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Putting away and retrieving 1 t pallets at up to 9 m beam height in selective pallet racking with reach trucks; pickers work in the same aisles at ground level",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Racking collapse after upright impact", "code": "MECH_FALLING_OBJECT", "category": "mechanical",
+         "consequence": "A reach truck strikes a rack upright; the damaged upright later buckles under full 1 t pallet loads and the bay collapses into the aisle: workers in the aisle crushed, multiple fatalities possible", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Load falling from a high bay", "code": "PHYS_STRUCK_BY_FALLING", "category": "physical",
+         "consequence": "Loose cartons on a pallet being retrieved from the 8 m top beam fall onto a picker walking in the aisle below: head injury or fatality", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Reach truck overload at full lift height", "code": "VEH-002", "category": "transportation",
+         "consequence": "Reach truck lifts an overweight pallet to the top beam at full reach and tips forward: operator injured and the load falls into the aisle", "likelihood": 3, "severity": 5},
+        {"key": "h4", "name": "Climbing the racking", "code": "HEIGHT_FALL_OVER_2M", "category": "height",
+         "consequence": "Worker climbs the racking or rides on the forks to reach a misplaced carton at 6 m: fall to the floor, fatal", "likelihood": 3, "severity": 5}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Upright protectors at aisle entries and end-of-aisle frame barriers"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Beam load notices (SWL per level) on every bay"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Annual rack inspection by the racking supplier", "effectiveness": "PARTIALLY_EFFECTIVE"},
+        {"hierarchy": "ENGINEERING", "description": "Reach trucks with load weight display and height pre-selection", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "PPE", "description": "Helmet, safety shoes, high-visibility vest"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Weekly in-house rack inspection with green / amber / red damage tags"},
+        {"hierarchy": "ENGINEERING", "description": "Anti-collapse mesh on the back of the high-bay racks", "costBand": "HIGH"},
+        {"hierarchy": "ENGINEERING", "description": "Rack upright protectors"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "No climbing of racking; order picker or MEWP for high-level access"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Damaged pallets not stored above beam level 1"}
+      ],
+      "plantData": {
+        "openCapas": [{"id": "capa-2026-191", "number": "CAPA-2026-191", "text": "Unload and replace the 6 red-tagged rack uprights in aisles 14-16"}]
+      },
+      "evidence": {"byFamily": {"FALLING_OBJECT": {"window": 0, "12m": 0,
+        "failures": ["Rack inspection RI-2026-03 (Sep 2026): 6 uprights with red-category damage in aisles 14-16, bays still loaded"],
+        "items": ["Rack inspection RI-2026-03 (Sep 2026): 6 uprights with red-category damage in aisles 14-16, bays still loaded"]}}},
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "WH-05",
+      "title": "Truck loading and unloading at the dock doors",
+      "study": "HIRA-2026-WH-005",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Unloading and loading trucks and 32 ft containers at 12 dock doors with hydraulic dock levellers, battery-operated pallet trucks (BOPT) driven into the trailer, and hand unloading of floor-loaded cartons",
+      "routine": "ROUTINE",
+      "frequency": "CONTINUOUS",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Truck drive-away during loading", "code": "VEH-003", "category": "transportation",
+         "consequence": "Truck driver pulls away from the dock while a loader and a BOPT are inside the trailer: the BOPT and loader fall 1.2 m from the dock edge, crush injury or fatality", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Trailer creep", "code": "VEH-002", "category": "transportation",
+         "consequence": "Trailer creeps away from the dock under repeated BOPT braking; the pallet truck wheel drops into the gap between the leveller lip and the trailer bed and the truck tips over with the operator", "likelihood": 3, "severity": 5},
+        {"key": "h3", "name": "Dock leveller lip", "code": "MECH_PINCH_POINT", "category": "mechanical",
+         "consequence": "Loader's foot trapped under the dock leveller lip as it lowers onto the trailer bed: crushed foot", "likelihood": 3, "severity": 4},
+        {"key": "h4", "name": "Open dock edge with no truck", "code": "WAH-003", "category": "height",
+         "consequence": "Loader walks backwards pulling a pallet truck off the open dock edge when no truck is docked: 1.2 m fall with the pallet truck, head injury", "likelihood": 3, "severity": 5},
+        {"key": "h5", "name": "Hand unloading of floor-loaded containers", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Loaders hand-unload about 1,200 floor-loaded 20 kg cartons from a 32 ft container: lower-back strain, worse inside a hot container", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Wheel chocks at every dock door"},
+        {"hierarchy": "ENGINEERING", "description": "Vehicle restraint (dock lock) interlocked with the dock door and traffic lights", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Truck keys held by the dock supervisor during loading"},
+        {"hierarchy": "ENGINEERING", "description": "Telescopic belt conveyor for floor-loaded containers", "costBand": "HIGH"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "ENGINEERING", "description": "Dock edge barrier chain when the door is open with no truck"}
+      ],
+      "plantData": {
+        "existingControlProposals": [
+          {"hierarchy": "ADMINISTRATIVE", "description": "Dock SOP WH-SOP-03: truck keys handed to the dock supervisor and wheel chocks placed before the dock door opens",
+           "source": "Site SOP register", "verificationMethod": "Dock door log signed by the dock supervisor for every truck"}
+        ],
+        "openCapas": [{"id": "capa-2026-204", "number": "CAPA-2026-204", "text": "Vehicle restraints (dock locks) with traffic lights interlocked to the dock doors at doors 1-12"}]
+      },
+      "evidence": {"byFamily": {"VEHICLE": {"window": 1, "12m": 1, "items": [
+        "NM-2026-0377: truck moved off dock door 7 while a loader was inside the trailer, no injury"]}}},
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"},
+      "notes": "No controls captured in the draft (dock activity added from scratch by the new 3PL site team); the site SOP register holds one."
+    }
+  ]
+}

@@ -1,0 +1,206 @@
+{
+  "schema": 1,
+  "pack": "CHEMICAL_PHARMA",
+  "description": "DRAFT industry rubric pack CHEMICAL_PHARMA: HIRA calibration v2 evaluation fixtures for an Indian API / bulk-drug plant. 5 activities: 2 low-hazard (CHEM-01, CHEM-02) and 3 high-hazard (CHEM-03..CHEM-05). Same structure as tests/eval/hira_calibration/activities.json: for DRAFT activities the per-hazard likelihood/severity are what an uncalibrated LLM (the v1 Copilot) proposed, often over-stated; recommendedControls are the controls it proposed. Hazards are seeds for the HSE lead to validate. 'expected' is an HSE judgement still to be made ('TODO(HSE lead)'); it must not be fitted to engine output.",
+  "matrices": {
+    "STD_5X5": {"likelihoodScale": "FREQUENCY", "moderateNotAcceptable": false,
+                "note": "Standard 5x5, frequency-anchored likelihood, MODERATE tolerable with ALARP."},
+    "JSL_QSD24_GT": {"likelihoodScale": "PLANT_INDEX", "moderateNotAcceptable": true,
+                     "note": "JSL Hisar plant method QSD/24 (GT > 3.33 significant): plant-index likelihood, MODERATE not acceptable."}
+  },
+  "activities": [
+    {
+      "id": "CHEM-01",
+      "title": "QC laboratory sample preparation and HPLC mobile phase",
+      "study": "HIRA-2026-CHM-011",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Weighing, dilution and titration of samples and preparation of HPLC mobile phases (methanol, acetonitrile, buffer) in the QC wet-chemistry laboratory",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "LIKELIHOOD_INFLATED (L4 because it is daily)",
+      "hazards": [
+        {"key": "h1", "name": "Solvent vapour while preparing mobile phase", "code": "CHEM_TOXIC_INHALATION", "category": "chemical",
+         "consequence": "Analyst breathes methanol / acetonitrile vapour while filtering and degassing 2 L of mobile phase on the open bench: headache and dizziness", "likelihood": 4, "severity": 4},
+        {"key": "h2", "name": "Acid splash during dilution", "code": "CHEM_CORROSIVE_CONTACT", "category": "chemical",
+         "consequence": "Concentrated sulphuric acid splashes into the analyst's eye while diluting it for a titration reagent: chemical eye burn", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Broken glassware", "code": "MECH_SHARP_EDGE", "category": "mechanical",
+         "consequence": "Pipette or volumetric flask neck breaks while fitting a bulb or stopper: hand laceration", "likelihood": 4, "severity": 3},
+        {"key": "h4", "name": "Hot oven trays and hot plates", "code": "THERMAL_HOT_SURFACE", "category": "thermal",
+         "consequence": "Analyst touches a 105 C loss-on-drying oven tray or a hot plate: minor contact burn", "likelihood": 3, "severity": 2}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Ducted fume hoods for all solvent and acid work", "effectiveness": "EFFECTIVE", "verificationMethod": "Quarterly face-velocity test (0.4-0.6 m/s) recorded on the hood label"},
+        {"hierarchy": "ENGINEERING", "description": "Eyewash at every bench row and a safety shower in the laboratory", "effectiveness": "EFFECTIVE", "verificationMethod": "Weekly flush test tag"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Lab safety SOP QC-SOP-014: acids diluted only in the fume hood (acid into water); mobile phase prepared in the hood"},
+        {"hierarchy": "PPE", "description": "Lab coat, safety goggles, nitrile gloves; heat-resistant gloves and tongs at the ovens"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Lab safety training"},
+        {"hierarchy": "PPE", "description": "Face shield for acid dilution"},
+        {"hierarchy": "ENGINEERING", "description": "Solvent safety cans and closed mobile-phase reservoirs with vent filters"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Inspect glassware for chips before use; broken-glass bin at each bench"},
+        {"hierarchy": "ENGINEERING", "description": "Bench-top spill kits"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "CHEM-02",
+      "title": "Cleaning in place (CIP) of the reactor train",
+      "study": "HIRA-2026-CHM-007",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Running the automated CIP cycle (2% caustic soda at 75 C, then 1% nitric acid) for the reactor, receiver and transfer lines from the CIP skid, changing swing bends on the transfer panel and topping up the dosing tanks from carboys",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "MIXED",
+      "hazards": [
+        {"key": "h1", "name": "Caustic splash at the swing bend", "code": "CHEM_CORROSIVE_CONTACT", "category": "chemical",
+         "consequence": "Hot residual caustic sprays the operator's face when a swing bend on the transfer panel is opened before the line has drained: chemical eye and face burns", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Nitric acid fumes while topping up", "code": "CHEM_TOXIC_INHALATION", "category": "chemical",
+         "consequence": "Operator breathes nitric acid fumes while pouring from 35 L carboys into the acid dosing tank: respiratory irritation", "likelihood": 3, "severity": 4},
+        {"key": "h3", "name": "Hot CIP supply lines", "code": "THERMAL_HOT_SURFACE", "category": "thermal",
+         "consequence": "Hand contact with uninsulated 75-80 C CIP supply lines and the heat exchanger at the skid: contact burn", "likelihood": 4, "severity": 3},
+        {"key": "h4", "name": "Wet floor around the CIP skid", "code": "PHYS_SLIP_TRIP", "category": "physical",
+         "consequence": "Slip on the wet, caustic-contaminated floor around the CIP skid: fall, wrist fracture", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Automated CIP skid with closed circuits; cycle started and monitored from the HMI", "effectiveness": "EFFECTIVE"},
+        {"hierarchy": "ENGINEERING", "description": "Proximity switches on the swing-bend panel interlocked with the CIP supply pump", "effectiveness": "EFFECTIVE", "verificationMethod": "Monthly interlock function test record"},
+        {"hierarchy": "ENGINEERING", "description": "Carboy tilting trolley for topping up the dosing tanks"},
+        {"hierarchy": "ENGINEERING", "description": "Eyewash and safety shower at the CIP skid"},
+        {"hierarchy": "PPE", "description": "Face shield over chemical goggles, PVC apron, rubber gloves, gumboots"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training on CIP chemicals and SDS"},
+        {"hierarchy": "ENGINEERING", "description": "Insulate the CIP supply lines"},
+        {"hierarchy": "ENGINEERING", "description": "Bulk caustic and acid dosing by metering pump instead of carboys", "costBand": "HIGH"},
+        {"hierarchy": "PPE", "description": "Acid gas respirator while topping up acid"},
+        {"hierarchy": "ENGINEERING", "description": "Anti-slip chemical-resistant flooring at the skid"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Confirm drain and zero flow on the HMI before opening a swing bend"}
+      ],
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "CHEM-03",
+      "title": "Solvent transfer and drumming at the solvent recovery plant",
+      "study": "HIRA-2026-CHM-004",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Pumping recovered toluene and methanol from the solvent recovery receiver into 200 L MS drums through a hose, and moving the full drums to the solvent yard",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Static ignition at the drum bung", "code": "CHEM-006", "category": "fire_explosion",
+         "consequence": "Splash filling through the top bung into an unearthed drum builds a static charge and the spark ignites toluene vapour at the bung: flash fire or drum explosion, severe burns to the operator", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Drum overflow / hose slipping out", "code": "CHEM_FLAMMABLE_SPILL", "category": "chemical",
+         "consequence": "Drum overfills or the hose jumps out of the bung and 20-30 L of toluene spill over the operator's legs and the drumming floor: skin irritation, slip, and a pool that can ignite", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Solvent vapour at the open bung", "code": "CHEM_TOXIC_INHALATION", "category": "chemical",
+         "consequence": "Operator bends over the open bung to watch the level and breathes toluene vapour: dizziness and narcosis; chronic neurotoxic effects over years", "likelihood": 4, "severity": 4},
+        {"key": "h4", "name": "Handling full drums", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Full 200 L drums (about 180 kg) are rolled and tipped upright by hand: crushed toes, fingers trapped between drums, back injury", "likelihood": 4, "severity": 4}
+      ],
+      "existingControls": [
+        {"hierarchy": "PPE", "description": "Goggles, cotton gloves, safety shoes"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Earthing clamp with a static-earth indicator on every drum before filling"},
+        {"hierarchy": "ENGINEERING", "description": "Dip pipe to the drum bottom (bottom filling) with a flow-meter cut-off"},
+        {"hierarchy": "ENGINEERING", "description": "Flameproof pump and local exhaust at the drumming point", "costBand": "HIGH"},
+        {"hierarchy": "ENGINEERING", "description": "Drum trolley and hydraulic drum lifter"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"},
+        {"hierarchy": "PPE", "description": "Nitrile gloves and organic vapour respirator"}
+      ],
+      "evidence": {"byFamily": {"CHEMICAL": {"window": 1, "12m": 1, "items": [
+        "NM-2026-0291: toluene drum overflowed at the SRS-2 drumming point, about 15 L on the floor, no ignition"]}}},
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"},
+      "notes": "Only baseline PPE recorded for the drumming point."
+    },
+    {
+      "id": "CHEM-04",
+      "title": "Manhole charging of powder into a solvent-filled reactor",
+      "study": "HIRA-2026-CHM-002",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Charging 1,000 kg of a solid intermediate in 25 kg bags through the open manhole of a 6 KL SS reactor containing methanol, from the reactor-top platform",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE_ALL (v1: L4 x S5 on every hazard)",
+      "hazards": [
+        {"key": "h1", "name": "Flash fire at the open manhole", "code": "CHEM-006", "category": "fire_explosion",
+         "consequence": "Static from powder poured out of a plastic-lined bag ignites methanol vapour at the open manhole: flash fire, severe burns to the charging operator's face and arms", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Solvent vapour and powder dust at the manhole", "code": "CHEM_TOXIC_INHALATION", "category": "chemical",
+         "consequence": "Operator breathes methanol vapour and intermediate dust rising from the open manhole during charging: dizziness, respiratory sensitisation", "likelihood": 4, "severity": 5},
+        {"key": "h3", "name": "Running agitator below the manhole", "code": "MECH-001", "category": "mechanical",
+         "consequence": "Operator breaking a lump with a scoop or by hand through the open manhole contacts the running agitator: arm drawn in, amputation", "likelihood": 4, "severity": 5},
+        {"key": "h4", "name": "Nitrogen-blanketed reactor", "code": "CS-001", "category": "confined_space",
+         "consequence": "Operator leans his head into the nitrogen-blanketed reactor through the manhole to check the powder level: collapses from oxygen deficiency and can fall in, fatal", "likelihood": 4, "severity": 5},
+        {"key": "h5", "name": "Lifting bags to the manhole", "code": "MECH_HEAVY_LIFTING", "category": "mechanical",
+         "consequence": "Operator lifts 40 bags of 25 kg per batch from the pallet to the manhole rim: lower-back and shoulder strain", "likelihood": 4, "severity": 5}
+      ],
+      "existingControls": [
+        {"hierarchy": "ENGINEERING", "description": "Reactor, charging chute, platform and bag pallet bonded and earthed; operators wear antistatic footwear on a conductive platform", "effectiveness": "EFFECTIVE", "verificationMethod": "Earthing continuity check (< 10 ohm) logged each shift"},
+        {"hierarchy": "ENGINEERING", "description": "Reactor nitrogen-inerted; oxygen below 8% confirmed before the manhole is opened", "verificationMethod": "O2 analyser reading recorded in the batch production record"},
+        {"hierarchy": "ENGINEERING", "description": "Manhole safety grill, interlocked to stop the agitator when the grill is lifted", "effectiveness": "EFFECTIVE", "verificationMethod": "Monthly interlock test by instrumentation"},
+        {"hierarchy": "ENGINEERING", "description": "Local exhaust ventilation ring at the manhole"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Charging SOP PRD-SOP-021: antistatic (Type C / D) liners only, slow pouring, no head inside the manhole"},
+        {"hierarchy": "PPE", "description": "Antistatic coverall, half-face respirator with organic vapour / P3 cartridge, chemical goggles, nitrile gloves"}
+      ],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Closed powder transfer system or split butterfly valve for charging", "costBand": "HIGH"},
+        {"hierarchy": "ENGINEERING", "description": "Vacuum bag lifter at the charging platform"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training on static electricity hazards"},
+        {"hierarchy": "PPE", "description": "SCBA kept at the reactor platform"},
+        {"hierarchy": "ENGINEERING", "description": "Oxygen monitor with alarm at the manhole"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Safety awareness programme"}
+      ],
+      "evidence": {"byFamily": {"FIRE_EXPLOSION": {"window": 1, "12m": 0, "items": [
+        "NM-2025-0466: blue flash seen at the R-104 manhole while charging from a non-antistatic liner, no injury"]}}},
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"}
+    },
+    {
+      "id": "CHEM-05",
+      "title": "Multi-milling, sifting and FBD discharge of dried API",
+      "study": "HIRA-2026-CHM-005",
+      "matrix": "STD_5X5",
+      "mode": "DRAFT",
+      "activity": "Unloading dried API from the fluid bed dryer (FBD) bowl, sizing it through the multi-mill and vibro-sifter and filling it into double-PE-lined drums in the milling room",
+      "routine": "ROUTINE",
+      "frequency": "DAILY",
+      "llmStyle": "WORST_CASE",
+      "hazards": [
+        {"key": "h1", "name": "Combustible dust explosion in the mill, sifter or FBD", "code": "FIRE_DUST_EXPLOSION", "category": "fire_explosion",
+         "consequence": "Fine dry API dust (low minimum ignition energy) in the multi-mill, sifter or FBD filter bag is ignited by a static spark or tramp metal hitting the beater blades: dust deflagration bursts the equipment, burns and flying parts injure the operators in the milling room", "likelihood": 4, "severity": 5},
+        {"key": "h2", "name": "Potent API dust", "code": "CHEM_TOXIC_INHALATION", "category": "chemical",
+         "consequence": "Operator breathes potent API dust while scooping product from the FBD bowl and tipping it into the mill hopper: pharmacological effects or sensitisation", "likelihood": 4, "severity": 4},
+        {"key": "h3", "name": "Multi-mill beater blades", "code": "MECH_UNGUARDED_ROTATING", "category": "mechanical",
+         "consequence": "Operator pushes lumps down the mill hopper by hand and reaches the rotating beater blades: finger or hand amputation", "likelihood": 3, "severity": 5},
+        {"key": "h4", "name": "Hot FBD bowl", "code": "THERMAL_HOT_SURFACE", "category": "thermal",
+         "consequence": "Operator touches the 60-70 C FBD bowl and retarding chamber while unloading straight after drying: minor contact burn", "likelihood": 4, "severity": 3},
+        {"key": "h5", "name": "Mill and sifter noise", "code": "NOISE_HIGH_EXPOSURE", "category": "noise",
+         "consequence": "Operators stand 3-4 hours beside the multi-mill and vibro-sifter at about 90 dB(A): noise-induced hearing loss", "likelihood": 4, "severity": 3}
+      ],
+      "existingControls": [],
+      "recommendedControls": [
+        {"hierarchy": "ENGINEERING", "description": "Earthing and bonding of the mill, sifter, FBD and drums"},
+        {"hierarchy": "ENGINEERING", "description": "Explosion vents or suppression on the FBD and mill", "costBand": "HIGH"},
+        {"hierarchy": "ENGINEERING", "description": "Magnetic grill at the mill inlet"},
+        {"hierarchy": "ENGINEERING", "description": "Closed vacuum transfer from the FBD to the mill", "costBand": "HIGH"},
+        {"hierarchy": "PPE", "description": "Powered air-purifying respirator (PAPR) for milling"},
+        {"hierarchy": "ADMINISTRATIVE", "description": "Training"}
+      ],
+      "plantData": {
+        "existingControlProposals": [
+          {"hierarchy": "ENGINEERING", "description": "Mill, sifter, FBD bowl and product drums bonded to an earthing relay that interlocks the mill motor",
+           "source": "Plant static control standard ESC-02", "verificationMethod": "Earthing relay check recorded at batch start"},
+          {"hierarchy": "PPE", "description": "PAPR with hood and disposable coverall for open handling of OEB-4 products",
+           "source": "Product containment matrix (OEB register)"}
+        ],
+        "openCapas": [{"id": "capa-2026-163", "number": "CAPA-2026-163", "text": "Explosion vent ducted outside the building on the FBD-3 filter housing"}]
+      },
+      "expected": {"inherentBand": "TODO(HSE lead)", "residualBand": "TODO(HSE lead)", "endState": "TODO(HSE lead)", "status": "TODO"},
+      "notes": "No controls captured in the draft (new milling suite); the plant registers hold two and there is an open CAPA."
+    }
+  ]
+}

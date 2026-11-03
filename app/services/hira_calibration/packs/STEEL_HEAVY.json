@@ -1,0 +1,12 @@
+{
+  "code": "STEEL_HEAVY",
+  "name": "Steel and heavy industry",
+  "status": "VALIDATED",
+  "statusNote": "Status is set by a person editing this file, never by code. VALIDATED = the round 1-2 eval scope (task-based HIRA, steel melt shop / heavy industry, 25 activities). The proposed expected bands (tests/eval/hira_calibration/expected_bands_proposed.csv) are pending HSE lead sign-off.",
+  "industries": ["steel", "metals", "heavy engineering"],
+  "inheritsDefaults": true,
+  "comment": "The engine defaults (config.DEFAULT_CONFIG severity rubric, likelihood anchors, baseline keywords, routine controls) ARE this pack, so it overrides nothing.",
+  "defaultHazardFamilies": ["LIFTING", "MOLTEN", "HEIGHT", "VEHICLE", "MACHINERY", "ELECTRICAL", "CONFINED_SPACE", "PRESSURE", "FIRE_EXPLOSION", "DUST", "HEAT", "NOISE", "MANUAL_HANDLING", "SLIP_TRIP"],
+  "regulationKeys": ["FACTORIES_ACT_1948"],
+  "overrides": {}
+}
