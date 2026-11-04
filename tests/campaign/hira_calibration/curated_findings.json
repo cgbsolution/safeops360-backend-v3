@@ -1,0 +1,65 @@
+{
+  "_note": "Engine findings verified by hand while triaging the offline campaign (2026-11-04). Each was reproduced directly against the engine; none was fixed (campaign rule: find and report). Merged into out/defects.csv as F-series rows.",
+  "findings": [
+    {
+      "title": "Control relevance: incidental keywords exclude the controls built for the hazard",
+      "category": "control-relevance (residual correctness)",
+      "severity": "major",
+      "hiraIds": ["S2-02", "S4-CAL_3X3-D", "S4-CAL_4X4-D", "S4-CAL_6X6-D", "S4-CAL_5X5_OVR-D", "S6-14", "HH-15"],
+      "observed": "'Remote-operated tap hole drill and mud gun from the cabin' is read as a HEAT control ('cabin') and ruled not relevant to molten-metal splash (S2-02 residual CRITICAL 15). 'Remote skimming machine with heat shield' (HEAT via 'heat') gets no credit for slag splash (S4 D on every matrix). 'Wheel stopper / bund at the hopper edge' is read as CHEMICAL ('bund') and ruled not relevant to 'Reversing tipper' and 'Tipper topples at the hopper edge' (HH-15, one of the original 25 fixtures, residual CRITICAL 15). 'Driver stays in the cabin during loading' (HEAT) is not relevant to a billet falling from the magnet (S6-14, CRITICAL 15). 'Casting SOP ... runner pre-heating check' (HEAT) is not relevant to molten splash.",
+      "expected": "A control is credited against the hazard it was written for; an incidental word ('cabin', 'heat shield', 'pre-heating', 'bund') does not move it to another family and exclude it.",
+      "cause": "risk_engine.CONTROL_KEYWORDS: HEAT includes 'cabin' and the stem 'heat'; CHEMICAL includes 'bund'. applies_to() excludes a control whose families do not include the hazard's family or a RELATED one (MOLTEN is related only to THERMAL and FIRE_EXPLOSION, not HEAT).",
+      "repro": "eng.applies_to(eng.Control(None,'ENGINEERING','Remote skimming machine with heat shield'), eng.Hazard('h','Molten slag splash','FIRE_MOLTEN_METAL','fire_explosion','Molten slag splash at the converter mouth')) -> (False, 'addresses heat, not molten'). Full list: out/control_relevance_audit.csv"
+    },
+    {
+      "title": "An engineering control with no family keyword is credited against every hazard in the entry",
+      "category": "control-relevance (false credit)",
+      "severity": "major",
+      "hiraIds": ["S2-02", "LOW-06", "S2-06", "HH-10"],
+      "observed": "'Fixed CO detectors on the cast house floor with alarm' earns L-1 on molten-metal splash, heat stress and noise (S2-02). 'Boom barrier with a speed breaker' earns credit on heat stress and slips (LOW-06). 'Remote racking device for the 33 kV VCB' earns credit on the transformer oil fire and on tripping over trench covers (S2-06). 'Closed transfer by acid-resistant pump' earns credit on slips and manual handling (HH-10). 15 such pairs on the corpus.",
+      "expected": "A control with no recognisable link is not credited to unrelated hazards; the user is asked which hazard it controls (or it counts only where it plausibly applies).",
+      "cause": "applies_to() returns (True, 'not linked to a hazard: counted for the whole activity') whenever control_families() is empty and the control has no hazard links.",
+      "repro": "eng.applies_to(eng.Control(None,'ENGINEERING','Fixed CO detectors on the cast house floor with alarm'), eng.Hazard('h','Molten metal splash at the tap hole','FIRE_MOLTEN_METAL','fire_explosion','Hot metal splash')) -> (True, 'not linked to a hazard: counted for the whole activity')"
+    },
+    {
+      "title": "Hazard family from free text: non-English wording and incidental nouns misclassify hazards",
+      "category": "hazard-family (edge case)",
+      "severity": "minor",
+      "hiraIds": ["S6-05"],
+      "observed": "Hindi 'भार गिरना' (load falls from the crane, fatal) gets family GENERAL: no severity rubric, the banksman control is ruled not relevant, residual CRITICAL 15 and the hazard is routed to the elevated override. Hinglish 'Haath dabna' (finger pinched between coil and trailer) is classed VEHICLE because of the word 'trailer': severity raised S3 -> S4 and 'Reversing camera / proximity sensor' and 'segregated pedestrian walkway' are recommended for a finger pinch.",
+      "expected": "A hazard whose family cannot be read is flagged for a hazard-master link instead of defaulting to GENERAL; an incidental noun does not reclassify a pinch hazard.",
+      "cause": "hazard_family() falls back to English keywords when the hazard has no master code or category. Minor because Assistant and Copilot drafts use hazard-master items (code and category set), so this mainly affects free-text or imported hazards without a master link.",
+      "repro": "corpus item S6-05 (run_campaign.run_one)"
+    },
+    {
+      "title": "A task-based entry with no hazards gets no finding and can be submitted",
+      "category": "completeness (edge case)",
+      "severity": "minor",
+      "hiraIds": ["S6-01"],
+      "observed": "review_v2.evaluate() on an entry with an empty hazard list returns findings [] and canSubmit True (status OPEN).",
+      "expected": "An advisory such as 'No hazards recorded' (the structural review for non-task studies already raises STRUCT_NO_HAZARDS).",
+      "cause": "evaluate() has no check for an empty hazard list on the calibrated path.",
+      "repro": "corpus item S6-01"
+    },
+    {
+      "title": "Controls with no hierarchy silently earn nothing; the advice shown does not fix it",
+      "category": "completeness (edge case)",
+      "severity": "minor",
+      "hiraIds": ["S6-08"],
+      "observed": "'Pull cord switch along the conveyor' and 'LOTO before scraper change' with an empty hierarchy are not in the credits list at all; the residual equals the inherent (HIGH 12) and the only related advice is 'Rate the effectiveness of the listed controls'.",
+      "expected": "A finding that asks for the control's hierarchy (rating its effectiveness does not change anything here).",
+      "cause": "residual_from_controls() buckets usable controls by hierarchy; a control with no hierarchy falls into no bucket and gets no credit row.",
+      "repro": "corpus item S6-08"
+    },
+    {
+      "title": "Duplicate hazards are kept and assessed twice",
+      "category": "completeness (edge case)",
+      "severity": "minor",
+      "hiraIds": ["S6-04"],
+      "observed": "Two identical 'Strap recoil' hazards (same code and text) are both kept and both routed to CONFIRM_CONTROLS; no finding mentions the duplicate.",
+      "expected": "Duplicates merged or flagged.",
+      "cause": "No duplicate-hazard check in calibrate_draft() or evaluate().",
+      "repro": "corpus item S6-04"
+    }
+  ]
+}

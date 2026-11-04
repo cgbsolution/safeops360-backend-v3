@@ -1,0 +1,4 @@
+{
+  "_note": "Base URLs the HIRA calibration campaign may run against. Staging only: never a production URL. Empty until a staging environment exists; the runner refuses any --base-url not listed here.",
+  "stagingBaseUrls": []
+}

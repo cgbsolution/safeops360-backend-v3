@@ -1,0 +1,12 @@
+DB row-count diff: NOT RUN against a database.
+
+This was the offline part of the campaign. No staging environment exists yet, and the only database in .env is the
+production Supabase project with the real JSL Hisar data, so no query was made.
+
+Guard: DATABASE_URL / DATABASE_URL_SYNC / DIRECT_URL were overridden to an unroutable host before the app was imported,
+and every connection attempt on the app's engine was counted and refused.
+Connection attempts during this run: 0
+
+Tables to count before/after the staging run: HiraStudy, HiraEntry, HiraEntryHazard, HiraEntryExistingControl,
+HiraEntryRecommendedControl, HiraEntryVersion (or the version table in use), Capa, HiraCalibrationConfig,
+hira_copilot_shadow_runs (expected to grow), and the ZZ-CAL-TEST-<date> study (expected to appear, then be emptied).

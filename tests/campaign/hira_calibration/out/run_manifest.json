@@ -1,0 +1,118 @@
+{
+ "campaign": "HIRA calibration v2, offline part",
+ "generatedAt": "2026-11-04T03:31:21+00:00",
+ "engineVersion": "2.0.0",
+ "corpus": {
+  "file": "tests\\campaign\\hira_calibration\\corpus.json",
+  "sha256": "2f0782085bdbf0237e899566d7b886ae4fd644958afa54d141c29d308a4d3993",
+  "items": 154,
+  "now": "2026-11-01"
+ },
+ "packs": {
+  "APPAREL_TEXTILE": "DRAFT",
+  "CHEMICAL_PHARMA": "DRAFT",
+  "STEEL_HEAVY": "VALIDATED",
+  "WAREHOUSE_LOGISTICS": "DRAFT"
+ },
+ "python": "3.12.10",
+ "seeds": {
+  "randomOrders": [
+   1,
+   2,
+   3
+  ],
+  "subprocessPYTHONHASHSEED": [
+   "0",
+   "4242"
+  ],
+  "blindSheet": "blind-<stratum>"
+ },
+ "determinismRuns": [
+  "in-process #2",
+  "reverse order",
+  "random order seed 1",
+  "random order seed 2",
+  "random order seed 3",
+  "parallel, 10 workers",
+  "new process (restart), PYTHONHASHSEED=0",
+  "new process (restart), PYTHONHASHSEED=4242"
+ ],
+ "dbConnectionAttempts": 0,
+ "llm": {
+  "calls": 0,
+  "note": "offline engine run: no LLM calls (see llm_probe_report.md for the separate probe)",
+  "liveProbe": {
+   "generatedAt": "2026-11-04T03:20:46+00:00",
+   "analysedAt": "2026-11-04T03:22:18+00:00",
+   "model": "claude-haiku-4-5-20251001",
+   "temperature": 0,
+   "promptSha256": "b379e8585cd40a71603e367b8856b22da8b4f6b0a85b1468b4d6a483e8f3a9e2",
+   "engineVersion": "2.0.0",
+   "calls": 21,
+   "spentUsd": 0.4378,
+   "budgetUsd": 2.0,
+   "usage": {
+    "input_tokens": 29730,
+    "output_tokens": 75174,
+    "cache_creation_input_tokens": 9908,
+    "cache_read_input_tokens": 198160
+   },
+   "latencyMs": {
+    "p50": 34049,
+    "p95": 54903,
+    "max": 54987
+   },
+   "costPer100EntriesUsd": 2.08,
+   "costPer1000EntriesUsd": 20.85,
+   "callsOver30s": [
+    "ADV-BASE#1",
+    "ADV-BASE#2",
+    "ADV-BASE#3",
+    "ADV-01#1",
+    "ADV-01#2",
+    "ADV-02#1",
+    "ADV-02#2",
+    "ADV-03#1",
+    "ADV-03#2",
+    "ADV-04#1",
+    "ADV-04#2",
+    "ADV-05#1",
+    "ADV-05#2",
+    "ADV-10#1",
+    "ADV-10#2",
+    "S2-01#1",
+    "S2-01#2",
+    "S2-08#1",
+    "S2-08#2"
+   ]
+  }
+ },
+ "timings": {
+  "totalSeconds": 353.3,
+  "engineDraftMs": {
+   "n": 108,
+   "p50": 40.4,
+   "p95": 104.7,
+   "max": 150.9
+  },
+  "engineReviewMs": {
+   "n": 93,
+   "p50": 4.8,
+   "p95": 14.9,
+   "max": 45.0
+  },
+  "engineStudyRunMs": {
+   "n": 37,
+   "p50": 612.8,
+   "p95": 978.3,
+   "max": 1135.5
+  },
+  "note": "engine only (calibrate_draft / evaluate / full multi-pass run); no LLM, no DB"
+ },
+ "serviceHarness": {
+  "reviewRuns": 148,
+  "assistantRuns": 51,
+  "copilotDraftRuns": 5
+ },
+ "controlRelevanceAuditRows": 171
+}

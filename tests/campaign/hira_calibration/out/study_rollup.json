@@ -1,0 +1,72 @@
+[
+ {
+  "study": "ST1",
+  "entries": 9,
+  "worstEntryRating": "HIGH 12 (L3xS4)",
+  "sumRecommendations": 6,
+  "uniqueRecommendations": 2,
+  "uniqueLowerThanSum": true,
+  "byRole": {
+   "Maintenance Head": 2
+  },
+  "rolesOver10": []
+ },
+ {
+  "study": "ST2",
+  "entries": 8,
+  "worstEntryRating": "CRITICAL 15 (L3xS5)",
+  "sumRecommendations": 6,
+  "uniqueRecommendations": 2,
+  "uniqueLowerThanSum": true,
+  "byRole": {
+   "Maintenance Head": 2
+  },
+  "rolesOver10": []
+ },
+ {
+  "study": "ST3",
+  "entries": 10,
+  "worstEntryRating": "HIGH 12 (L3xS4)",
+  "sumRecommendations": 8,
+  "uniqueRecommendations": 2,
+  "uniqueLowerThanSum": true,
+  "byRole": {
+   "Maintenance Head": 2
+  },
+  "rolesOver10": []
+ },
+ {
+  "study": "ST4",
+  "entries": 8,
+  "worstEntryRating": "CRITICAL 15 (L3xS5)",
+  "sumRecommendations": 6,
+  "uniqueRecommendations": 2,
+  "uniqueLowerThanSum": true,
+  "byRole": {
+   "Maintenance Head": 2
+  },
+  "rolesOver10": []
+ },
+ {
+  "study": "ST5",
+  "entries": 9,
+  "worstEntryRating": "MODERATE 5 (L1xS5)",
+  "sumRecommendations": 0,
+  "uniqueRecommendations": 0,
+  "uniqueLowerThanSum": false,
+  "byRole": {},
+  "rolesOver10": []
+ },
+ {
+  "study": "ST6",
+  "entries": 8,
+  "worstEntryRating": "HIGH 12 (L3xS4)",
+  "sumRecommendations": 6,
+  "uniqueRecommendations": 2,
+  "uniqueLowerThanSum": true,
+  "byRole": {
+   "Maintenance Head": 2
+  },
+  "rolesOver10": []
+ }
+]

@@ -1,0 +1,58 @@
+[
+ {
+  "text": "Helmet and safety shoes",
+  "baseline": true,
+  "residual": "-",
+  "inherentOnly": true,
+  "credit": "none"
+ },
+ {
+  "text": "Helmet, safety shoes, hi-vis jacket",
+  "baseline": true,
+  "residual": "-",
+  "inherentOnly": true,
+  "credit": "none"
+ },
+ {
+  "text": "Safety shoes, helmet, as per site rule",
+  "baseline": false,
+  "residual": "MODERATE 6 (L2xS3)",
+  "inherentOnly": false,
+  "credit": "PPE L-1"
+ },
+ {
+  "text": "Helmet; to be worn at all times",
+  "baseline": false,
+  "residual": "MODERATE 6 (L2xS3)",
+  "inherentOnly": false,
+  "credit": "PPE L-1"
+ },
+ {
+  "text": "Helmet, safety shoes (mandatory in plant)",
+  "baseline": true,
+  "residual": "-",
+  "inherentOnly": true,
+  "credit": "none"
+ },
+ {
+  "text": "Cotton hand gloves, helmet - always worn",
+  "baseline": true,
+  "residual": "-",
+  "inherentOnly": true,
+  "credit": "none"
+ },
+ {
+  "text": "Use of PPE as per norms at all times",
+  "baseline": true,
+  "residual": "-",
+  "inherentOnly": true,
+  "credit": "none"
+ },
+ {
+  "text": "Basic PPE (helmet, shoes) as per plant standard",
+  "baseline": false,
+  "residual": "MODERATE 6 (L2xS3)",
+  "inherentOnly": false,
+  "credit": "PPE L-1"
+ }
+]
