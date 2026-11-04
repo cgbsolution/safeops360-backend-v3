@@ -820,9 +820,14 @@ def service_checks(items: list[dict[str, Any]], c: Check) -> dict[str, Any]:
             summary["copilotDraftRuns"] += 1
             sm = (got or {}).get("summary") or {}
             changed = []
+            if got is None:
+                # copilot/tools.py replaces the draft only for {"mode": "ON"}; None = saved unchanged
+                po_none = True
+            else:
+                po_none = False
             if sm.get("entryResidual") or any(h.get("residual") for h in sm.get("hazards") or []):
                 changed.append("residual band claimed")
-            po = (got or {}).get("parsed") or {}
+            po = parsed if po_none else ((got or {}).get("parsed") or {})
             if (po.get("initialLikelihood"), po.get("initialSeverity")) != (parsed["initialLikelihood"], parsed["initialSeverity"]):
                 changed.append(f"initial L/S {parsed['initialLikelihood']}x{parsed['initialSeverity']} -> {po.get('initialLikelihood')}x{po.get('initialSeverity')}")
             if len(po.get("recommendedControls") or []) != len(parsed["recommendedControls"]):
@@ -1556,7 +1561,8 @@ def render(items, base, c, defects, deltas, cons, roll, s1r, mono, s4, perf, ui_
               "literal I1-I16 wording but change what users see.", ""]
         for n, f in enumerate(curated, 1):
             L += [f"### F{n:02d} [{f['severity']}] {f['title']}", "", f"- Entries: {', '.join(f['hiraIds'])}", f"- Observed: {f['observed']}",
-                  f"- Expected: {f['expected']}", f"- Likely cause: {f.get('cause', '-')}", f"- Repro: {f['repro']}", ""]
+                  f"- Expected: {f['expected']}", f"- Likely cause: {f.get('cause', '-')}", f"- Repro: {f['repro']}",
+                  *([f"- Fix: {f['fix']}"] if f.get("fix") else []), ""]
     crit = [(a["id"], h) for a in items if base[a["id"]]["kind"] == "CALIBRATED" and base[a["id"]]["scope"]["validated"]
             for h in base[a["id"]]["summary"]["v2"]["criticalResidualHazards"]]
     if crit:

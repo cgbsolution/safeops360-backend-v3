@@ -15,6 +15,18 @@ cd safeops_360_bakend
 .venv/Scripts/python.exe tests/campaign/hira_calibration/llm_probe.py --reanalyse      # re-derive I8/I13 from the saved answers, no API calls
 ```
 
+Live shadow run (section 5), READ-ONLY against the database in `.env`:
+
+```
+.venv/Scripts/python.exe tests/campaign/hira_calibration/live_shadow.py --label after      # ~6 min, 157 entries
+.venv/Scripts/python.exe tests/campaign/hira_calibration/live_shadow.py --label after --rerender   # report again, no DB access
+```
+
+`live_db.py` opens its own connection with `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY` (checked with
+`SHOW transaction_read_only` before and after) and a client hook that refuses any non-read SQL; the app's own engine is
+replaced by a stub that raises. Results go to `out/live/<label>/` (git-ignored: real plant data), with before/after row
+counts. Step 5.2 (writing to `hira_copilot_shadow_runs`) is skipped because it is a write.
+
 Run the probe before `run_campaign.py`: the campaign report merges `out/llm_probe_runs.json` in as the I8 / I13 rows marked
 "live LLM" (live failures go to `defects.csv`). `run_campaign.py --no-subprocess` skips the two new-process (restart)
 determinism runs (~4 min).

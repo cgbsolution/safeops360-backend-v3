@@ -67,6 +67,11 @@ def calibrate_draft(
             consequence=h.get("consequence"),
         )
         fam = hz.family
+        # How far below the exposure default an AI proposal may go: one entry-level number from the
+        # Assistant (applied to every hazard) not at all; a per-hazard draft proposal by at most
+        # likelihood.draftMaxStepsBelowDefault steps.
+        default_l = eng.default_likelihood(routine, draft.get("frequency"), cfg)
+        steps = 0 if h.get("likelihoodSource") == "ENTRY_LEVEL" else int(cfg["likelihood"].get("draftMaxStepsBelowDefault", 1))
         lcal = eng.calibrate_likelihood(
             h.get("likelihood"),
             routine=routine,
@@ -75,6 +80,7 @@ def calibrate_draft(
             scale=rule.likelihood_scale,
             cfg=cfg,
             draft=True,  # an LLM draft is capped by evidence even on a plant-index scale
+            floor=max(1, default_l - steps),
         )
         scal = eng.calibrate_severity(h.get("severity"), family=fam, text=hz.text, cfg=cfg, adjust=True)
         if scal["value"] is None:
@@ -220,6 +226,7 @@ def from_assistant_suggestion(
                     "category": h.get("category"),
                     "consequence": h.get("contextualDescription"),
                     "likelihood": l,
+                    "likelihoodSource": "ENTRY_LEVEL",  # one Assistant number for the whole activity
                     "severity": s,
                     "relevance": 1.0,
                 }
@@ -238,6 +245,7 @@ def from_assistant_suggestion(
                 "category": lib.get("category"),
                 "consequence": h.get("reasoning"),
                 "likelihood": l,
+                "likelihoodSource": "ENTRY_LEVEL",  # one Assistant number for the whole activity
                 "severity": s,
                 "relevance": float(h.get("relevance_confidence") or 0.0),
             }

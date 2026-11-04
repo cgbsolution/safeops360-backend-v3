@@ -542,6 +542,11 @@ async def calibrate_copilot_draft(
     cfg, mode, versions = await cal_config.load(db, study.plantId)
     if mode == "OFF":
         return None
+    # Only task-based studies are calibrated (I11). Before the round-3 DDL a study has no
+    # type, and a Copilot draft (activity / hazards / controls) is a task-based entry.
+    hira_type = await loader.study_hira_type(db, study) or "TASK_BASED"
+    if hira_type not in cal_config.CALIBRATED_TYPES:
+        return None
     ids = [h["hazardId"] for h in parsed["hazards"]]
     masters = {
         r[0]: r
@@ -592,7 +597,7 @@ async def calibrate_copilot_draft(
     cal = assistant_v2.calibrate_draft(
         draft, cfg=cfg, rule=built["rule"], evidence=built["evidence"], plant=built["plant"], expand=expand
     )
-    scope = rubric_packs.scope_for(pack, "TASK_BASED")
+    scope = rubric_packs.scope_for(pack, hira_type)
     if not scope["validated"]:
         cal["review"] = rubric_packs.apply_scope(cal["review"], scope)
         cal["entry"] = cal["review"]["entry"]
@@ -759,6 +764,10 @@ async def calibrate_assistant_output(
         return suggestion
     try:
         built = await loader.build(db, entry_id, cfg)
+        if built["input"].hira_type not in cal_config.CALIBRATED_TYPES:
+            # non-task study (HAZOP, FMEA, MOC, ...): the Assistant's answer passes unchanged (I11);
+            # the entry review shows the "not applied to this study type" banner
+            return suggestion
         library = {
             h.get("hazard_master_id"): h
             for h in ((context.get("context") or {}).get("applicable_hazard_library") or [])

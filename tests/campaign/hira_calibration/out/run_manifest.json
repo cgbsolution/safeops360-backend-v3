@@ -1,6 +1,6 @@
 {
  "campaign": "HIRA calibration v2, offline part",
- "generatedAt": "2026-11-04T03:31:21+00:00",
+ "generatedAt": "2026-11-04T04:29:32+00:00",
  "engineVersion": "2.0.0",
  "corpus": {
   "file": "tests\\campaign\\hira_calibration\\corpus.json",
@@ -43,7 +43,7 @@
   "note": "offline engine run: no LLM calls (see llm_probe_report.md for the separate probe)",
   "liveProbe": {
    "generatedAt": "2026-11-04T03:20:46+00:00",
-   "analysedAt": "2026-11-04T03:22:18+00:00",
+   "analysedAt": "2026-11-04T04:15:56+00:00",
    "model": "claude-haiku-4-5-20251001",
    "temperature": 0,
    "promptSha256": "b379e8585cd40a71603e367b8856b22da8b4f6b0a85b1468b4d6a483e8f3a9e2",
@@ -88,24 +88,24 @@
   }
  },
  "timings": {
-  "totalSeconds": 353.3,
+  "totalSeconds": 302.2,
   "engineDraftMs": {
    "n": 108,
-   "p50": 40.4,
-   "p95": 104.7,
-   "max": 150.9
+   "p50": 45.0,
+   "p95": 103.9,
+   "max": 166.3
   },
   "engineReviewMs": {
    "n": 93,
-   "p50": 4.8,
-   "p95": 14.9,
-   "max": 45.0
+   "p50": 5.2,
+   "p95": 13.6,
+   "max": 35.7
   },
   "engineStudyRunMs": {
    "n": 37,
-   "p50": 612.8,
-   "p95": 978.3,
-   "max": 1135.5
+   "p50": 469.6,
+   "p95": 778.0,
+   "max": 955.4
   },
   "note": "engine only (calibrate_draft / evaluate / full multi-pass run); no LLM, no DB"
  },
@@ -114,5 +114,5 @@
   "assistantRuns": 51,
   "copilotDraftRuns": 5
  },
- "controlRelevanceAuditRows": 171
+ "controlRelevanceAuditRows": 157
 }

@@ -3110,13 +3110,13 @@
     "blockers": [],
     "controlsJustify": [
      "Truck movement at the gate: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1 (provisional); Administrative L-1 (provisional)).",
-     "Climbing onto the truck footboard: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1 (provisional)).",
+     "Climbing onto the truck footboard: residual not assessed (no controls recorded).",
      "Outdoor duty in summer heat: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1 (provisional))."
     ],
     "criticalResidualHazards": [],
     "droppedHazards": [],
     "entryLevelForCap": "MODERATE",
-    "existingControlProposals": 0,
+    "existingControlProposals": 3,
     "findings": [
      "CONFIRM_ROUTINE_CONTROLS",
      "CONTROLS_PROVISIONAL",
@@ -3182,22 +3182,7 @@
      },
      {
       "code": "PHYS_SLIP_TRIP",
-      "credits": [
-       {
-        "axis": null,
-        "control": "Reflective jacket, safety shoes",
-        "hierarchy": "PPE",
-        "status": "BASELINE",
-        "steps": 0
-       },
-       {
-        "axis": "L",
-        "control": "Boom barrier with a speed breaker before the checking point",
-        "hierarchy": "ENGINEERING",
-        "status": "PROVISIONAL",
-        "steps": 1
-       }
-      ],
+      "credits": [],
       "family": "SLIP_TRIP",
       "inherent": {
        "level": "HIGH",
@@ -3212,18 +3197,13 @@
        "likelihood": 3,
        "severity": 3
       },
-      "residual": {
-       "level": "MODERATE",
-       "likelihood": 2,
-       "score": 6,
-       "severity": 3
-      },
+      "residual": null,
       "severityFinding": null,
       "severityRule": "SLIP_TRIP_FAMILY_DEFAULT",
       "severityTier": "S<=3",
       "tolerability": {
        "missing": [
-        "verifiedControl"
+        "routineControls"
        ],
        "route": "CONFIRM_CONTROLS",
        "state": "NOT_ACCEPTABLE"
@@ -3241,17 +3221,10 @@
        },
        {
         "axis": "L",
-        "control": "Boom barrier with a speed breaker before the checking point",
+        "control": "Guard cabin with fan, shade and drinking water",
         "hierarchy": "ENGINEERING",
         "status": "PROVISIONAL",
         "steps": 1
-       },
-       {
-        "axis": null,
-        "control": "Guard cabin with fan, shade and drinking water",
-        "hierarchy": "ENGINEERING",
-        "status": "COUNTED_WITH_ABOVE",
-        "steps": 0
        }
       ],
       "family": "HEAT",
@@ -4139,12 +4112,12 @@
      "Ladle transfer car movement: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Engineering L-1 (provisional)).",
      "Arc furnace noise: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Ppe L-1 (provisional)).",
      "Furnace fumes at tapping: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1 (provisional)).",
-     "Radiant heat below the furnace: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Administrative L-1)."
+     "Radiant heat below the furnace: residual not assessed (no controls recorded)."
     ],
     "criticalResidualHazards": [],
     "droppedHazards": [],
     "entryLevelForCap": "HIGH",
-    "existingControlProposals": 0,
+    "existingControlProposals": 3,
     "findings": [
      "HAZARD_NOT_ACCEPTABLE",
      "CONFIRM_ROUTINE_CONTROLS",
@@ -4339,15 +4312,7 @@
      },
      {
       "code": "ENV_HEAT_STRESS",
-      "credits": [
-       {
-        "axis": "L",
-        "control": "Tapping SOP SMS/EAF/WI-07 with ladle pre-heat and dryness check",
-        "hierarchy": "ADMINISTRATIVE",
-        "status": "CREDITED",
-        "steps": 1
-       }
-      ],
+      "credits": [],
       "family": "HEAT",
       "inherent": {
        "level": "HIGH",
@@ -4362,19 +4327,16 @@
        "likelihood": 4,
        "severity": 4
       },
-      "residual": {
-       "level": "MODERATE",
-       "likelihood": 2,
-       "score": 6,
-       "severity": 3
-      },
+      "residual": null,
       "severityFinding": null,
       "severityRule": "HEAT_AMBIENT_S3",
       "severityTier": "S<=3",
       "tolerability": {
-       "missing": [],
-       "route": null,
-       "state": "ACCEPTABLE"
+       "missing": [
+        "routineControls"
+       ],
+       "route": "CONFIRM_CONTROLS",
+       "state": "NOT_ACCEPTABLE"
       }
      }
     ],
@@ -5341,9 +5303,9 @@
    "final": {
     "entryResidual": {
      "level": "MODERATE",
-     "likelihood": 2,
-     "score": 6,
-     "severity": 3
+     "likelihood": 1,
+     "score": 5,
+     "severity": 5
     },
     "hazards": [
      {
@@ -5404,12 +5366,12 @@
       "name": "Residual acid sludge",
       "residual": {
        "level": "MODERATE",
-       "likelihood": 2,
-       "score": 6,
-       "severity": 3
+       "likelihood": 1,
+       "score": 4,
+       "severity": 4
       },
       "route": null,
-      "state": "ACCEPTABLE"
+      "state": "TOLERABLE_ALARP"
      }
     ],
     "label": "TOLERABLE_ALARP",
@@ -5439,7 +5401,7 @@
    "statutoryCurrent": null,
    "title": "Confined space entry into an acid storage tank",
    "unverified": {
-    "final": "NOT_REACHED (CONFIRM_CONTROLS, CONTROLS)",
+    "final": "NOT_REACHED (CONTROLS)",
     "newBlockers": [],
     "provisionalCreditNotAboveVerified": true
    },
@@ -5468,7 +5430,7 @@
      "Oxygen deficiency: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1 (provisional); Administrative L-1).",
      "Portable lighting in a wet tank: L3 x S5 = CRITICAL (15) -> L2 x S5 = HIGH (10) (Engineering L-1).",
      "Toxic acid vapour and H2S: L3 x S5 = CRITICAL (15) -> L1 x S5 = MODERATE (5) (Engineering L-1 (provisional); Administrative L-1).",
-     "Residual acid sludge: L3 x S4 = HIGH (12) -> L3 x S4 = HIGH (12) (no credit)."
+     "Residual acid sludge: L3 x S4 = HIGH (12) -> L1 x S4 = MODERATE (4) (Engineering L-1 (provisional); Administrative L-1)."
     ],
     "criticalResidualHazards": [],
     "droppedHazards": [],
@@ -5476,7 +5438,7 @@
     "existingControlProposals": 0,
     "findings": [
      "HAZARD_NOT_ACCEPTABLE",
-     "RATE_EFFECTIVENESS",
+     "CONTROLS_PROVISIONAL",
      "VERIFY_CONTROLS",
      "REGULATION_SUGGESTED"
     ],
@@ -5698,6 +5660,20 @@
         "hierarchy": "PPE",
         "status": "NO_CREDIT",
         "steps": 0
+       },
+       {
+        "axis": "L",
+        "control": "Forced ventilation by air blower through the bottom manhole",
+        "hierarchy": "ENGINEERING",
+        "status": "PROVISIONAL",
+        "steps": 1
+       },
+       {
+        "axis": "L",
+        "control": "Confined space entry permit with gas test (O2, LEL, H2S) before entry",
+        "hierarchy": "ADMINISTRATIVE",
+        "status": "CREDITED",
+        "steps": 1
        }
       ],
       "family": "CHEMICAL",
@@ -5715,17 +5691,19 @@
        "severity": 5
       },
       "residual": {
-       "level": "HIGH",
-       "likelihood": 3,
-       "score": 12,
+       "level": "MODERATE",
+       "likelihood": 1,
+       "score": 4,
        "severity": 4
       },
       "severityFinding": null,
       "severityRule": "CHEMICAL_FAMILY_DEFAULT",
       "severityTier": "S>=4",
       "tolerability": {
-       "missing": [],
-       "route": "CONTROLS",
+       "missing": [
+        "controlVerification"
+       ],
+       "route": "VERIFY_CONTROLS",
        "state": "NOT_ACCEPTABLE"
       }
      }
@@ -5740,24 +5718,6 @@
     "linkedCapas": [],
     "recommendationCap": 5,
     "recommendations": [
-     {
-      "costBand": "MEDIUM",
-      "description": "Substitute with a less hazardous chemical where the process allows",
-      "hierarchy": "SUBSTITUTION",
-      "id": "CH-SUB-1",
-      "kind": "CAPA",
-      "residualAfter": {
-       "level": "MODERATE",
-       "likelihood": 2,
-       "score": 6,
-       "severity": 3
-      },
-      "source": "catalogue",
-      "studyLevel": false,
-      "targets": [
-       "h3"
-      ]
-     },
      {
       "costBand": "LOW",
       "description": "Lockable isolation points with test points at each panel for zero-energy verification",
@@ -5779,9 +5739,9 @@
     ],
     "residual": {
      "level": "HIGH",
-     "likelihood": 3,
-     "score": 12,
-     "severity": 4
+     "likelihood": 2,
+     "score": 10,
+     "severity": 5
     },
     "residualLabel": null,
     "status": "OPEN"
@@ -7912,7 +7872,7 @@
    },
    "expectedMatch": {
     "inherent": true,
-    "residual": true
+    "residual": false
    },
    "expectedProposed": null,
    "final": {
@@ -8028,14 +7988,15 @@
     "controlsJustify": [
      "Acid fumes above the tank: L3 x S4 = HIGH (12) -> L1 x S3 = LOW (3) (Engineering S-1; Engineering L-1; Administrative L-1 (provisional)).",
      "Acid splash during transfer: L3 x S4 = HIGH (12) -> L1 x S3 = LOW (3) (Engineering S-1; Engineering L-1; Administrative L-1 (provisional)).",
-     "Acid-wet floor: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1).",
-     "Handling acid carboys: L3 x S3 = HIGH (9) -> L2 x S3 = MODERATE (6) (Engineering L-1)."
+     "Acid-wet floor: residual not assessed (no controls recorded).",
+     "Handling acid carboys: residual not assessed (no controls recorded)."
     ],
     "criticalResidualHazards": [],
     "droppedHazards": [],
-    "entryLevelForCap": "MODERATE",
-    "existingControlProposals": 0,
+    "entryLevelForCap": "LOW",
+    "existingControlProposals": 4,
     "findings": [
+     "CONFIRM_ROUTINE_CONTROLS",
      "CONTROLS_PROVISIONAL",
      "REGULATION_SUGGESTED"
     ],
@@ -8063,6 +8024,13 @@
         "hierarchy": "ENGINEERING",
         "status": "CREDITED",
         "steps": 1
+       },
+       {
+        "axis": null,
+        "control": "Fume extraction hood over the pickling tank",
+        "hierarchy": "ENGINEERING",
+        "status": "COUNTED_WITH_ABOVE",
+        "steps": 0
        },
        {
         "axis": "L",
@@ -8126,6 +8094,13 @@
         "steps": 1
        },
        {
+        "axis": null,
+        "control": "Fume extraction hood over the pickling tank",
+        "hierarchy": "ENGINEERING",
+        "status": "COUNTED_WITH_ABOVE",
+        "steps": 0
+       },
+       {
         "axis": "L",
         "control": "SDS displayed and acid handling SOP",
         "hierarchy": "ADMINISTRATIVE",
@@ -8164,15 +8139,7 @@
      },
      {
       "code": "PHYS_SLIP_TRIP",
-      "credits": [
-       {
-        "axis": "L",
-        "control": "Closed transfer by acid-resistant pump from the bulk tank",
-        "hierarchy": "ENGINEERING",
-        "status": "CREDITED",
-        "steps": 1
-       }
-      ],
+      "credits": [],
       "family": "SLIP_TRIP",
       "inherent": {
        "level": "HIGH",
@@ -8187,32 +8154,21 @@
        "likelihood": 4,
        "severity": 4
       },
-      "residual": {
-       "level": "MODERATE",
-       "likelihood": 2,
-       "score": 6,
-       "severity": 3
-      },
+      "residual": null,
       "severityFinding": null,
       "severityRule": "SLIP_TRIP_FAMILY_DEFAULT",
       "severityTier": "S<=3",
       "tolerability": {
-       "missing": [],
-       "route": null,
-       "state": "ACCEPTABLE"
+       "missing": [
+        "routineControls"
+       ],
+       "route": "CONFIRM_CONTROLS",
+       "state": "NOT_ACCEPTABLE"
       }
      },
      {
       "code": "MECH_HEAVY_LIFTING",
-      "credits": [
-       {
-        "axis": "L",
-        "control": "Closed transfer by acid-resistant pump from the bulk tank",
-        "hierarchy": "ENGINEERING",
-        "status": "CREDITED",
-        "steps": 1
-       }
-      ],
+      "credits": [],
       "family": "MANUAL_HANDLING",
       "inherent": {
        "level": "HIGH",
@@ -8227,19 +8183,16 @@
        "likelihood": 3,
        "severity": 3
       },
-      "residual": {
-       "level": "MODERATE",
-       "likelihood": 2,
-       "score": 6,
-       "severity": 3
-      },
+      "residual": null,
       "severityFinding": null,
       "severityRule": "MANUAL_HEAVY_LOAD_S3",
       "severityTier": "S<=3",
       "tolerability": {
-       "missing": [],
-       "route": null,
-       "state": "ACCEPTABLE"
+       "missing": [
+        "routineControls"
+       ],
+       "route": "CONFIRM_CONTROLS",
+       "state": "NOT_ACCEPTABLE"
       }
      }
     ],
@@ -8254,13 +8207,13 @@
     "recommendationCap": 3,
     "recommendations": [],
     "residual": {
-     "level": "MODERATE",
-     "likelihood": 2,
-     "score": 6,
+     "level": "LOW",
+     "likelihood": 1,
+     "score": 3,
      "severity": 3
     },
     "residualLabel": null,
-    "status": "RESOLVED"
+    "status": "OPEN"
    }
   },
   {
@@ -10015,6 +9968,7 @@
      "HAZARD_NOT_ACCEPTABLE",
      "CONFIRM_ROUTINE_CONTROLS",
      "CONTROLS_PROVISIONAL",
+     "LINK_CONTROL",
      "REGULATION_SUGGESTED"
     ],
     "hazards": [

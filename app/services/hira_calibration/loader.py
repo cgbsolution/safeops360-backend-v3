@@ -118,9 +118,14 @@ def _rule(matrix: Any, cfg: dict[str, Any], labels: list[str]) -> MatrixRule:
 _TYPE_COL: dict[str, Any] = {"ready": None, "at": 0.0}
 
 
-async def _hira_type(db: AsyncSession, study: Any, entry: Any) -> str:
-    """HiraStudy.hiraType once the round-3 DDL has added it; until then a study
-    with the activity / hazard / controls structure is TASK_BASED, else OTHER."""
+async def study_hira_type(db: AsyncSession, study: Any) -> str | None:
+    """HiraStudy.hiraType once the round-3 DDL has added it; None while the column
+    does not exist or holds no known type."""
+    if study is None:
+        return None
+    v = getattr(study, "hiraType", None)  # mapped attribute, when the model has it
+    if v in HIRA_TYPES:
+        return v
     if _TYPE_COL["ready"] is None or time.monotonic() - _TYPE_COL["at"] > 300:
         n = (
             await db.execute(
@@ -131,12 +136,21 @@ async def _hira_type(db: AsyncSession, study: Any, entry: Any) -> str:
             )
         ).scalar()
         _TYPE_COL.update(ready=bool(n), at=time.monotonic())
-    if _TYPE_COL["ready"] and study is not None:
+    if _TYPE_COL["ready"]:
         v = (
             await db.execute(text('SELECT "hiraType" FROM "HiraStudy" WHERE id = :i'), {"i": study.id})
         ).scalar()
         if v in HIRA_TYPES:
             return v
+    return None
+
+
+async def _hira_type(db: AsyncSession, study: Any, entry: Any) -> str:
+    """The study's hiraType; until the round-3 DDL adds it, an entry with the
+    activity / hazard / controls structure is TASK_BASED, else OTHER."""
+    v = await study_hira_type(db, study)
+    if v:
+        return v
     structured = bool((entry.activityDescription or "").strip()) and bool(
         entry.hazards or entry.existingControls
     )

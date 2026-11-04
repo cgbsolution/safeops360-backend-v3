@@ -18,6 +18,8 @@ never raises a new BLOCKER on the next pass.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -211,12 +213,16 @@ def evaluate(
         return structural_review(entry)
     cfg = with_matrix(cfg, rule)
     findings: list[dict[str, Any]] = []
+    entry_fams = frozenset(h.family for h in entry.hazards)
+    for h in entry.hazards:
+        h.entry_families = entry_fams  # an unlinked control naming no hazard counts for all only in a one-family entry
     basis_with_controls = entry.rating_basis == "WITH_CONTROLS"
     rating_credit = not basis_with_controls  # a sheet rating already includes its controls (round 2 H)
     real_controls = eng.has_real_controls(entry.controls, cfg)
     hazard_out: list[dict[str, Any]] = []
     rec_input: list[dict[str, Any]] = []
     unsupported_l, sev_under, sev_over, unrated_same = [], [], [], False
+    unconfirmed_l: list[tuple[eng.Hazard, int]] = []  # plant-index L4+ with nothing on record
     provisional_any = False
     estimated = not entry.hazard_ratings_stored
     inherent_only = not basis_with_controls and not real_controls
@@ -346,6 +352,10 @@ def evaluate(
             scal = {**scal, "value": scal["credibleMax"], "spreadClamped": True}
         if lcal["capped"]:
             unsupported_l.append((h, l_team, lcal))
+        elif (lcal["value"] or 0) >= 4 and not evidence.for_family(fam).has_any:
+            # a team rating on a plant-index scale passes through (round 2), but L4+ with no incident,
+            # near miss or control failure on record is worth confirming
+            unconfirmed_l.append((h, lcal["value"]))
         if scal["finding"]:
             (sev_under if scal["finding"]["kind"] == "UNDERSTATED" else sev_over).append((h, s_team, scal))
         L, S = lcal["value"], scal["value"]
@@ -785,6 +795,97 @@ def evaluate(
                 + f". {unsupported_l[0][2]['reason']}",
                 "Use the calibrated likelihood, or attach the incident / near miss / control failure that supports it.",
                 [h.key for h, _, _ in unsupported_l],
+            )
+        )
+    if unconfirmed_l:
+        findings.append(
+            _finding(
+                "LIKELIHOOD_TO_CONFIRM",
+                ADVISORY,
+                "Confirm the likelihood",
+                "; ".join(f"{h.name}: L{v}" for h, v in unconfirmed_l[:3])
+                + f". No incident, near miss or control failure is recorded for this area in the last "
+                f"{evidence.window_months} months. The team's rating is kept.",
+                "Attach the record that supports it, or lower the likelihood if the exposure has changed.",
+                [h.key for h, _ in unconfirmed_l],
+            )
+        )
+    unlinked = sorted(
+        {
+            c["control"]
+            for ho in hazard_out
+            for c in ho.get("credits") or []
+            if c.get("status") == "NOT_RELEVANT" and c.get("reason") == eng.UNLINKED_REASON
+        }
+    )
+    if unlinked:
+        findings.append(
+            _finding(
+                "LINK_CONTROL",
+                ADVISORY,
+                "Link the control to its hazard",
+                "; ".join(f"'{t[:80]}'" for t in unlinked[:3])
+                + " names no hazard, and this entry has several kinds of hazard, so it earns no credit yet.",
+                "Link it to the hazard it controls (or say in its text what it controls).",
+            )
+        )
+    no_hier = [
+        c.description
+        for c in entry.controls
+        if not c.planned and (c.hierarchy or "").upper() not in eng.HIERARCHY and (c.description or "").strip()
+    ]
+    if no_hier:
+        findings.append(
+            _finding(
+                "CONTROL_HIERARCHY_MISSING",
+                ADVISORY,
+                "Set the control type",
+                "; ".join(f"'{t[:80]}'" for t in no_hier[:3])
+                + " has no hierarchy level (elimination / substitution / engineering / administrative / PPE), "
+                "so it earns no credit.",
+                "Choose the hierarchy level of each control.",
+            )
+        )
+    seen_hz: dict[tuple[str, str], str] = {}
+    dup = []
+    for h in entry.hazards:
+        k = ((h.code or "").upper(), re.sub(r"\s+", " ", (h.name or "").strip().lower()))
+        if k in seen_hz:
+            dup.append(h)
+        else:
+            seen_hz[k] = h.key
+    if dup:
+        findings.append(
+            _finding(
+                "DUPLICATE_HAZARD",
+                ADVISORY,
+                "Hazard listed twice",
+                "; ".join(f"'{h.name}'" for h in dup[:3]) + " appears more than once in this entry.",
+                "Merge the duplicates so the hazard is assessed once.",
+                [h.key for h in dup],
+            )
+        )
+    unknown = [h for h in entry.hazards if h.family == "GENERAL" and not h.code]
+    if unknown:
+        findings.append(
+            _finding(
+                "HAZARD_TYPE_UNKNOWN",
+                ADVISORY,
+                "Link the hazard to the hazard master",
+                "; ".join(f"'{h.name}'" for h in unknown[:3])
+                + " could not be matched to a hazard type, so no severity rule or control check applies to it.",
+                "Pick the hazard from the hazard master list (or describe it in English).",
+                [h.key for h in unknown],
+            )
+        )
+    if not entry.hazards:
+        findings.append(
+            _finding(
+                "NO_HAZARDS",
+                ADVISORY,  # same class as STRUCT_NO_HAZARDS on non-task studies
+                "No hazards recorded",
+                "This task-based entry has no hazards, so its risk cannot be assessed.",
+                "Add the hazards of this activity (the Copilot can suggest them).",
             )
         )
     if sev_under:

@@ -57,6 +57,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "defaultRoutine": 2,
         "defaultHighExposure": 3,
         "highExposureFrequencies": ["DAILY", "CONTINUOUS"],
+        # An AI draft's per-hazard likelihood may sit at most this many steps below the exposure
+        # default without evidence (the Assistant's single entry-level number: not below it at all).
+        "draftMaxStepsBelowDefault": 1,
     },
     "severity": {
         # Credible worst case per hazard family (round 2 B). A floor ("min") only
@@ -419,6 +422,22 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "full body",
             "breathing apparatus",
             "scba",
+        ],
+        # Words of a remark that follows baseline PPE ("as per site rule", "to be worn at all
+        # times"): such a remark does not make baseline PPE task-specific.
+        "baselineFillerWords": [
+            "a", "all", "always", "an", "and", "are", "area", "areas", "as", "at", "basic", "be", "by", "company",
+            "compulsory", "during", "employees", "every", "everyone", "for", "general", "in", "inside", "is",
+            "job", "mandatory", "must", "norm", "norms", "of", "on", "per", "person", "persons", "plant",
+            "policy", "premises", "required", "rule", "rules", "shall", "shop", "site", "standard", "standards",
+            "the", "time", "times", "to", "use", "used", "wear", "wearing", "while", "with", "work", "workers",
+            "working", "worn",
+        ],
+        # PPE items that are not baseline: a PPE line naming one of these is task-specific.
+        "ppeItemNouns": [
+            "mask", "glasses", "spectacle", "shield", "suit", "coverall", "sleeve", "gauntlet", "ear defender",
+            "knee pad", "arm guard", "shin guard", "belt", "jacket", "boot", "cap", "protection", "protector",
+            "defender", "ear", "eye", "hearing", "face", "plug", "muff", "screen", "hood",
         ],
     },
     "tolerability": {

@@ -269,6 +269,9 @@ def masters(monkeypatch):
         def all(self):
             return self.rows
 
+        def scalar(self):
+            return 0  # information_schema: no HiraStudy.hiraType column (before the round-3 DDL)
+
     class DB:
         async def execute(self, stmt):
             return R([(h.key, h.name, h.code, h.category) for h in ENTRY1_HAZARDS])

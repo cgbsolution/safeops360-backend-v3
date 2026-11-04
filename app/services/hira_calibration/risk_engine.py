@@ -156,7 +156,7 @@ RELATED = {
     "FALLING_OBJECT": {"LIFTING", "HEIGHT"},
     "LIFTING": {"FALLING_OBJECT"},
     "THERMAL": {"MOLTEN"},
-    "MOLTEN": {"THERMAL", "FIRE_EXPLOSION"},
+    "MOLTEN": {"FIRE_EXPLOSION"},  # not THERMAL: a heat shield does not stop a splash (THERMAL -> MOLTEN stays)
     "MACHINERY": {"ELECTRICAL"},
     "ELECTRICAL": {"MACHINERY"},
     "PHYSICAL": {"SLIP_TRIP", "FALLING_OBJECT"},
@@ -254,6 +254,14 @@ CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "moisture",
         "preheat",
         "tapping",
+        "tap hole",
+        "taphole",
+        "mud gun",
+        "skimm",
+        "pre-heat",
+        "runner",
+        "launder",
+        "tuyere",
         "leg guard",
     ),
     "ELECTRICAL": (
@@ -272,6 +280,11 @@ CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "panel",
         "voltage",
         "arc flash",
+        "vcb",
+        "acb",
+        "circuit breaker",
+        "racking",
+        "kv",
     ),
     "VEHICLE": (
         "horn",
@@ -287,6 +300,10 @@ CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "mirror",
         "beacon",
         "seat belt",
+        "speed breaker",
+        "speed bump",
+        "boom barrier",
+        "tipping",
     ),
     "FALLING_OBJECT": ("toe board", "netting", "barricad", "falling", "overhead", "cordon", "drop zone"),
     "MACHINERY": (
@@ -311,24 +328,70 @@ CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "ventilat",
         "blower",
         "air mover",
+        "gas ",
+        "4-gas",
+        "positive isolation",
+        "blind",
+        "spade",
+        "drained",
+        "purg",
+        "scba",
+        "breathing apparatus",
+        "airline",
+        "standby",
+        "co detector",
+        "co monitor",
+        "co alarm",
+        "gas alarm",
     ),
     "CHEMICAL": (
         "msds",
         "sds",
         "chemical",
         "spill",
-        "bund",
+        "bunded",
+        "spill bund",
+        "chemical bund",
+        "bund wall",
+        "drip tray",
         "eyewash",
         "safety shower",
         "neutralis",
         "fume hood",
+        "acid",
+        "alkali",
+        "caustic",
+        "corrosive",
+        "closed transfer",
+        "gas ",
+        "vapour",
+        "vapor",
+        "fume",
+        "toxic",
+        "ventilat",
+        "extraction",
+        "local exhaust",
+        "respirat",
+        "scba",
+        "breathing apparatus",
+        "airline",
+        "positive isolation",
+        "blind",
+        "spade",
+        "drained",
+        "purg",
+        "co detector",
+        "co monitor",
+        "co alarm",
+        "gas alarm",
     ),
     "SLIP_TRIP": (
         "housekeeping",
         "anti-slip",
         "non-slip",
         "spillage",
-        "drain",
+        "floor drain",
+        "drainage",
         "floor marking",
         "illumination",
         "lighting",
@@ -355,21 +418,51 @@ CONTROL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "cylinder bank",
         "leak test",
         "soap test",
+        "gas ",
+        "lel",
+        "flammable",
+        "inert",
+    ),
+    # radiant heat / hot surfaces (related to MOLTEN): heat shields belong here, not to heat stress
+    "THERMAL": (
+        "heat shield",
+        "heat resistant",
+        "heat-resistant",
+        "radiant heat",
+        "radiation shield",
+        "hot surface",
+        "lagging",
+        "allow to cool",
+        "cooling period",
     ),
     "PRESSURE": ("relief valve", "pressure", "gauge", "hose", "whip", "depressur", "bleed"),
     "NOISE": ("noise", "acoustic", "silencer", "earmuff", "ear muff", "ear plug"),
     "HEAT": (
-        "heat",
-        "cool",
+        "heat stress",
+        "heat stroke",
+        "heat exhaustion",
+        "heat illness",
+        "heat rash",
+        "hot weather",
+        "summer",
+        "cool water",
+        "cool drinking",
+        "cooling fan",
+        "air cooler",
+        "cool shelter",
+        "cool room",
         "drinking water",
-        "rest",
+        "rest break",
+        "rest pause",
+        "rest period",
+        "work-rest",
+        "work rest",
         "shade",
         "hydration",
         "acclimat",
         "air-conditioned",
         "air conditioned",
         "ac cabin",
-        "cabin",
         "man cooler",
         "spot cool",
     ),
@@ -495,16 +588,25 @@ def is_baseline(hierarchy: str | None, description: str | None, cfg: dict[str, A
     cc = cfg["controlCredit"]
     t = _norm(description)
     t = re.sub(r"^\s*(ppe|use of ppe|wearing of ppe)\s*[:\-]\s*", " ", t)
-    items = [i.strip() for i in re.split(r",|;|/|\+| and |\n", t) if i.strip()]
+    items = [i.strip() for i in re.split(r",|;|/|\+| and |\n|\(|\)", t) if i.strip()]
     if not items:
         return False
+    filler = set(cc.get("baselineFillerWords") or ())
+    has_baseline = False
     for item in items:
         it = f" {item} "
         if _any(it, cc["specificQualifiers"]):
-            return False
-        if not _any(it, cc["baselineKeywords"], "word"):
-            return False
-    return True
+            return False  # task-specific PPE (cut-resistant, harness, face shield, ...)
+        if _any(it, cc["baselineKeywords"], "word"):
+            has_baseline = True
+            continue
+        words = re.findall(r"[a-z]+", item)
+        if all(w in filler for w in words):
+            continue  # a remark such as "as per site rule" or "to be worn at all times"
+        if h == "PPE" and not _any(it, cc.get("ppeItemNouns") or (), "word"):
+            continue  # a PPE line's remark that names no other PPE item does not make it task-specific
+        return False
+    return has_baseline
 
 
 # ─── R3: likelihood anchored to evidence ────────────────────────────────
@@ -559,13 +661,16 @@ def calibrate_likelihood(
     scale: str,
     cfg: dict[str, Any],
     draft: bool = False,
+    floor: int | None = None,
 ) -> dict[str, Any]:
     """Cap a proposed likelihood by the evidence. L4 needs a recorded event in
     the window or a documented control failure; L5 needs 2+ events in 12 months.
     Without evidence a proposal is capped at L3 (round 2 F: flat, whatever the
     exposure; no control credit is ever part of the inherent rating). A team's
     rating on a plant-index scale passes through; an LLM draft (draft=True) is
-    capped too."""
+    capped too. `floor` (drafts only): an AI proposal below it is raised to it,
+    so an AI draft cannot talk the inherent likelihood down (I13); the team can
+    still rate lower with its own reason."""
     lk = cfg["likelihood"]
     if scale != "FREQUENCY" and not draft:
         v = proposed if proposed else default_likelihood(routine, frequency, cfg)
@@ -606,6 +711,15 @@ def calibrate_likelihood(
             "proposed": proposed,
             "capped": True,
             "reason": f"Capped at L{cap}: {ev_txt}. {why}",
+        }
+    if draft and floor and p < floor:
+        return {
+            "value": floor,
+            "proposed": proposed,
+            "capped": True,
+            "reason": f"Raised to L{floor}: an AI draft cannot set the likelihood this far below the exposure default "
+            f"(L{default_likelihood(routine, frequency, cfg)} for this activity) without evidence. The inherent rating takes "
+            "no credit for controls; the team can rate lower with its own reason when it saves the entry.",
         }
     return {
         "value": p,
@@ -763,6 +877,9 @@ class Hazard:
     consequence: str | None = None
     likelihood: int | None = None
     severity: int | None = None
+    # hazard families of the whole entry, set by the review: decides whether an unlinked control
+    # that names no hazard can count for the whole activity (F02)
+    entry_families: frozenset[str] | None = field(default=None, compare=False, repr=False)
 
     @property
     def text(self) -> str:
@@ -788,7 +905,20 @@ def applies_to(c: Control, h: Hazard) -> tuple[bool, str]:
         return False, f"addresses {'/'.join(sorted(fams)).lower()}, not {fam.lower()}"
     if is_generic_control(c.description):
         return True, "procedure for the whole activity"
+    if (
+        (c.hierarchy or "").upper() in ("ENGINEERING", "SUBSTITUTION", "ELIMINATION")
+        and h.entry_families is not None
+        and len(h.entry_families) > 1
+        and not _any(_norm(c.description), WHOLE_ACTIVITY_WORDS)
+    ):
+        # names no hazard and the entry has several kinds of hazard: crediting it to every one of them
+        # overstates the reduction (a CO detector does not stop a metal splash)
+        return False, UNLINKED_REASON
     return True, "not linked to a hazard: counted for the whole activity"
+
+
+UNLINKED_REASON = "names no hazard and is not linked: link it to the hazard it controls"
+WHOLE_ACTIVITY_WORDS = ("for this activity", "for the activity", "whole activity", "all hazards", "entire activity")
 
 
 def _credit(c: Control, axis: str | None, steps: int, status: str, reason: str) -> dict[str, Any]:

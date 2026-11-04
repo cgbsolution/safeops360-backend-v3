@@ -11,12 +11,12 @@ How each entry is run: pass 1 = `calibrate_draft` (Copilot drafts) or `review_v2
 | Inherent CRITICAL only on hazards whose rubric allows S5 | 0 entries | **PASS** |
 | Zero actions (blocker, recommendation, CAPA) triggered by the inherent band alone | 0 entries | **PASS** |
 | Critical residual <= 5% of entries, and only with evidence | 1/25 (4%); without evidence: 0 — HH-15 | **PASS** |
-| Average recommendations per entry <= 3.0 | 1.24 (total 31) | **PASS** |
+| Average recommendations per entry <= 3.0 | 1.20 (total 30) | **PASS** |
 | Never more than 5 recommendations on an entry | max 4 | **PASS** |
 | Zero loops: pass 2 has 0 blockers | 0 entries with pass-2 blockers | **PASS** |
 | No new blockers on pass 2 or pass 3 | 0 entries | **PASS** |
 | Unverified-controls scenario: no new blockers, provisional credit never above verified | new blockers 0, credit above verified 0 | **PASS** |
-| 100% deterministic | 2 in-process runs + 1 reverse-order run identical; subprocesses with PYTHONHASHSEED=0 and 4242 identical | **PASS** |
+| 100% deterministic | 2 in-process runs + 1 reverse-order run identical | **PASS** |
 | >= 80% one-pass resolution overall (ACCEPTABLE, TOLERABLE_ALARP or OVERRIDE) | 24/25 (96%); of which OVERRIDE: 3 — HH-13 | **PASS** |
 | Low-hazard (LOW-*): 100% one pass | 8/8 (100%) | **PASS** |
 | Low-hazard (LOW-*): average recommendations <= 1 | 0.38 | **PASS** |
@@ -74,7 +74,7 @@ Scoring (section 5J): inherent within +/-1 band passes (TOLERANCE, informational
 | HH-01 | CRITICAL 20 | HIGH 10 | TOLERABLE_ALARP | 2 | CRITICAL (20) / HIGH (10) / TOLERABLE_ALARP | EXACT | EXACT | EXACT | **EXACT** | - |
 | HH-02 | CRITICAL 15 | HIGH 10 | OVERRIDE | 1 | CRITICAL (15) / HIGH (10) / OVERRIDE | EXACT | EXACT | EXACT | **EXACT** | - |
 | HH-03 | CRITICAL 15 | MODERATE 6 | TOLERABLE_ALARP | 0 | CRITICAL (15) / MODERATE (5) / TOLERABLE_ALARP | EXACT | EXACT | EXACT | **EXACT** | - |
-| HH-04 | CRITICAL 15 | HIGH 12 | TOLERABLE_ALARP | 2 | CRITICAL (15) / HIGH (10) / TOLERABLE_ALARP after a second engineering control | EXACT | EXACT | EXACT | **EXACT** | - |
+| HH-04 | CRITICAL 15 | HIGH 10 | TOLERABLE_ALARP | 1 | CRITICAL (15) / HIGH (10) / TOLERABLE_ALARP after a second engineering control | EXACT | EXACT | EXACT | **EXACT** | - |
 | HH-05 | CRITICAL 20 | Inherent only | TOLERABLE_ALARP | 4 | CRITICAL (20) / NOT_ASSESSED (baseline only) / TOLERABLE_ALARP | EXACT | EXACT | EXACT | **EXACT** | - |
 | HH-07 | HIGH 12 | MODERATE 6 | TOLERABLE_ALARP | 0 | HIGH (12) / MODERATE (6) / TOLERABLE_ALARP | EXACT | EXACT | EXACT | **EXACT** | - |
 | HH-08 | CRITICAL 15 | MODERATE 6 | TOLERABLE_ALARP | 0 | HIGH (12) / MODERATE (6) / TOLERABLE_ALARP | TOLERANCE | EXACT | EXACT | **TOLERANCE** | inherent CRITICAL 15 vs HIGH (12) (TOLERANCE) |
@@ -115,13 +115,13 @@ Before = frozen round-1 output (`baseline_round1.json`). Flag = the row moved fo
 | HH-01 | TOLERABLE_ALARP -> TOLERABLE_ALARP | 3 -> 2 | HAZARD_NOT_ACCEPTABLE -> HAZARD_NOT_ACCEPTABLE | CRITICAL 20 -> CRITICAL 20 | HIGH 10 -> HIGH 10 | - |
 | HH-02 | NOT_REACHED (CONTROLS) -> OVERRIDE | 1 -> 1 | HAZARD_NOT_ACCEPTABLE -> HAZARD_NOT_ACCEPTABLE | CRITICAL 15 -> CRITICAL 15 | HIGH 10 -> HIGH 10 | - |
 | HH-03 | TOLERABLE_ALARP -> TOLERABLE_ALARP | 0 -> 0 | - -> - | HIGH 10 -> CRITICAL 15 | MODERATE 5 -> MODERATE 6 | - |
-| HH-04 | NOT_REACHED (CONTROLS) -> TOLERABLE_ALARP | 3 -> 2 | ALARP_ENGINEERING, HAZARD_NOT_ACCEPTABLE -> HAZARD_NOT_ACCEPTABLE | HIGH 10 -> CRITICAL 15 | HIGH 10 -> HIGH 12 | **FLAG** |
+| HH-04 | NOT_REACHED (CONTROLS) -> TOLERABLE_ALARP | 3 -> 1 | ALARP_ENGINEERING, HAZARD_NOT_ACCEPTABLE -> HAZARD_NOT_ACCEPTABLE | HIGH 10 -> CRITICAL 15 | HIGH 10 -> HIGH 10 | **FLAG** |
 | HH-05 | NOT_REACHED (CONTROLS) -> TOLERABLE_ALARP | 4 -> 4 | NO_CONTROLS -> NO_CONTROLS | CRITICAL 20 -> CRITICAL 20 | Inherent only -> Inherent only | - |
 | HH-06 | NOT_REACHED (CONTROLS) -> TOLERABLE_ALARP | 2 -> 3 | HAZARD_NOT_ACCEPTABLE -> HAZARD_NOT_ACCEPTABLE | CRITICAL 20 -> CRITICAL 20 | HIGH 12 -> HIGH 12 | **FLAG** |
 | HH-07 | TOLERABLE_ALARP -> TOLERABLE_ALARP | 1 -> 0 | HAZARD_NOT_ACCEPTABLE -> - | HIGH 12 -> HIGH 12 | HIGH 9 -> MODERATE 6 | - |
 | HH-08 | TOLERABLE_ALARP -> TOLERABLE_ALARP | 1 -> 0 | HAZARD_NOT_ACCEPTABLE -> - | CRITICAL 15 -> CRITICAL 15 | HIGH 8 -> MODERATE 6 | **FLAG** |
 | HH-09 | TOLERABLE_ALARP -> TOLERABLE_ALARP | 0 -> 0 | - -> - | HIGH 10 -> CRITICAL 15 | MODERATE 6 -> MODERATE 5 | **FLAG** |
-| HH-10 | TOLERABLE_ALARP -> ACCEPTABLE | 0 -> 0 | - -> - | HIGH 12 -> HIGH 12 | MODERATE 6 -> MODERATE 6 | - |
+| HH-10 | TOLERABLE_ALARP -> ACCEPTABLE | 0 -> 0 | - -> - | HIGH 12 -> HIGH 12 | MODERATE 6 -> LOW 3 | - |
 | HH-11 | NOT_REACHED (CONTROLS) -> TOLERABLE_ALARP | 2 -> 1 | HAZARD_NOT_ACCEPTABLE -> HAZARD_NOT_ACCEPTABLE | CRITICAL 20 -> CRITICAL 20 | HIGH 12 -> HIGH 12 | - |
 | HH-12 | TOLERABLE_ALARP -> TOLERABLE_ALARP | 2 -> 3 | NO_CONTROLS -> NO_CONTROLS | HIGH 10 -> CRITICAL 15 | Inherent only -> Inherent only | - |
 | HH-13 | NOT_REACHED (ALARP_CHECKLIST, CONTROLS) -> NOT_REACHED (ALARP_CHECKLIST) | 2 -> 2 | HAZARD_NOT_ACCEPTABLE -> HAZARD_NOT_ACCEPTABLE | CRITICAL 16 -> CRITICAL 16 | HIGH 12 -> HIGH 12 | - |
@@ -133,18 +133,18 @@ Before = frozen round-1 output (`baseline_round1.json`). Flag = the row moved fo
 - **BENCH-6**: 
 - **LOW-01**: Damaged extension board: S4->S3 (B: ELECTRICAL_FLOOR_NOT_TRIGGERED, the round-1 uplift no longer applies); Damaged extension board: NOT_ACCEPTABLE/ALARP_CHECKLIST -> ACCEPTABLE/- (A/C/D/H tolerability and routes); Prolonged sitting at the workstation: NOT_ACCEPTABLE/ALARP_CHECKLIST -> ACCEPTABLE/- (A/C/D/H tolerability and routes)
 - **LOW-02**: 
-- **LOW-06**: Climbing onto the truck footboard: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Outdoor duty in summer heat: S4->S3 (B rubric HEAT_AMBIENT_S3); Outdoor duty in summer heat: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); FLAG Truck movement at the gate: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I)
+- **LOW-06**: Climbing onto the truck footboard: residual MODERATE 6 -> not assessed (C: low severity, confirm routine controls); Climbing onto the truck footboard: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Outdoor duty in summer heat: S4->S3 (B rubric HEAT_AMBIENT_S3); Outdoor duty in summer heat: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); FLAG Truck movement at the gate: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I)
 - **LOW-08**: Stones thrown by the brush-cutter: inherent L2->L3 (F: no control credit in inherent, L3 cap); Brush-cutter noise: inherent L2->L3 (F: no control credit in inherent, L3 cap); Outdoor work in summer: S4->S3 (B rubric HEAT_AMBIENT_S3); Outdoor work in summer: inherent L2->L3 (F: no control credit in inherent, L3 cap); Sickle and hedge shears: inherent L2->L3 (F: no control credit in inherent, L3 cap)
-- **HH-01**: Arc furnace noise: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Furnace fumes at tapping: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Radiant heat below the furnace: S4->S3 (B rubric HEAT_AMBIENT_S3); Radiant heat below the furnace: NOT_ACCEPTABLE/CONTROLS -> ACCEPTABLE/- (A/C/D/H tolerability and routes)
+- **HH-01**: Arc furnace noise: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Furnace fumes at tapping: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Radiant heat below the furnace: S4->S3 (B rubric HEAT_AMBIENT_S3); Radiant heat below the furnace: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes)
 - **HH-02**: Radiant heat in the crane cabin: S4->S3 (B rubric HEAT_AMBIENT_S3); Radiant heat in the crane cabin: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/OVERRIDE (A/C/D/H tolerability and routes)
 - **HH-03**: Entanglement at the tail pulley: inherent L2->L3 (F: no control credit in inherent, L3 cap); Unexpected energisation: inherent L2->L3 (F: no control credit in inherent, L3 cap); Belt lifting with jacks: inherent L2->L3 (F: no control credit in inherent, L3 cap); Carrying idler rolls: inherent L2->L3 (F: no control credit in inherent, L3 cap); Carrying idler rolls: ACCEPTABLE/- -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Coal spillage on the gallery: inherent L2->L3 (F: no control credit in inherent, L3 cap); Coal spillage on the gallery: ACCEPTABLE/- -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes)
-- **HH-04**: Descent through the top manhole: inherent L2->L3 (F: no control credit in inherent, L3 cap); Oxygen deficiency: inherent L2->L3 (F: no control credit in inherent, L3 cap); Portable lighting in a wet tank: inherent L2->L3 (F: no control credit in inherent, L3 cap); Portable lighting in a wet tank: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONTROLS (A/C/D/H tolerability and routes); Toxic acid vapour and H2S: inherent L2->L3 (F: no control credit in inherent, L3 cap); Residual acid sludge: inherent L2->L3 (F: no control credit in inherent, L3 cap); FLAG Descent through the top manhole: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Oxygen deficiency: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Toxic acid vapour and H2S: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I)
+- **HH-04**: Descent through the top manhole: inherent L2->L3 (F: no control credit in inherent, L3 cap); Oxygen deficiency: inherent L2->L3 (F: no control credit in inherent, L3 cap); Portable lighting in a wet tank: inherent L2->L3 (F: no control credit in inherent, L3 cap); Portable lighting in a wet tank: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONTROLS (A/C/D/H tolerability and routes); Toxic acid vapour and H2S: inherent L2->L3 (F: no control credit in inherent, L3 cap); Residual acid sludge: inherent L2->L3 (F: no control credit in inherent, L3 cap); FLAG Descent through the top manhole: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Oxygen deficiency: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Toxic acid vapour and H2S: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Residual acid sludge: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I)
 - **HH-05**: Asbestos fibres from old sheets: inherent L2->L3 (F: no control credit in inherent, L3 cap); Sheets and tools dropped on the bay below: inherent L2->L3 (F: no control credit in inherent, L3 cap); Cut sheet edges: inherent L2->L3 (F: no control credit in inherent, L3 cap); Hot roof surface in summer: S4->S3 (B rubric HEAT_AMBIENT_S3); Hot roof surface in summer: inherent L2->L3 (F: no control credit in inherent, L3 cap)
 - **HH-06**: FLAG Forklift overturn on the ramp: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Truck moves during loading: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I)
 - **HH-07**: Press impact noise: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Sharp blank edges: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Repetitive feeding: S3->S2 (B rubric MANUAL_HANDLING_FAMILY_DEFAULT); Repetitive feeding: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes)
 - **HH-08**: Grinding dust: NOT_ACCEPTABLE/ALARP_CHECKLIST -> ACCEPTABLE/- (A/C/D/H tolerability and routes); FLAG Sparks igniting combustibles: no longer in the review (left out by the draft hazard cap; ties broken by name); FLAG Damaged grinder cable: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Disc burst: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Kickback: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Grinding noise: new in the review
 - **HH-09**: Arc flash: inherent L2->L3 (F: no control credit in inherent, L3 cap); Contact with a live busbar: inherent L2->L3 (F: no control credit in inherent, L3 cap); Open cable trench behind the panel: inherent L2->L3 (F: no control credit in inherent, L3 cap); Open cable trench behind the panel: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); FLAG Arc flash: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I); FLAG Contact with a live busbar: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/VERIFY_CONTROLS (verify-first route: added in round 2 J for the unverified-controls scenario, not one of A-I)
-- **HH-10**: Acid-wet floor: NOT_ACCEPTABLE/ALARP_CHECKLIST -> ACCEPTABLE/- (A/C/D/H tolerability and routes); Handling acid carboys: NOT_ACCEPTABLE/ALARP_CHECKLIST -> ACCEPTABLE/- (A/C/D/H tolerability and routes)
+- **HH-10**: Acid-wet floor: residual MODERATE 6 -> not assessed (C: low severity, confirm routine controls); Acid-wet floor: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Handling acid carboys: residual MODERATE 6 -> not assessed (C: low severity, confirm routine controls); Handling acid carboys: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes)
 - **HH-11**: Hose leak or flashback: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/ALARP_CHECKLIST (A/C/D/H tolerability and routes); Ignition of combustibles in scrap: S4->S3 (B rubric FIRE_ROUTINE_SPARKS_S3); Ignition of combustibles in scrap: NOT_ACCEPTABLE/CONTROLS -> ACCEPTABLE/- (A/C/D/H tolerability and routes); Fumes from coated scrap: residual HIGH 9 -> not assessed (C: low severity, confirm routine controls); Fumes from coated scrap: NOT_ACCEPTABLE/CONTROLS -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes); Hot slag and cut pieces: NOT_ACCEPTABLE/ALARP_CHECKLIST -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes)
 - **HH-12**: Fall from the scaffold during erection: inherent L2->L3 (F: no control credit in inherent, L3 cap); Scaffold collapse: inherent L2->L3 (F: no control credit in inherent, L3 cap); Dropped tubes and clamps: inherent L2->L3 (F: no control credit in inherent, L3 cap); Handling 6 m tubes: inherent L2->L3 (F: no control credit in inherent, L3 cap)
 - **HH-13**: Compressor house noise: inherent L2->L3 (F: no control credit in inherent, L3 cap); Hot discharge pipes: inherent L2->L3 (F: no control credit in inherent, L3 cap); Hot discharge pipes: ACCEPTABLE/- -> NOT_ACCEPTABLE/CONFIRM_CONTROLS (A/C/D/H tolerability and routes)
@@ -160,8 +160,8 @@ Each draft pack runs its own fixtures with the pack's rules. Shown = what the us
 | Pack | Status | Inherent | Would-be residual | Would-be end state | Avg / max recs | Residual claims shown | Blockers shown | Expected TODO |
 |---|---|---|---|---|---|---|---|---|
 | APPAREL_TEXTILE | DRAFT | CRITICAL 2, HIGH 3 | HIGH 1, MODERATE 2, NOT_ASSESSED 2 | TOLERABLE_ALARP 5 | 1.2 / 3 | 0 | 0 | 5 of 5 |
-| CHEMICAL_PHARMA | DRAFT | CRITICAL 3, HIGH 2 | CRITICAL 2, HIGH 1, LOW 1, NOT_ASSESSED 1 | ACCEPTABLE 2, TOLERABLE_ALARP 3 | 2.2 / 4 | 0 | 0 | 5 of 5 |
-| WAREHOUSE_LOGISTICS | DRAFT | CRITICAL 4, HIGH 1 | HIGH 2, MODERATE 1, NOT_ASSESSED 2 | NOT_REACHED (VERIFY_CONTROLS) 1, TOLERABLE_ALARP 4 | 1.4 / 4 | 0 | 0 | 5 of 5 |
+| CHEMICAL_PHARMA | DRAFT | CRITICAL 3, HIGH 2 | CRITICAL 1, HIGH 2, MODERATE 1, NOT_ASSESSED 1 | ACCEPTABLE 2, TOLERABLE_ALARP 3 | 1.6 / 4 | 0 | 0 | 5 of 5 |
+| WAREHOUSE_LOGISTICS | DRAFT | CRITICAL 4, HIGH 1 | HIGH 2, MODERATE 1, NOT_ASSESSED 2 | TOLERABLE_ALARP 5 | 2.2 / 4 | 0 | 0 | 5 of 5 |
 
 <details><summary>APPAREL_TEXTILE activities</summary>
 
@@ -179,10 +179,10 @@ Each draft pack runs its own fixtures with the pack's rules. Shown = what the us
 
 | ID | Class | Activity | Inherent | Would-be residual | Would-be end state | Recs | Rubric rules |
 |---|---|---|---|---|---|---|---|
-| CHEM-01 | LOW | QC laboratory sample preparation and HPLC mobile phase | HIGH 12 | LOW 3 | ACCEPTABLE | 0 | CHEMICAL_FAMILY_DEFAULT, SHARP_FAMILY_DEFAULT, THERMAL_FAMILY_DEFAULT |
-| CHEM-02 | LOW | Cleaning in place (CIP) of the reactor train | HIGH 12 | HIGH 8 | ACCEPTABLE | 1 | CHEMICAL_FAMILY_DEFAULT, SLIP_TRIP_FAMILY_DEFAULT, THERMAL_FAMILY_DEFAULT |
+| CHEM-01 | LOW | QC laboratory sample preparation and HPLC mobile phase | HIGH 12 | MODERATE 4 | ACCEPTABLE | 0 | CHEMICAL_FAMILY_DEFAULT, SHARP_FAMILY_DEFAULT, THERMAL_FAMILY_DEFAULT |
+| CHEM-02 | LOW | Cleaning in place (CIP) of the reactor train | HIGH 12 | HIGH 12 | ACCEPTABLE | 1 | CHEMICAL_FAMILY_DEFAULT, SLIP_TRIP_FAMILY_DEFAULT, THERMAL_FAMILY_DEFAULT |
 | CHEM-03 | HIGH | Solvent transfer and drumming at the solvent recovery plant | CRITICAL 16 | CRITICAL 16 | TOLERABLE_ALARP | 4 | CHEMICAL_FAMILY_DEFAULT, FIRE_EXPLOSION_FAMILY_DEFAULT, MANUAL_HEAVY_LOAD_S3 |
-| CHEM-04 | HIGH | Manhole charging of powder into a solvent-filled reactor | CRITICAL 20 | CRITICAL 15 | TOLERABLE_ALARP | 3 | CHEMICAL_FAMILY_DEFAULT, CONFINED_SPACE_FAMILY_DEFAULT, FIRE_EXPLOSION_FAMILY_DEFAULT, MACHINERY_FAMILY_DEFAULT, MANUAL_HEAVY_LOAD_S3 |
+| CHEM-04 | HIGH | Manhole charging of powder into a solvent-filled reactor | CRITICAL 20 | HIGH 10 | TOLERABLE_ALARP | 0 | CHEMICAL_FAMILY_DEFAULT, CONFINED_SPACE_FAMILY_DEFAULT, FIRE_EXPLOSION_FAMILY_DEFAULT, MACHINERY_FAMILY_DEFAULT, MANUAL_HEAVY_LOAD_S3 |
 | CHEM-05 | HIGH | Multi-milling, sifting and FBD discharge of dried API | CRITICAL 15 | Inherent only | TOLERABLE_ALARP | 3 | FIRE_EXPLOSION_FAMILY_DEFAULT, MACHINERY_FAMILY_DEFAULT, NOISE_FAMILY_DEFAULT, THERMAL_FAMILY_DEFAULT |
 
 </details>
@@ -194,7 +194,7 @@ Each draft pack runs its own fixtures with the pack's rules. Shown = what the us
 | WH-01 | LOW | Manual case picking from ground and first-level racking | CRITICAL 15 | MODERATE 6 | TOLERABLE_ALARP | 0 | SHARP_FAMILY_DEFAULT, SLIP_TRIP_FAMILY_DEFAULT, VEHICLE_FAMILY_DEFAULT, WH_HEAVY_CARTON_S3 |
 | WH-02 | LOW | Packing, tape sealing and labelling at the packing stations | HIGH 12 | Inherent only | TOLERABLE_ALARP | 1 | MACHINERY_FAMILY_DEFAULT, MANUAL_HANDLING_FAMILY_DEFAULT, SHARP_FAMILY_DEFAULT, SLIP_TRIP_FAMILY_DEFAULT |
 | WH-03 | HIGH | Forklift and reach-truck traffic in shared aisles and the cross-dock | CRITICAL 20 | HIGH 8 | TOLERABLE_ALARP | 2 | CHEMICAL_FAMILY_DEFAULT, FALLING_OBJECT_FAMILY_DEFAULT, VEHICLE_FAMILY_DEFAULT |
-| WH-04 | HIGH | Pallet put-away and retrieval in 10 m high-bay racking | CRITICAL 20 | HIGH 10 | NOT_REACHED (VERIFY_CONTROLS) | 0 | HEIGHT_AT_OR_ABOVE_THRESHOLD_OR_EDGE_S4, VEHICLE_FAMILY_DEFAULT, WH_RACK_COLLAPSE_S5 |
+| WH-04 | HIGH | Pallet put-away and retrieval in 10 m high-bay racking | CRITICAL 20 | HIGH 10 | TOLERABLE_ALARP | 4 | HEIGHT_AT_OR_ABOVE_THRESHOLD_OR_EDGE_S4, VEHICLE_FAMILY_DEFAULT, WH_RACK_COLLAPSE_S5 |
 | WH-05 | HIGH | Truck loading and unloading at the dock doors | CRITICAL 20 | Inherent only | TOLERABLE_ALARP | 4 | HEIGHT_AT_OR_ABOVE_THRESHOLD_OR_EDGE_S4, MACHINERY_FAMILY_DEFAULT, VEHICLE_FAMILY_DEFAULT, WH_HEAVY_CARTON_S3 |
 
 </details>
@@ -240,20 +240,20 @@ Final state = after implementing the pass-1 recommendations once (single pass). 
 | HH-01 | EAF tapping into the ladle | STD_5X5 | real | MOLTEN | CRITICAL 20 (L4xS5) | CRITICAL 20 (L4xS5) | LOW 3 (L1xS3) | HIGH 10 (L2xS5) | 7 | 2 | HAZARD_NOT_ACCEPTABLE | - | TOLERABLE_ALARP | CRITICAL ✓ / TODO(HSE lead) |
 | HH-02 | Hot metal ladle handling by EOT crane (JSL) | JSL_QSD24_GT | real | - | CRITICAL 20 (L4xS5) | CRITICAL 15 (L3xS5) | LOW 3 (L1xS3) | HIGH 10 (L2xS5) | 6 | 1 | HAZARD_NOT_ACCEPTABLE | - | OVERRIDE | CRITICAL ✓ / TODO(HSE lead) |
 | HH-03 | Belt conveyor idler replacement under LOTO | STD_5X5 | real | - | CRITICAL 20 (L4xS5) | CRITICAL 15 (L3xS5) | MODERATE 4 (L1xS4) | MODERATE 6 (L2xS3) | 7 | 0 | - | - | TOLERABLE_ALARP | TODO(HSE lead) / MODERATE ✓ |
-| HH-04 | Confined space entry into an acid storage tank | STD_5X5 | real | - | CRITICAL 20 (L4xS5) | CRITICAL 15 (L3xS5) | LOW 3 (L1xS3) | HIGH 12 (L3xS4) | 7 | 2 | HAZARD_NOT_ACCEPTABLE | - | TOLERABLE_ALARP | CRITICAL ✓ / HIGH ✓ |
+| HH-04 | Confined space entry into an acid storage tank | STD_5X5 | real | - | CRITICAL 20 (L4xS5) | CRITICAL 15 (L3xS5) | LOW 3 (L1xS3) | HIGH 10 (L2xS5) | 7 | 1 | HAZARD_NOT_ACCEPTABLE | - | TOLERABLE_ALARP | CRITICAL ✓ / HIGH ✓ |
 | HH-05 | Fragile roof sheet replacement (contractor) | STD_5X5 | baseline only | HEIGHT | CRITICAL 20 (L4xS5) | CRITICAL 20 (L4xS5) | CRITICAL 16 (L4xS4) | Inherent only | 8 | 4 | NO_CONTROLS | - | TOLERABLE_ALARP | CRITICAL ✓ / TODO(HSE lead) |
 | HH-06 | Forklift loading of coil packets into trucks | STD_5X5 | real | VEHICLE | CRITICAL 20 (L4xS5) | CRITICAL 20 (L4xS5) | MODERATE 4 (L1xS4) | HIGH 12 (L3xS4) | 6 | 3 | HAZARD_NOT_ACCEPTABLE | - | TOLERABLE_ALARP | CRITICAL ✓ / HIGH ✓ |
 | HH-07 | Mechanical power press operation | STD_5X5 | real | - | CRITICAL 20 (L4xS5) | HIGH 12 (L3xS4) | LOW 3 (L1xS3) | MODERATE 6 (L2xS3) | 6 | 0 | - | - | TOLERABLE_ALARP | HIGH ✓ / MODERATE ✓ |
 | HH-08 | Angle grinding of weld joints | STD_5X5 | real | - | CRITICAL 20 (L4xS5) | CRITICAL 15 (L3xS5) | MODERATE 6 (L2xS3) | MODERATE 6 (L2xS3) | 7 | 0 | - | - | TOLERABLE_ALARP | TODO(HSE lead) / MODERATE ✓ |
 | HH-09 | LT MCC panel maintenance | STD_5X5 | real | - | CRITICAL 20 (L4xS5) | CRITICAL 15 (L3xS5) | HIGH 8 (L2xS4) | MODERATE 5 (L1xS5) | 5 | 0 | - | - | TOLERABLE_ALARP | CRITICAL ✓ / TODO(HSE lead) |
-| HH-10 | HCl handling at the pickling tank | STD_5X5 | real | - | CRITICAL 20 (L4xS5) | HIGH 12 (L3xS4) | LOW 3 (L1xS3) | MODERATE 6 (L2xS3) | 5 | 0 | - | - | ACCEPTABLE | HIGH ✓ / MODERATE ✓ |
+| HH-10 | HCl handling at the pickling tank | STD_5X5 | real | - | CRITICAL 20 (L4xS5) | HIGH 12 (L3xS4) | LOW 3 (L1xS3) | LOW 3 (L1xS3) | 5 | 0 | - | - | ACCEPTABLE | HIGH ✓ / MODERATE ✗ |
 | HH-11 | Gas cutting of scrap | STD_5X5 | real | FIRE_EXPLOSION | CRITICAL 20 (L4xS5) | CRITICAL 20 (L4xS5) | HIGH 8 (L2xS4) | HIGH 12 (L3xS4) | 6 | 1 | HAZARD_NOT_ACCEPTABLE | - | TOLERABLE_ALARP | CRITICAL ✓ / TODO(HSE lead) |
 | HH-12 | Scaffold erection for vessel maintenance | STD_5X5 | none | - | CRITICAL 20 (L4xS5) | CRITICAL 15 (L3xS5) | CRITICAL 20 (L4xS5) | Inherent only | 7 | 3 | NO_CONTROLS | - | TOLERABLE_ALARP | CRITICAL ✓ / TODO(HSE lead) |
 | HH-13 | Air compressor and hydraulic power pack maintenance | STD_5X5 | real | PRESSURE | CRITICAL 16 (L4xS4) | CRITICAL 16 (L4xS4) | MODERATE 6 (L2xS3) | HIGH 12 (L3xS4) | 6 | 2 | HAZARD_NOT_ACCEPTABLE | - | NOT_REACHED (ALARP_CHECKLIST) | TODO(HSE lead) / TODO(HSE lead) |
 | HH-14 | Slag pot handling and dumping (JSL) | JSL_QSD24_GT | real | - | CRITICAL 20 (L4xS5) | CRITICAL 15 (L3xS5) | MODERATE 6 (L2xS3) | HIGH 10 (L2xS5) | 5 | 3 | HAZARD_NOT_ACCEPTABLE | - | OVERRIDE | CRITICAL ✓ / TODO(HSE lead) |
 | HH-15 | Tipper unloading at the RMHS ground hopper | STD_5X5 | real | VEHICLE | CRITICAL 20 (L4xS5) | CRITICAL 20 (L4xS5) | LOW 3 (L1xS3) | CRITICAL 15 (L3xS5) | 5 | 3 | HAZARD_NOT_ACCEPTABLE | - | TOLERABLE_ALARP | CRITICAL ✓ / MODERATE ✗ |
 
-Totals: v1 recommendations 147 -> v2 31; v1 CRITICAL inherent 19 -> v2 16; v1 CRITICAL residual 3 -> v2 1; expected bands agreed 31 of 35 compared.
+Totals: v1 recommendations 147 -> v2 30; v1 CRITICAL inherent 19 -> v2 16; v1 CRITICAL residual 3 -> v2 1; expected bands agreed 30 of 35 compared.
 
 ## Hazard detail (pass 1)
 
@@ -344,7 +344,7 @@ Recommendations: ADMINISTRATIVE VE-ADM-1 -> h1 (LOW); ENGINEERING FO-ENG-1 -> h2
 | Hazard | Family | LLM / team | Inherent v2 | Residual v2 | Tolerability (pass 1) | After implementing |
 |---|---|---|---|---|---|---|
 | Truck movement at the gate | VEHICLE | L4xS5 | CRITICAL 15 (L3xS5) | MODERATE 5 (L1xS5) | NOT_ACCEPTABLE (VERIFY_CONTROLS) | TOLERABLE_ALARP (-) |
-| Climbing onto the truck footboard | SLIP_TRIP | L3xS3 | HIGH 9 (L3xS3) | MODERATE 6 (L2xS3) | NOT_ACCEPTABLE (CONFIRM_CONTROLS) | ACCEPTABLE (-) |
+| Climbing onto the truck footboard | SLIP_TRIP | L3xS3 | HIGH 9 (L3xS3) | not assessed | NOT_ACCEPTABLE (CONFIRM_CONTROLS) | ACCEPTABLE (-) |
 | Outdoor duty in summer heat | HEAT | L4xS4 | HIGH 9 (L3xS3) | MODERATE 6 (L2xS3) | NOT_ACCEPTABLE (CONFIRM_CONTROLS) | ACCEPTABLE (-) |
 
 </details>
@@ -381,7 +381,7 @@ Recommendations: ENGINEERING MA-ENG-1 -> h1 (MEDIUM).
 | Ladle transfer car movement | VEHICLE | L3xS5 | CRITICAL 15 (L3xS5) | HIGH 10 (L2xS5) | NOT_ACCEPTABLE (CONTROLS) | TOLERABLE_ALARP (-) |
 | Arc furnace noise | NOISE | L4xS4 | HIGH 9 (L3xS3) | MODERATE 6 (L2xS3) | NOT_ACCEPTABLE (CONFIRM_CONTROLS) | ACCEPTABLE (-) |
 | Furnace fumes at tapping | DUST | L4xS4 | HIGH 9 (L3xS3) | MODERATE 6 (L2xS3) | NOT_ACCEPTABLE (CONFIRM_CONTROLS) | ACCEPTABLE (-) |
-| Radiant heat below the furnace | HEAT | L4xS4 | HIGH 9 (L3xS3) | MODERATE 6 (L2xS3) | ACCEPTABLE (-) | ACCEPTABLE (-) |
+| Radiant heat below the furnace | HEAT | L4xS4 | HIGH 9 (L3xS3) | not assessed | NOT_ACCEPTABLE (CONFIRM_CONTROLS) | ACCEPTABLE (-) |
 
 Recommendations: ADMINISTRATIVE VE-ADM-1 -> h2 (LOW); ENGINEERING MO-ENG-1 -> h1 (MEDIUM).
 
@@ -420,9 +420,9 @@ Recommendations: ENGINEERING MO-ENG-1 -> h3 (MEDIUM).
 | Oxygen deficiency | CONFINED_SPACE | L4xS5 | CRITICAL 15 (L3xS5) | MODERATE 5 (L1xS5) | NOT_ACCEPTABLE (VERIFY_CONTROLS) | TOLERABLE_ALARP (-) |
 | Portable lighting in a wet tank | ELECTRICAL | L4xS5 | CRITICAL 15 (L3xS5) | HIGH 10 (L2xS5) | NOT_ACCEPTABLE (CONTROLS) | TOLERABLE_ALARP (-) |
 | Toxic acid vapour and H2S | CONFINED_SPACE | L4xS5 | CRITICAL 15 (L3xS5) | MODERATE 5 (L1xS5) | NOT_ACCEPTABLE (VERIFY_CONTROLS) | TOLERABLE_ALARP (-) |
-| Residual acid sludge | CHEMICAL | L4xS5 | HIGH 12 (L3xS4) | HIGH 12 (L3xS4) | NOT_ACCEPTABLE (CONTROLS) | ACCEPTABLE (-) |
+| Residual acid sludge | CHEMICAL | L4xS5 | HIGH 12 (L3xS4) | MODERATE 4 (L1xS4) | NOT_ACCEPTABLE (VERIFY_CONTROLS) | TOLERABLE_ALARP (-) |
 
-Recommendations: SUBSTITUTION CH-SUB-1 -> h3 (MEDIUM); ENGINEERING EL-ENG-1 -> h5 (LOW).
+Recommendations: ENGINEERING EL-ENG-1 -> h5 (LOW).
 
 </details>
 
@@ -497,8 +497,8 @@ Dropped by the hazard cap: Sparks igniting combustibles.
 |---|---|---|---|---|---|---|
 | Acid fumes above the tank | CHEMICAL | L4xS4 | HIGH 12 (L3xS4) | LOW 3 (L1xS3) | ACCEPTABLE (-) | ACCEPTABLE (-) |
 | Acid splash during transfer | CHEMICAL | L4xS5 | HIGH 12 (L3xS4) | LOW 3 (L1xS3) | ACCEPTABLE (-) | ACCEPTABLE (-) |
-| Acid-wet floor | SLIP_TRIP | L4xS4 | HIGH 9 (L3xS3) | MODERATE 6 (L2xS3) | ACCEPTABLE (-) | ACCEPTABLE (-) |
-| Handling acid carboys | MANUAL_HANDLING | L3xS3 | HIGH 9 (L3xS3) | MODERATE 6 (L2xS3) | ACCEPTABLE (-) | ACCEPTABLE (-) |
+| Acid-wet floor | SLIP_TRIP | L4xS4 | HIGH 9 (L3xS3) | not assessed | NOT_ACCEPTABLE (CONFIRM_CONTROLS) | ACCEPTABLE (-) |
+| Handling acid carboys | MANUAL_HANDLING | L3xS3 | HIGH 9 (L3xS3) | not assessed | NOT_ACCEPTABLE (CONFIRM_CONTROLS) | ACCEPTABLE (-) |
 
 </details>
 
