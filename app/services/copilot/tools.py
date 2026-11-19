@@ -336,7 +336,8 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "submits. Send only fields to change. categoryCode and subCategoryCode go together and must be a STOP pair "
         "from suggest_observation_fields (stopCandidates) for the observation type. If severity differs from the "
         "SafeOps matrix suggestion, give severityReason (at least 10 characters, the user can edit it). Only rewrite "
-        "description or immediateAction when the user asks you to.",
+        "description or immediateAction when the user asks you to, except: when the user sent a photo to report an "
+        "observation and the description is empty, write the description from the photo and their words.",
         {
             "type": {"type": "string", "enum": list(form_drafts.OBS_TYPES)},
             "areaId": {"type": "string", "maxLength": 64, "description": "An areaId from the draft's areas list."},

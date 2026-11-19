@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     copilot_max_tokens: int = 16000
     # Model round-trips per user message (each tool batch is one).
     copilot_max_iterations: int = 10
+    # Length of one response stream. The turn itself has no time limit: when a
+    # stream ends the browser reconnects and carries on. Keep it under the
+    # frontend host's function limit (Vercel: 300 s) and any proxy limit (Azure: 230 s).
+    copilot_stream_segment_seconds: int = 200
     # Messages per user per hour; seeds Agent.rateLimit on first use.
     copilot_rate_limit_per_hour: int = 60
     # Server-side refusal fallback (fallbacks: "default") on models that offer it.

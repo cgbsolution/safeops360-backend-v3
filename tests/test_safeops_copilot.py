@@ -277,12 +277,25 @@ def _make_turn(monkeypatch, finals, *, draft):
 
 async def _drain(turn) -> list[tuple[str, dict[str, Any]]]:
     await turn.run()
-    events = []
-    while not turn.queue.empty():
-        item = turn.queue.get_nowait()
-        if item is not None:
-            events.append(item)
-    return events
+    assert turn.log.finished
+    return [(event, data) for _, event, data in turn.log.events]
+
+
+def _frames(body: str) -> list[tuple[int | None, str, dict[str, Any]]]:
+    """Parse an SSE body into (id, event, data); comment lines are skipped."""
+    out = []
+    for chunk in body.split("\n\n"):
+        seq, event, data = None, None, None
+        for line in chunk.split("\n"):
+            if line.startswith("id: "):
+                seq = int(line[4:])
+            elif line.startswith("event: "):
+                event = line[7:]
+            elif line.startswith("data: "):
+                data = json.loads(line[6:])
+        if event:
+            out.append((seq, event, data))
+    return out
 
 
 async def test_turn_fills_draft_and_returns_append_only_history(monkeypatch):
@@ -372,27 +385,105 @@ async def test_http_endpoint_streams_sse(monkeypatch):
     async def no_limit(db, agent, user_id):
         return None
 
-    monkeypatch.setattr(copilot_router, "ensure_copilot_agent", fake_ensure)
-    monkeypatch.setattr(copilot_router, "enforce_rate_limit", no_limit)
-    monkeypatch.setattr(copilot_router, "is_configured", lambda: True)
-    monkeypatch.setattr(copilot_router, "get_settings", lambda: SimpleNamespace(copilot_enabled=True))
-
-    app = FastAPI()
-    app.include_router(copilot_router.router)
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="me", plantId="p1")
-    app.dependency_overrides[get_db] = lambda: None
+    app, rows = _copilot_app(monkeypatch, copilot_router, fake_ensure, no_limit)
 
     body = {"conversationId": "conv-12345678", "message": "hi", "messages": [],
-            "page": {"path": "/dashboard"}, "nowLocal": "2026-10-26T15:00", "timezoneOffsetMinutes": -330}
+            "page": {"path": "/dashboard"}, "nowLocal": "2026-10-26T15:00", "timezoneOffsetMinutes": -330,
+            "turnId": "a" * 32}
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client:
         bad = await client.post("/api/copilot/chat", json={**body, "messages": [{"role": "assistant", "content": "x"}]})
         assert bad.status_code == 400
         res = await client.post("/api/copilot/chat", json=body)
-    assert res.status_code == 200 and res.headers["content-type"].startswith("text/event-stream")
-    frames = [f for f in res.text.split("\n\n") if f.startswith("event:")]
-    events = [(f.split("\n")[0][7:], json.loads(f.split("\n", 1)[1][6:])) for f in frames]
-    assert events[0] == ("text", {"delta": "Hello from copilot"})
-    assert events[-1][0] == "done" and len(events[-1][1]["appendMessages"]) == 2
+        assert res.status_code == 200 and res.headers["content-type"].startswith("text/event-stream")
+        events = _frames(res.text)
+        assert events[0] == (1, "text", {"delta": "Hello from copilot", "at": 0})
+        assert [e for _, e, _ in events][-2:] == ["done", "end"]
+        assert len(events[-2][2]["appendMessages"]) == 2
+
+        # Resuming after event 1 gets only what came later.
+        rows["a" * 32] = SimpleNamespace(id="a" * 32, invokedById="me", sourceModule="COPILOT")
+        again = await client.get(f"/api/copilot/chat/{'a' * 32}/events?after=1")
+        assert [e for _, e, _ in _frames(again.text)] == ["done", "end"]
+        # Someone else's turn, or an unknown one, is not found.
+        rows["b" * 32] = SimpleNamespace(id="b" * 32, invokedById="other", sourceModule="COPILOT")
+        assert (await client.get(f"/api/copilot/chat/{'b' * 32}/events")).status_code == 404
+        assert (await client.get(f"/api/copilot/chat/{'c' * 32}/events")).status_code == 404
+
+
+def _copilot_app(monkeypatch, copilot_router, fake_ensure, no_limit):
+    """FastAPI app with the copilot router; DB lookups served from `rows`."""
+    from fastapi import FastAPI
+
+    from app.core.db import get_db
+    from app.core.deps import get_current_user
+    from app.services.copilot import turn_stream
+
+    rows: dict[str, Any] = {}
+
+    async def fake_find(db, turn_id):
+        return rows.get(turn_id)
+
+    async def no_saver(turn):
+        return None
+
+    class _Db:
+        async def commit(self):
+            pass
+
+    monkeypatch.setattr(copilot_router, "ensure_copilot_agent", fake_ensure)
+    monkeypatch.setattr(copilot_router, "enforce_rate_limit", no_limit)
+    monkeypatch.setattr(copilot_router, "is_configured", lambda: True)
+    monkeypatch.setattr(copilot_router, "get_settings", lambda: SimpleNamespace(copilot_enabled=True))
+    monkeypatch.setattr(copilot_router, "find_turn", fake_find)
+    monkeypatch.setattr(turn_stream, "_saver", no_saver)
+
+    app = FastAPI()
+    app.include_router(copilot_router.router)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="me", plantId="p1")
+    app.dependency_overrides[get_db] = lambda: _Db()
+    return app, rows
+
+
+async def test_retried_request_joins_the_running_turn(monkeypatch):
+    """The browser resends POST with the same turnId when it never got an
+    answer; that must not start a second turn (or a second model call)."""
+    import httpx
+
+    from app.routers import copilot as copilot_router
+    from app.services.copilot import turn_stream
+
+    finals = [_Final(stop_reason="end_turn", usage=_usage(), content=[_Block(type="text", text="Only once")])]
+    _, calls, _ = _make_turn(monkeypatch, finals, draft=None)
+
+    async def fake_ensure(db, user_id):
+        return (SimpleNamespace(id="agent-1", isActive=True, primaryModelId="claude-opus-5-5", currentAuthorityLevel="L1", rateLimit=60),
+                SimpleNamespace(id="prompt-1", systemPrompt="SYSTEM"))
+
+    async def no_limit(db, agent, user_id):
+        return None
+
+    app, rows = _copilot_app(monkeypatch, copilot_router, fake_ensure, no_limit)
+    turn_id = "d" * 32
+    started: list[str] = []
+    real_start = turn_stream.start_turn
+
+    async def start_once(turn):
+        started.append(turn.turn_id)
+        await real_start(turn)
+        rows[turn.turn_id] = SimpleNamespace(id=turn.turn_id, invokedById="me", sourceModule="COPILOT")
+
+    monkeypatch.setattr(copilot_router, "start_turn", start_once)
+    body = {"conversationId": "conv-12345678", "message": "hi", "messages": [], "page": {"path": "/"}, "turnId": turn_id}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client:
+        first = await client.post("/api/copilot/chat", json=body)
+        second = await client.post("/api/copilot/chat", json=body)
+    assert started == [turn_id] and len(calls) == 1
+    for res in (first, second):
+        text = "".join(d["delta"] for _, e, d in _frames(res.text) if e == "text")
+        assert text == "Only once"
+    rows[turn_id] = SimpleNamespace(id=turn_id, invokedById="someone-else", sourceModule="COPILOT")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client:
+        assert (await client.post("/api/copilot/chat", json=body)).status_code == 409
 
 
 async def test_api_failure_before_answer_leaves_history_untouched(monkeypatch):
@@ -412,10 +503,259 @@ async def test_api_failure_before_answer_leaves_history_untouched(monkeypatch):
             raise anthropic.APIConnectionError(request=httpx.Request("POST", "http://127.0.0.1:9/v1/messages"))
 
     monkeypatch.setattr(anthropic, "AsyncAnthropic", Boom)
+    monkeypatch.setattr(runtime, "_ROUND_RETRY_DELAYS", (0.0, 0.0, 0.0))
     events = await _drain(turn)
     assert events[0][0] == "error" and "reach the AI service" in events[0][1]["message"]
     assert events[-1][1]["appendMessages"] == []
     assert audit["error"]
+
+
+# ─── 2026-11-04: turns that survive dropped connections ─────────────────
+
+
+def _apply_text(events) -> str:
+    """What the browser shows: text by offset, with rewinds applied."""
+    text = ""
+    for e, d in events:
+        if e == "text":
+            at = d["at"]
+            text = text[:at] + d["delta"] if at <= len(text) else text + d["delta"]
+        elif e == "rewind":
+            text = text[: d["to"]]
+    return text
+
+
+async def test_round_that_drops_mid_stream_is_retried_without_duplicate_text(monkeypatch):
+    import anthropic
+    import httpx
+
+    finals = [_Final(stop_reason="end_turn", usage=_usage(), content=[_Block(type="text", text="Full answer.")])]
+    turn, calls, audit = _make_turn(monkeypatch, finals, draft=None)
+    monkeypatch.setattr(runtime, "_ROUND_RETRY_DELAYS", (0.0, 0.0, 0.0))
+
+    class _Dropping(_Stream):
+        def __aiter__(self):
+            async def gen():
+                yield SimpleNamespace(type="text", text="Half an ans")
+                yield SimpleNamespace(type="content_block_start",
+                                      content_block=SimpleNamespace(type="tool_use", id="tu_x", name="check_ptw_draft"))
+                raise anthropic.APIConnectionError(request=httpx.Request("POST", "http://api/v1/messages"))
+            return gen()
+
+    real = _FakeClient.stream
+    state = {"n": 0}
+
+    def flaky(self, **kwargs):
+        state["n"] += 1
+        if state["n"] == 1:
+            self.calls.append(kwargs)
+            return _Dropping(_Final(stop_reason="end_turn", usage=_usage(), content=[]))
+        return real(self, **kwargs)
+
+    monkeypatch.setattr(_FakeClient, "stream", flaky)
+    events = await _drain(turn)
+    rewind = next(d for e, d in events if e == "rewind")
+    assert rewind == {"to": 0, "dropTools": ["tu_x"]}
+    assert _apply_text(events) == "Full answer."
+    assert len(calls) == 2 and audit["error"] is None
+    assert events[-1][0] == "done" and len(events[-1][1]["appendMessages"]) == 2
+
+
+async def test_overload_reported_inside_a_stream_counts_as_transient():
+    import anthropic
+    import httpx
+
+    response = httpx.Response(200, request=httpx.Request("POST", "http://api/v1/messages"))
+    err = anthropic.APIStatusError("overloaded", response=response,
+                                   body={"type": "error", "error": {"type": "overloaded_error"}})
+    assert runtime._is_transient(err)
+    bad = anthropic.APIStatusError("bad", response=httpx.Response(400, request=response.request),
+                                   body={"type": "error", "error": {"type": "invalid_request_error"}})
+    assert not runtime._is_transient(bad)
+
+
+def test_turn_log_offsets_are_utf16_and_snapshot_merges_text():
+    from app.services.copilot.turn_stream import TurnLog
+
+    tl = TurnLog()
+    tl.append("text", {"delta": "Fire 🔥 "})          # the emoji is 2 UTF-16 units
+    tl.append("text", {"delta": "watch"})
+    tl.append("tool", {"id": "t1", "status": "pending"})
+    tl.append("text", {"delta": "!"})
+    assert [d.get("at") for _, e, d in tl.events if e == "text"] == [0, 8, 13]
+    snap = tl.snapshot()
+    assert snap["events"] == [
+        [2, "text", {"delta": "Fire 🔥 watch", "at": 0}],
+        [3, "tool", {"id": "t1", "status": "pending"}],
+        [4, "text", {"delta": "!", "at": 13}],
+    ]
+    assert snap["seq"] == 4 and snap["done"] is False and snap["beat"]
+
+
+async def test_local_stream_ends_its_segment_with_reconnect():
+    from app.services.copilot import turn_stream
+
+    tl = turn_stream.TurnLog()
+    tl.append("text", {"delta": "Working"})
+    chunks = [c async for c in turn_stream._local_events(tl, 0, 0.05)]
+    events = _frames(b"".join(chunks).decode())
+    assert events == [(1, "text", {"delta": "Working", "at": 0}), (None, "reconnect", {"after": 1})]
+
+    tl.append("text", {"delta": " on it"})
+    tl.finish()
+    chunks = [c async for c in turn_stream._local_events(tl, 1, 5)]
+    assert _frames(b"".join(chunks).decode()) == [(2, "text", {"delta": " on it", "at": 7}), (None, "end", {})]
+
+
+async def test_other_worker_streams_from_the_saved_copy(monkeypatch):
+    """A resume that lands on a worker not running the turn reads the row's copy,
+    sends only text it has not sent yet, and stops at `done`."""
+    from datetime import datetime, timezone
+
+    from app.services.copilot import turn_stream
+
+    tl = turn_stream.TurnLog()
+    tl.append("text", {"delta": "Hello"})
+    first = tl.snapshot()
+    tl.append("text", {"delta": " world"})
+    tl.append("done", {"appendMessages": []})
+    second = tl.snapshot(done=True)
+    now = datetime.now(timezone.utc)
+    rows = iter([
+        SimpleNamespace(status="RUNNING", agentSuggestion={"stream": first}, invokedAt=now),
+        SimpleNamespace(status="COMPLETED", agentSuggestion={"stream": second}, invokedAt=now),
+    ])
+
+    async def load(turn_id):
+        return next(rows)
+
+    monkeypatch.setattr(turn_stream, "_load_saved", load)
+    monkeypatch.setattr(turn_stream, "POLL_SECONDS", 0.0)
+    chunks = [c async for c in turn_stream._saved_events("e" * 32, 0, 30)]
+    assert _frames(b"".join(chunks).decode()) == [
+        (1, "text", {"delta": "Hello", "at": 0}),
+        (2, "text", {"delta": " world", "at": 5}),
+        (3, "done", {"appendMessages": []}),
+        (None, "end", {}),
+    ]
+
+
+async def test_saved_copy_without_heartbeat_reports_a_lost_turn(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.copilot import turn_stream
+
+    old = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    row = SimpleNamespace(status="RUNNING", invokedAt=None,
+                          agentSuggestion={"stream": {"events": [], "done": False, "beat": old}})
+
+    async def load(turn_id):
+        return row
+
+    monkeypatch.setattr(turn_stream, "_load_saved", load)
+    chunks = [c async for c in turn_stream._saved_events("f" * 32, 0, 30)]
+    events = _frames(b"".join(chunks).decode())
+    assert events == [(None, "error", {"message": turn_stream.LOST_MESSAGE}), (None, "end", {})]
+
+
+async def test_long_answer_survives_many_stream_segments(monkeypatch):
+    """A client that follows `reconnect` gets the whole answer, once, even when
+    the answer takes several stream segments (here 0.1 s each)."""
+    import asyncio
+
+    import httpx
+
+    from app.routers import copilot as copilot_router
+
+    pieces = [f"part{i} " for i in range(12)]
+    finals = [_Final(stop_reason="end_turn", usage=_usage(), content=[_Block(type="text", text="".join(pieces))])]
+    _make_turn(monkeypatch, finals, draft=None)
+
+    class _Slow(_Stream):
+        def __aiter__(self):
+            async def gen():
+                for p in pieces:
+                    await asyncio.sleep(0.03)
+                    yield SimpleNamespace(type="text", text=p)
+            return gen()
+
+    monkeypatch.setattr(_FakeClient, "stream", lambda self, **kw: (self.calls.append(kw), _Slow(self._finals.pop(0)))[1])
+
+    async def fake_ensure(db, user_id):
+        return (SimpleNamespace(id="agent-1", isActive=True, primaryModelId="claude-opus-5-5", currentAuthorityLevel="L1", rateLimit=60),
+                SimpleNamespace(id="prompt-1", systemPrompt="SYSTEM"))
+
+    async def no_limit(db, agent, user_id):
+        return None
+
+    app, rows = _copilot_app(monkeypatch, copilot_router, fake_ensure, no_limit)
+    monkeypatch.setattr(copilot_router, "get_settings",
+                        lambda: SimpleNamespace(copilot_enabled=True, copilot_stream_segment_seconds=0.1))
+    turn_id = "9" * 32
+    body = {"conversationId": "conv-12345678", "message": "hi", "messages": [], "page": {"path": "/"}, "turnId": turn_id}
+    seen: list[tuple[str, dict[str, Any]]] = []
+    after, segments = 0, 0
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client:
+        res = await client.post("/api/copilot/chat", json=body)
+        rows[turn_id] = SimpleNamespace(id=turn_id, invokedById="me", sourceModule="COPILOT")
+        while True:
+            segments += 1
+            frames = _frames(res.text)
+            for seq, event, data in frames:
+                if seq is not None:
+                    assert seq > after
+                    after = seq
+                seen.append((event, data))
+            if frames[-1][1] == "end":
+                break
+            assert frames[-1][1] == "reconnect" and segments < 40
+            res = await client.get(f"/api/copilot/chat/{turn_id}/events?after={after}")
+    assert segments > 1
+    assert _apply_text(seen) == "".join(pieces)
+    assert [e for e, _ in seen][-2:] == ["done", "end"]
+
+
+async def test_stop_cancels_the_turn_and_keeps_history_unchanged(monkeypatch):
+    import asyncio
+
+    from app.services.copilot import turn_stream
+
+    turn, _, audit = _make_turn(monkeypatch, [], draft=None)
+
+    class _Slow:
+        def __init__(self, **kw):
+            self.messages = self
+
+        def stream(self, **kw):
+            return _Hang()
+
+    class _Hang(_Stream):
+        def __init__(self):
+            pass
+
+        def __aiter__(self):
+            async def gen():
+                yield SimpleNamespace(type="text", text="Starting")
+                await asyncio.sleep(30)
+            return gen()
+
+    import anthropic
+
+    async def no_saver(t):
+        return None
+
+    monkeypatch.setattr(anthropic, "AsyncAnthropic", _Slow)
+    monkeypatch.setattr(turn_stream, "_saver", no_saver)
+    await turn_stream.start_turn(turn)
+    for _ in range(50):
+        if turn.log.text_len:
+            break
+        await asyncio.sleep(0.01)
+    assert await turn_stream.request_stop(turn.turn_id, "me") is True
+    await asyncio.wait_for(turn_stream._LOCAL[turn.turn_id].task, 2)
+    done = [d for _, e, d in turn.log.events if e == "done"][-1]
+    assert done["stopped"] is True and done["appendMessages"] == []
+    assert audit["error"] == turn_stream.STOPPED_TEXT and turn.log.finished
 
 
 # ─── 2026-10-27: draft-first fixes ──────────────────────────────────────

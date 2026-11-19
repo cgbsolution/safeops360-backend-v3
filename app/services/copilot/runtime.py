@@ -1,6 +1,8 @@
 """Streaming tool loop for the copilot.
 
-One HTTP request = one user turn. The browser holds the conversation (the
+One user message = one turn. The turn runs as a background task that does not
+depend on the connection that started it (see turn_stream.py: segments,
+resume, Stop). The browser holds the conversation (the
 exact Anthropic `messages` list, thinking blocks included) and sends it back
 each turn; we append to it and never rewrite it, which keeps the prompt cache
 warm and keeps earlier thinking blocks valid. The server stores no transcript
@@ -12,16 +14,19 @@ table (schema changes go through hand-written DDL on this deployment). A
 user who edits their own history only affects their own chat, because every
 tool re-checks permissions server-side.
 
-SSE events sent to the browser:
-  text         {delta}                         streamed assistant text
+SSE events sent to the browser (each with a sequence number as the SSE id):
+  text         {delta, at}                     streamed assistant text; `at` = offset in the reply (UTF-16 units)
+  rewind       {to, dropTools}                 a failed model round is being retried: cut the text back, drop its chips
   tool         {id, name, label, status, error?}
   draft_patch  {patch, check}                  apply to the open permit form
   draft_check  {check}
   form_patch   {kind, patch}                    apply to the open observation form / HIRA entry editor
   people       {userIds}                       ids the browser may resolve to names
   action       {type: navigate|specialist|record, ...}   record = a HIRA study/entry the copilot saved
-  done         {appendMessages, replaceHistory?, usage, turnNumber}
+  done         {appendMessages, replaceHistory?, usage, turnNumber, stopped?}
   error        {message}
+  reconnect    {after}                         this stream segment is over; resume from `after`
+  end          {}                              the turn is over (sent after `done`)
 """
 
 from __future__ import annotations
@@ -30,7 +35,6 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -42,9 +46,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import AsyncSessionLocal
+from app.models._base import gen_id
 from app.models.agent import Agent, AgentInvocation, AgentPrompt, AgentToolCall
 from app.services.ai.redaction import redact_data, scrub_text
 from app.services.copilot import ptw_draft
+from app.services.copilot.photos import photo_summary, strip_photos
+from app.services.copilot.turn_stream import (
+    LOST_MESSAGE,
+    STOPPED_TEXT,
+    STOPPED_TYPE,
+    TurnExistsError,
+    TurnLog,
+)
 from app.services.copilot.tools import (
     TOOL_DEFINITIONS,
     TOOL_LABELS,
@@ -90,6 +103,10 @@ _ANSWER_NUDGE = (
 )
 
 _TOOLS_FOR_API: list[dict[str, Any]] = [{**t, "eager_input_streaming": True} for t in TOOL_DEFINITIONS]
+
+# Waits before retrying a model round that failed on a dropped connection,
+# overload or a 5xx (on top of the SDK's own retries when a request starts).
+_ROUND_RETRY_DELAYS: tuple[float, ...] = (3.0, 8.0, 20.0)
 
 
 def load_system_prompt() -> str:
@@ -238,7 +255,8 @@ def _strip_thinking(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def build_user_message(*, text: str, page: dict[str, Any], draft: dict[str, Any] | None,
                        now_local: str | None, tz_offset: int, user_plant_id: str | None,
                        user_id: str | None = None, form_kind: str | None = None,
-                       form_draft: dict[str, Any] | None = None) -> dict[str, Any]:
+                       form_draft: dict[str, Any] | None = None,
+                       photos: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     ctx: dict[str, Any] = {
         "path": page.get("path"),
         "module": page.get("module"),
@@ -260,10 +278,14 @@ def build_user_message(*, text: str, page: dict[str, Any], draft: dict[str, Any]
     elif form_kind == "HIRA_ENTRY" and form_draft is not None:
         ctx["hiraEntryOpen"] = True
         ctx["hiraEntryDraft"] = redact_data(form_draft)
+    if photos:
+        ctx["photosAttached"] = len(photos)
     return {
         "role": "user",
         "content": [
             {"type": "text", "text": "<page_context>\n" + json.dumps(ctx, default=str, ensure_ascii=False) + "\n</page_context>"},
+            # Photos sit before the text, as the API recommends for images.
+            *(photos or []),
             {"type": "text", "text": scrub_text(text) or "(empty message)"},
         ],
     }
@@ -307,7 +329,7 @@ def _request_options(model: str) -> tuple[dict[str, Any], dict[str, str]]:
 
 
 class CopilotTurn:
-    """Runs one turn and pushes SSE events onto a queue."""
+    """Runs one turn and records its SSE events in a TurnLog."""
 
     def __init__(
         self,
@@ -325,8 +347,17 @@ class CopilotTurn:
         tz_offset: int,
         form_kind: str | None = None,
         form_draft: dict[str, Any] | None = None,
+        turn_id: str | None = None,
+        photos: list[dict[str, Any]] | None = None,
     ) -> None:
-        self.queue: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
+        self.log = TurnLog()
+        # Also the audit row's id, so a retried request can't start the turn twice.
+        self.turn_id = turn_id or gen_id()
+        self.row_id: str | None = None
+        self.turn_number: str | None = None
+        self.stop_requested = False
+        self.finishing = False
+        self._round_tools: list[str] = []
         self.user_id = user_id
         self.agent_id = agent.id
         self.prompt_id = prompt.id
@@ -352,7 +383,9 @@ class CopilotTurn:
         self.user_message = build_user_message(
             text=self.user_text, page=page, draft=draft, now_local=now_local, tz_offset=tz_offset,
             user_plant_id=user_plant_id, user_id=user_id, form_kind=form_kind, form_draft=form_draft,
+            photos=photos,
         )
+        self.photos = list(photos or [])
         self.usage = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
         self.tool_records: list[dict[str, Any]] = []
         self.patches: list[dict[str, Any]] = []
@@ -362,15 +395,18 @@ class CopilotTurn:
             self.patches.append(data.get("patch") or {})
         elif event == "form_patch":
             self.patches.append({"form": data.get("kind"), **(data.get("patch") or {})})
-        await self.queue.put((event, data))
+        self.log.append(event, data)
 
     # The audit row is written before the model is called, so a turn that
     # dies mid-way still leaves a record (the reaper marks it TIMED_OUT).
+    # Its id is the turn id: a second insert with the same id is a retried
+    # request, reported as TurnExistsError.
     async def _open_audit_row(self) -> tuple[str, str]:
         async with AsyncSessionLocal() as db:
             for _ in range(3):
                 number = await _next_turn_number(db)
                 row = AgentInvocation(
+                    id=self.turn_id,
                     invocationNumber=number,
                     agentId=self.agent_id,
                     invokedById=self.user_id,
@@ -389,6 +425,7 @@ class CopilotTurn:
                         "ptwDraftBefore": redact_data(self.ctx.draft) if self.ctx.draft is not None else None,
                         "formKind": self.ctx.form_kind,
                         "formDraftBefore": redact_data(self.ctx.form_draft) if self.ctx.form_draft is not None else None,
+                        "photos": photo_summary(self.photos),
                     },
                     status="RUNNING",
                 )
@@ -398,6 +435,11 @@ class CopilotTurn:
                     return row.id, number
                 except IntegrityError:
                     await db.rollback()
+                    taken = (await db.execute(
+                        select(AgentInvocation.id).where(AgentInvocation.id == self.turn_id)
+                    )).scalar_one_or_none()
+                    if taken is not None:
+                        raise TurnExistsError(self.turn_id) from None
             raise RuntimeError("could not allocate a copilot turn number")
 
     async def _close_audit_row(self, row_id: str, *, started: float, error: str | None,
@@ -414,10 +456,13 @@ class CopilotTurn:
                         "draftPatches": self.patches,
                         "specialistsStarted": self.ctx.specialists_started,
                         "usage": self.usage,
+                        # What the browser was sent, so another worker can still
+                        # serve a reconnect after the turn has finished.
+                        "stream": self.log.snapshot(done=True),
                     },
                     "rawApiResponse": last_response,
                     "hadError": bool(error),
-                    "errorType": "API_ERROR" if error else None,
+                    "errorType": (STOPPED_TYPE if self.stop_requested else "API_ERROR") if error else None,
                     "errorDetails": error[:2000] if error else None,
                 }
                 log.info(
@@ -441,33 +486,45 @@ class CopilotTurn:
         last_response: dict[str, Any] | None = None
         new_messages: list[dict[str, Any]] = [self.user_message]
         replace_history: list[dict[str, Any]] | None = None
-        turn_number = None
-        row_id = None
+        stopped = False
         try:
-            row_id, turn_number = await self._open_audit_row()
+            if self.row_id is None:  # start_turn() normally opens it first
+                self.row_id, self.turn_number = await self._open_audit_row()
             last_response, replace_history = await self._loop(new_messages)
         except asyncio.CancelledError:
-            error = "Client disconnected"
+            # Stop button, or the worker shutting down. Closing a connection no
+            # longer cancels a turn.
+            stopped = True
+            error = STOPPED_TEXT if self.stop_requested else "The server stopped while answering"
+            if not self.stop_requested:
+                self.log.append("error", {"message": LOST_MESSAGE})
             raise
         except Exception as e:  # noqa: BLE001
             error = _friendly_error(e)
             log.warning("copilot turn failed: %s", e)
-            await self.queue.put(("error", {"message": error}))
+            self.log.append("error", {"message": error})
         finally:
-            if row_id:
-                await self._close_audit_row(row_id, started=started, error=error, last_response=last_response)
-            if error != "Client disconnected":
-                # A turn that failed before the model answered leaves the
-                # transcript as it was, so the user can simply resend.
-                append = new_messages if (not error or len(new_messages) > 1) else []
-                await self.queue.put(("done", {
-                    "appendMessages": append,
-                    "replaceHistory": replace_history,
-                    "usage": {**self.usage, "costUsd": _cost(self.model, self.usage)},
-                    "turnNumber": turn_number,
-                    "model": self.model,
-                }))
-            await self.queue.put(None)
+            self.finishing = True
+            # A stopped turn, or one that failed before the model answered,
+            # leaves the transcript as it was, so the user can simply resend.
+            append = [] if stopped else (new_messages if (not error or len(new_messages) > 1) else [])
+            # Photos go to the model in this turn only; the browser keeps a note.
+            append = [strip_photos(m) if i == 0 else m for i, m in enumerate(append)]
+            done: dict[str, Any] = {
+                "appendMessages": append,
+                "replaceHistory": None if stopped else replace_history,
+                "usage": {**self.usage, "costUsd": _cost(self.model, self.usage)},
+                "turnNumber": self.turn_number,
+                "model": self.model,
+            }
+            if stopped:
+                done["stopped"] = True
+            self.log.append("done", done)
+            try:
+                if self.row_id:
+                    await self._close_audit_row(self.row_id, started=started, error=error, last_response=last_response)
+            finally:
+                self.log.finish()
 
     async def _loop(self, new_messages: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
         import anthropic  # noqa: PLC0415
@@ -475,7 +532,14 @@ class CopilotTurn:
         settings = get_settings()
         if not settings.anthropic_api_key:
             raise RuntimeError("AI is not configured on this server (ANTHROPIC_API_KEY missing)")
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=180.0, max_retries=1)
+        import httpx  # noqa: PLC0415
+
+        # The read timeout is the longest silence allowed inside a stream (the
+        # API sends pings), not a cap on the answer. A silent connection is
+        # dropped and the round retried below.
+        client = anthropic.AsyncAnthropic(
+            api_key=settings.anthropic_api_key, timeout=httpx.Timeout(180.0, connect=20.0), max_retries=3,
+        )
         extra_body, headers = _request_options(self.model)
         system = [{"type": "text", "text": self.system_prompt, "cache_control": {"type": "ephemeral"}}]
         history = list(self.history)
@@ -485,17 +549,22 @@ class CopilotTurn:
         nudged = False
         json_retries = 0
         truncation_retries = 0
+        round_failures = 0
 
         iteration = 0
         while iteration < settings.copilot_max_iterations:
             iteration += 1
             messages = history + new_messages
+            text_mark = self.log.text_len
+            self._round_tools = []
             try:
                 final = await self._stream_once(client, system, messages, extra_body, headers)
                 json_retries = 0
+                round_failures = 0
             except ValueError:
                 # Tool-input JSON the SDK could not parse (eager input streaming).
                 # No tool_use id to answer, so re-issue the request (bounded).
+                self.log.rewind(text_mark, self._round_tools)
                 json_retries += 1
                 if json_retries > 2:
                     raise
@@ -511,6 +580,19 @@ class CopilotTurn:
                     iteration -= 1
                     continue
                 raise
+            except Exception as e:  # noqa: BLE001
+                # Dropped connection, overload, 5xx — possibly half-way through
+                # the reply. Undo what this round showed and run it again.
+                if not _is_transient(e) or round_failures >= len(_ROUND_RETRY_DELAYS):
+                    raise
+                delay = _ROUND_RETRY_DELAYS[round_failures]
+                round_failures += 1
+                log.warning("copilot round failed (%s: %s); retry %s in %.0fs",
+                            type(e).__name__, e, round_failures, delay)
+                self.log.rewind(text_mark, self._round_tools)
+                await asyncio.sleep(delay)
+                iteration -= 1
+                continue
 
             last_dump = final.model_dump(mode="json", exclude_none=True)
             u = final.usage
@@ -592,6 +674,7 @@ class CopilotTurn:
                     block = getattr(event, "content_block", None)
                     if getattr(block, "type", None) == "tool_use" and block.id not in announced:
                         announced.add(block.id)
+                        self._round_tools.append(block.id)
                         await self._emit("tool", {"id": block.id, "name": block.name,
                                                   "label": TOOL_LABELS.get(block.name, block.name), "status": "pending"})
             return await stream.get_final_message()
@@ -644,6 +727,8 @@ def _friendly_error(e: Exception) -> str:
         if isinstance(e, anthropic.APIConnectionError):
             return "Could not reach the AI service. Check the connection and try again."
         if isinstance(e, anthropic.APIStatusError):
+            if _is_transient(e):
+                return "The AI service is busy right now. Try again in a minute."
             return f"The AI service returned an error ({e.status_code}). Try again."
     except ImportError:
         pass
@@ -651,32 +736,28 @@ def _friendly_error(e: Exception) -> str:
     return msg if msg.startswith("AI is not configured") else "Something went wrong running the copilot. Try again."
 
 
-def _sse(event: str, data: dict[str, Any]) -> bytes:
-    return f"event: {event}\ndata: {json.dumps(data, default=str, ensure_ascii=False)}\n\n".encode()
+_TRANSIENT_ERROR_TYPES = {"overloaded_error", "api_error", "rate_limit_error", "timeout_error"}
 
 
-async def stream_turn(turn: CopilotTurn) -> AsyncIterator[bytes]:
-    """Drive the turn as a task and relay its events. A keepalive comment every
-    15 s stops proxies from closing a quiet connection while a tool runs."""
-    task = asyncio.create_task(turn.run())
+def _is_transient(e: BaseException) -> bool:
+    """Worth running the same model round again: a dropped or silent
+    connection, overload, rate limit or 5xx — including errors the API sends
+    half-way through a stream (HTTP 200 with an `error` event)."""
     try:
-        yield b": open\n\n"
-        while True:
-            try:
-                item = await asyncio.wait_for(turn.queue.get(), timeout=15)
-            except asyncio.TimeoutError:
-                yield b": ping\n\n"
-                continue
-            if item is None:
-                break
-            yield _sse(*item)
-    finally:
-        if not task.done():
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                pass
+        import anthropic  # noqa: PLC0415
+        import httpx  # noqa: PLC0415
+    except ImportError:
+        return False
+    if isinstance(e, (anthropic.APIConnectionError, httpx.TransportError)):
+        return True
+    if isinstance(e, anthropic.APIStatusError):
+        code = getattr(e, "status_code", 0) or 0
+        if code in (408, 409, 429) or code >= 500:
+            return True
+        body = getattr(e, "body", None)
+        err = body.get("error") if isinstance(body, dict) else None
+        return isinstance(err, dict) and err.get("type") in _TRANSIENT_ERROR_TYPES
+    return False
 
 
 __all__ = [
@@ -686,6 +767,5 @@ __all__ = [
     "ensure_copilot_agent",
     "load_system_prompt",
     "ptw_draft",
-    "stream_turn",
     "validate_history",
 ]

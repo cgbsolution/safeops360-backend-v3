@@ -1,18 +1,22 @@
 """SafeOps Copilot endpoint.
 
-  POST /api/copilot/chat   one user turn, streamed back as Server-Sent Events
-  GET  /api/copilot/status whether the copilot is available to this user
+  POST /api/copilot/chat                     start one user turn (or join it, on a
+                                             retry with the same turnId) and stream it
+  GET  /api/copilot/chat/{turnId}/events     resume the stream after event `after`
+  POST /api/copilot/chat/{turnId}/cancel     Stop button
+  GET  /api/copilot/status                   whether the copilot is available to this user
 
 Auth, licence (AI_ASSIST), rate limit and request validation all happen
 before the stream opens, so failures there are ordinary HTTP errors. Inside
-the stream every tool re-checks the user's permissions on its own.
+the stream every tool re-checks the user's permissions on its own. A turn
+runs on its own and is not tied to any one stream (see turn_stream.py).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,18 +24,50 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.deps import get_current_user
+from app.models._base import gen_id
 from app.models.user import User
 from app.services.ai.anthropic_client import is_configured
-from app.services.copilot import form_drafts, ptw_draft
+from app.services.copilot import form_drafts, photos, ptw_draft
 from app.services.copilot.runtime import (
+    SOURCE_MODULE,
     CopilotTurn,
     enforce_rate_limit,
     ensure_copilot_agent,
-    stream_turn,
     validate_history,
+)
+from app.services.copilot.turn_stream import (
+    GONE_MESSAGE,
+    SEGMENT_SECONDS,
+    TURN_ID_PATTERN,
+    TurnExistsError,
+    find_turn,
+    request_stop,
+    start_turn,
+    stream_events,
 )
 
 router = APIRouter(prefix="/api/copilot", tags=["copilot"])
+
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache, no-transform",
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+}
+
+
+def _segment_seconds() -> float:
+    seconds = getattr(get_settings(), "copilot_stream_segment_seconds", None)
+    return float(seconds or SEGMENT_SECONDS)
+
+
+def _own_turn(row: Any, user_id: str) -> bool:
+    return row is not None and row.sourceModule == SOURCE_MODULE and row.invokedById == user_id
+
+
+async def _release(db: AsyncSession) -> None:
+    """End the request's transaction before streaming, so a stream that runs
+    for minutes doesn't hold a pooled DB connection."""
+    await db.commit()
 
 
 class PageContext(BaseModel):
@@ -55,6 +91,13 @@ class CopilotTurnRequest(BaseModel):
     formDraft: dict[str, Any] | None = None
     nowLocal: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
     timezoneOffsetMinutes: int = Field(default=0, ge=-840, le=840)
+    # Picked by the browser, so a retried request joins the turn it already
+    # started instead of starting a second one. Optional for older clients.
+    turnId: str | None = Field(default=None, pattern=TURN_ID_PATTERN)
+    # Photos the user attached (upload or camera), downscaled JPEG in the
+    # browser: [{"mediaType": "image/jpeg", "data": "<base64>"}]. Checked by
+    # photos.validate_photos before the turn starts.
+    images: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
 
 
 @router.get("/status")
@@ -111,34 +154,79 @@ async def copilot_chat(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "AI is not configured on this server.")
 
     history = validate_history(payload.messages)
+    photo_blocks = photos.validate_photos(payload.images)
     agent, prompt = await ensure_copilot_agent(db, user.id)
     if not agent.isActive:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "The copilot has been disabled by an administrator.")
-    await enforce_rate_limit(db, agent, user.id)
+    user_id = user.id
+    turn_id = payload.turnId or gen_id()
 
-    draft = ptw_draft.normalise_client_draft(payload.ptwDraft) if payload.ptwDraft is not None else None
-    form_kind, form_draft = form_drafts.normalise_client_form(payload.formDraft)
-    turn = CopilotTurn(
-        user_id=user.id,
-        user_plant_id=user.plantId,
-        agent=agent,
-        prompt=prompt,
-        conversation_id=payload.conversationId,
-        history=history,
-        user_text=payload.message,
-        page=payload.page.model_dump(),
-        draft=draft,
-        now_local=payload.nowLocal[:16] if payload.nowLocal else None,
-        tz_offset=payload.timezoneOffsetMinutes,
-        form_kind=form_kind,
-        form_draft=form_draft,
-    )
+    existing = await find_turn(db, turn_id)
+    if existing is None:
+        await enforce_rate_limit(db, agent, user_id)
+        draft = ptw_draft.normalise_client_draft(payload.ptwDraft) if payload.ptwDraft is not None else None
+        form_kind, form_draft = form_drafts.normalise_client_form(payload.formDraft)
+        turn = CopilotTurn(
+            user_id=user_id,
+            user_plant_id=user.plantId,
+            agent=agent,
+            prompt=prompt,
+            conversation_id=payload.conversationId,
+            history=history,
+            user_text=payload.message,
+            page=payload.page.model_dump(),
+            draft=draft,
+            now_local=payload.nowLocal[:16] if payload.nowLocal else None,
+            tz_offset=payload.timezoneOffsetMinutes,
+            form_kind=form_kind,
+            form_draft=form_draft,
+            turn_id=turn_id,
+            photos=photo_blocks,
+        )
+        try:
+            await start_turn(turn)
+        except TurnExistsError:
+            existing = await find_turn(db, turn_id)  # a retry of this request got there first
+    if existing is not None and not _own_turn(existing, user_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That turn id is taken. Send the message again.")
+
+    await _release(db)
     return StreamingResponse(
-        stream_turn(turn),
+        stream_events(turn_id, user_id, segment_seconds=_segment_seconds()),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        },
+        headers=_SSE_HEADERS,
     )
+
+
+@router.get("/chat/{turn_id}/events")
+async def copilot_turn_events(
+    turn_id: str = Path(pattern=TURN_ID_PATTERN),
+    after: int = Query(default=0, ge=0),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Carry on streaming a turn after event `after` (a new segment, or after a
+    dropped connection). Works on any worker."""
+    user_id = user.id
+    if not _own_turn(await find_turn(db, turn_id), user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, GONE_MESSAGE)
+    await _release(db)
+    return StreamingResponse(
+        stream_events(turn_id, user_id, after=after, segment_seconds=_segment_seconds()),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
+
+
+@router.post("/chat/{turn_id}/cancel")
+async def copilot_turn_cancel(
+    turn_id: str = Path(pattern=TURN_ID_PATTERN),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Stop button. Closing the panel or the tab does not stop a turn."""
+    user_id = user.id
+    if not _own_turn(await find_turn(db, turn_id), user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such copilot turn.")
+    await _release(db)
+    return {"stopped": await request_stop(turn_id, user_id)}

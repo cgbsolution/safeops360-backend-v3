@@ -65,6 +65,7 @@ def normalise_client_form(raw: Any) -> tuple[str | None, dict[str, Any] | None]:
             "severityReason": _s(d.get("severityReason"), 500), "suggestedSeverity": _enum(d.get("suggestedSeverity"), SEVERITIES),
             "description": _s(d.get("description"), 4000), "immediateAction": _s(d.get("immediateAction"), 2000),
             "contractorInvolved": bool(d.get("contractorInvolved")), "workersNamed": _int(d.get("workersNamed"), 0, 50) or 0,
+            "photoCount": _int(d.get("photoCount"), 0, 20) or 0,
             "areas": [{"areaId": _s(a.get("areaId"), 64), "name": _s(a.get("name"), 120)}
                       for a in (d.get("areas") or [])[:80] if isinstance(a, dict)],
         }
