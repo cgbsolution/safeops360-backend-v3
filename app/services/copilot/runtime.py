@@ -532,13 +532,13 @@ class CopilotTurn:
         settings = get_settings()
         if not settings.anthropic_api_key:
             raise RuntimeError("AI is not configured on this server (ANTHROPIC_API_KEY missing)")
-        import httpx  # noqa: PLC0415
-
         # The read timeout is the longest silence allowed inside a stream (the
         # API sends pings), not a cap on the answer. A silent connection is
-        # dropped and the round retried below.
+        # dropped and the round retried below. `anthropic.Timeout` is the SDK's
+        # own class: httpx's on SDK 0.x, httpx2's on 1.x and later. A plain
+        # `httpx.Timeout` is refused by 1.x+ and fails every turn.
         client = anthropic.AsyncAnthropic(
-            api_key=settings.anthropic_api_key, timeout=httpx.Timeout(180.0, connect=20.0), max_retries=3,
+            api_key=settings.anthropic_api_key, timeout=anthropic.Timeout(180.0, connect=20.0), max_retries=3,
         )
         extra_body, headers = _request_options(self.model)
         system = [{"type": "text", "text": self.system_prompt, "cache_control": {"type": "ephemeral"}}]
@@ -739,16 +739,28 @@ def _friendly_error(e: Exception) -> str:
 _TRANSIENT_ERROR_TYPES = {"overloaded_error", "api_error", "rate_limit_error", "timeout_error"}
 
 
+def _transport_errors() -> tuple[type[BaseException], ...]:
+    """A dropped connection as the HTTP library raises it mid-stream: httpx2's
+    (SDK 1.x and later) and httpx's (SDK 0.x), whichever are installed."""
+    found: list[type[BaseException]] = []
+    for name in ("httpx2", "httpx"):
+        try:
+            module = __import__(name)
+        except ImportError:
+            continue
+        found.append(module.TransportError)
+    return tuple(found)
+
+
 def _is_transient(e: BaseException) -> bool:
     """Worth running the same model round again: a dropped or silent
     connection, overload, rate limit or 5xx — including errors the API sends
     half-way through a stream (HTTP 200 with an `error` event)."""
     try:
         import anthropic  # noqa: PLC0415
-        import httpx  # noqa: PLC0415
     except ImportError:
         return False
-    if isinstance(e, (anthropic.APIConnectionError, httpx.TransportError)):
+    if isinstance(e, (anthropic.APIConnectionError, *_transport_errors())):
         return True
     if isinstance(e, anthropic.APIStatusError):
         code = getattr(e, "status_code", 0) or 0
