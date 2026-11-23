@@ -49,7 +49,7 @@ from app.core.db import AsyncSessionLocal
 from app.models._base import gen_id
 from app.models.agent import Agent, AgentInvocation, AgentPrompt, AgentToolCall
 from app.services.ai.redaction import redact_data, scrub_text
-from app.services.copilot import ptw_draft
+from app.services.copilot import form_drafts, ptw_draft
 from app.services.copilot.photos import photo_summary, strip_photos
 from app.services.copilot.turn_stream import (
     LOST_MESSAGE,
@@ -278,6 +278,9 @@ def build_user_message(*, text: str, page: dict[str, Any], draft: dict[str, Any]
     elif form_kind == "HIRA_ENTRY" and form_draft is not None:
         ctx["hiraEntryOpen"] = True
         ctx["hiraEntryDraft"] = redact_data(form_draft)
+    elif form_kind and form_draft is not None:
+        # Any other form, as it describes itself (fields, options, current values).
+        ctx["openForm"] = {"kind": form_kind, **redact_data(form_drafts.described_form_for_model(form_draft))}
     if photos:
         ctx["photosAttached"] = len(photos)
     return {

@@ -3,6 +3,9 @@ fpdf2
 # binaries — the airgapped deployment constraint rules out LibreOffice headless.
 python-pptx>=1.0.0
 openpyxl>=3.1.0
+# Knowledge bank text extraction + PTW paper-permit scan fallback.
+pypdf>=4.0
+python-docx>=1.1
 
 # zoneinfo has no tz database on Windows (and on slim Linux images without
 # tzdata), so report timestamps silently fell back to UTC while labelled IST.

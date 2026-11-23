@@ -23,7 +23,9 @@ dependencies = [
   "anthropic>=0.100.0,<3",  # tested on 0.100.0 and 2.2.0; 1.x+ removed temperature/top_p/top_k
   "fpdf2>=2.7.0",       # ERM report PDF export (§10f)
   "python-pptx>=1.0.0", # EHS Scorecard deck export — pure-Python, airgap-safe
-  "openpyxl>=3.1.0"     # ERM report Excel (.xlsx) export (§10f)
+  "openpyxl>=3.1.0",    # ERM report Excel (.xlsx) export (§10f)
+  "pypdf>=4.0",         # Knowledge bank text extraction + PTW paper-permit scan fallback
+  "python-docx>=1.1"    # Knowledge bank DOCX text extraction
 ]
 
 [project.optional-dependencies]

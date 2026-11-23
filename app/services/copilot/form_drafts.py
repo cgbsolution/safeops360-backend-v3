@@ -1,10 +1,19 @@
-"""Observation-form and HIRA-entry drafts the copilot can read and suggest into.
+"""Form drafts the copilot can read and suggest into.
 
 The browser sends the open form's current state with each turn (`formDraft`),
-the copilot proposes changes through `update_observation_draft` /
-`update_hira_entry_draft`, and the form applies them live. Nothing is saved by
-the copilot: the user still presses Submit / Save, and the normal endpoints
+the copilot proposes changes, and the form applies them live. Nothing is saved
+by the copilot: the user still presses Submit / Save, and the normal endpoints
 re-validate everything.
+
+Two kinds of form:
+  * the observation form and the HIRA entry editor, which have their own tools
+    (`update_observation_draft`, `update_hira_entry_draft`) and checks;
+  * any other form (near miss, incident, CAPA, ...), which describes itself
+    field by field (label, type, the options of each dropdown, current value)
+    through the frontend's `useCopilotForm`. The copilot fills it with
+    `update_form_draft`, checked here against that description: a dropdown
+    takes only one of its own options, so the copilot can't invent a master
+    record, and a field the form didn't list can't be set.
 
 The HIRA what-if (`assess_controls`) reuses the HIRA router's own residual
 model (`_suggest_residual_scores`), matrix cells and ALARP banding, so the
@@ -13,9 +22,12 @@ numbers the copilot quotes are the numbers the editor shows.
 
 from __future__ import annotations
 
+import re
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
+# Forms with their own tools. Every other kind is a described form.
 FORM_KINDS = ("OBSERVATION", "HIRA_ENTRY")
 OBS_TYPES = ("SAFE_ACT", "UNSAFE_ACT", "SAFE_CONDITION", "UNSAFE_CONDITION")
 SEVERITIES = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
@@ -53,10 +65,16 @@ def normalise_client_form(raw: Any) -> tuple[str | None, dict[str, Any] | None]:
     """Whitelist and clip the browser's form snapshot. Returns (kind, draft)."""
     if not isinstance(raw, dict):
         return None, None
-    kind = _enum(raw.get("kind"), FORM_KINDS)
     d = raw.get("draft")
-    if kind is None or not isinstance(d, dict):
+    if not isinstance(d, dict):
         return None, None
+    described = str(raw.get("kind") or "").strip().upper()
+    if described not in FORM_KINDS:
+        if not _KIND_RE.match(described):
+            return None, None
+        form = normalise_described_form(d)
+        return (described, form) if form else (None, None)
+    kind = described
     if kind == "OBSERVATION":
         return kind, {
             "plantId": _s(d.get("plantId"), 64), "areaId": _s(d.get("areaId"), 64), "areaName": _s(d.get("areaName"), 120),
@@ -99,6 +117,244 @@ def normalise_client_form(raw: Any) -> tuple[str | None, dict[str, Any] | None]:
         # over this entry (it would overwrite them).
         "dirty": d.get("dirty") is True,
     }
+
+
+# ─── Described forms (near miss, incident, CAPA, ...) ────────────────────
+
+FIELD_TYPES = ("text", "textarea", "select", "multiselect", "datetime", "date", "number", "boolean")
+_KIND_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,39}$")
+_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,47}$")
+MAX_FIELDS = 80
+MAX_OPTIONS = 400
+MAX_TEXT = 4000
+# Options shown to the model per field (all of them are still checked).
+MODEL_OPTIONS = 150
+
+
+def _num(v: Any) -> float | int | None:
+    if isinstance(v, bool) or v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if f != f or f in (float("inf"), float("-inf")):  # NaN / inf
+        return None
+    return int(f) if f.is_integer() else f
+
+
+def _client_value(ftype: str, v: Any) -> Any:
+    """The form's current value, clipped to its type (never rejected: it is the user's)."""
+    if ftype == "multiselect":
+        return [str(x)[:80] for x in (v if isinstance(v, list) else [])[:50] if x is not None]
+    if ftype == "number":
+        return _num(v)
+    if ftype == "boolean":
+        return v if isinstance(v, bool) else None
+    return None if v is None else str(v)[:MAX_TEXT]
+
+
+def _described_field(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    name = str(raw.get("name") or "")
+    ftype = str(raw.get("type") or "")
+    if not _NAME_RE.match(name) or ftype not in FIELD_TYPES:
+        return None
+    field: dict[str, Any] = {"name": name, "label": _s(raw.get("label"), 100) or name, "type": ftype,
+                             "value": _client_value(ftype, raw.get("value"))}
+    if raw.get("required") is True:
+        field["required"] = True
+    if raw.get("readOnly") is True:
+        field["readOnly"] = True
+    if (help_ := _s(raw.get("help"), 300)) is not None:
+        field["help"] = help_
+    dep = str(raw.get("dependsOn") or "")
+    if _NAME_RE.match(dep):
+        field["dependsOn"] = dep
+    for k in ("min", "max"):
+        if (n := _num(raw.get(k))) is not None:
+            field[k] = n
+    for k in ("minLength", "maxLength"):
+        n = _int(raw.get(k), 0, MAX_TEXT)
+        if n is not None:
+            field[k] = n
+    if ftype in ("select", "multiselect"):
+        seen: set[str] = set()
+        options = []
+        for o in (raw.get("options") or [])[:MAX_OPTIONS]:
+            if not isinstance(o, dict):
+                continue
+            value = _s(o.get("value"), 80)
+            if value is None or value in seen:
+                continue
+            seen.add(value)
+            options.append({"value": value, "label": _s(o.get("label"), 160) or value})
+        field["options"] = options
+    return field
+
+
+def normalise_described_form(d: dict[str, Any]) -> dict[str, Any] | None:
+    """A form's own description of itself: title and fields (with their current values)."""
+    fields: list[dict[str, Any]] = []
+    names: set[str] = set()
+    for raw in (d.get("fields") or [])[:MAX_FIELDS]:
+        f = _described_field(raw)
+        if f and f["name"] not in names:
+            names.add(f["name"])
+            fields.append(f)
+    if not fields:
+        return None
+    return {"title": _s(d.get("title"), 120) or "form", "fields": fields}
+
+
+def described_form_for_model(form: dict[str, Any]) -> dict[str, Any]:
+    """The form as the model reads it: compact, options as [value, label] pairs."""
+    out = []
+    for f in form.get("fields") or []:
+        v: dict[str, Any] = {k: f[k] for k in ("name", "label", "type", "value") if k in f}
+        for k in ("required", "readOnly", "help", "dependsOn", "min", "max", "minLength", "maxLength"):
+            if k in f:
+                v[k] = f[k]
+        if "options" in f:
+            opts = f["options"]
+            v["options"] = [[o["value"], o["label"]] for o in opts[:MODEL_OPTIONS]]
+            if len(opts) > MODEL_OPTIONS:
+                v["moreOptions"] = len(opts) - MODEL_OPTIONS
+            if not opts:
+                v["options"] = []
+                v["note"] = "no options loaded yet"
+        out.append(v)
+    return {"title": form.get("title"), "fields": out}
+
+
+def _match_option(field: dict[str, Any], v: Any) -> str | None:
+    """An option's value from its value or (case-insensitively) its label."""
+    t = str(v).strip()
+    opts = field.get("options") or []
+    for o in opts:
+        if o["value"] == t:
+            return o["value"]
+    low = t.lower()
+    hits = [o["value"] for o in opts if o["label"].strip().lower() == low]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _option_hint(field: dict[str, Any]) -> str:
+    opts = field.get("options") or []
+    if not opts:
+        return f"{field['label']} has no options loaded on the form yet"
+    shown = ", ".join(f"{o['value']} ({o['label']})" if o["value"] != o["label"] else o["value"] for o in opts[:12])
+    more = f" and {len(opts) - 12} more" if len(opts) > 12 else ""
+    return f"use one of {field['label']}'s options: {shown}{more}"
+
+
+def _check_value(field: dict[str, Any], v: Any) -> tuple[Any, str | None]:
+    """(value to apply, error). None / "" clears the field."""
+    label, ftype = field["label"], field["type"]
+    if v is None or v == "" or v == []:
+        if ftype == "multiselect":
+            return [], None
+        return (None if ftype in ("number", "boolean") else ""), None
+    if ftype in ("text", "textarea"):
+        t = str(v).strip()
+        if field.get("minLength") and len(t) < field["minLength"]:
+            return None, f"{label} needs at least {field['minLength']} characters"
+        cap = field.get("maxLength") or MAX_TEXT
+        if len(t) > cap:
+            return None, f"{label} takes at most {cap} characters (you sent {len(t)})"
+        return t, None
+    if ftype == "select":
+        hit = _match_option(field, v)
+        return (hit, None) if hit is not None else (None, f"{v!r} is not an option: {_option_hint(field)}")
+    if ftype == "multiselect":
+        items = v if isinstance(v, list) else [v]
+        out, bad = [], []
+        for x in items:
+            hit = _match_option(field, x)
+            if hit is None:
+                bad.append(repr(x))
+            elif hit not in out:
+                out.append(hit)
+        return (out, None) if not bad else (None, f"{', '.join(bad)} not an option: {_option_hint(field)}")
+    if ftype == "number":
+        n = _num(v)
+        if n is None:
+            return None, f"{label} must be a number"
+        if ("min" in field and n < field["min"]) or ("max" in field and n > field["max"]):
+            return None, f"{label} must be between {field.get('min', '-')} and {field.get('max', '-')}"
+        return n, None
+    if ftype == "boolean":
+        if isinstance(v, bool):
+            return v, None
+        t = str(v).strip().lower()
+        if t in ("true", "yes", "y", "1"):
+            return True, None
+        if t in ("false", "no", "n", "0"):
+            return False, None
+        return None, f"{label} must be true or false"
+    fmt, shape = ("%Y-%m-%dT%H:%M", "YYYY-MM-DDTHH:MM") if ftype == "datetime" else ("%Y-%m-%d", "YYYY-MM-DD")
+    t = str(v).strip()[:16 if ftype == "datetime" else 10]
+    try:
+        datetime.strptime(t, fmt)
+    except ValueError:
+        return None, f"{label} must be local time as {shape}"
+    return t, None
+
+
+def parse_described_patch(form: dict[str, Any], values: Any) -> tuple[dict[str, Any], dict[str, str], list[str], str | None]:
+    """Check the copilot's values against the form's own description.
+
+    Returns (patch, labels, skipped, error). On any error nothing is applied, so
+    the copilot fixes the values and sends them again. A field whose options
+    depend on another field the same patch changes (an area when the plant
+    changes) is left out: its options reload on the form first.
+    """
+    if not isinstance(values, dict) or not values:
+        return {}, {}, [], "Send values as an object of field name to value, e.g. {\"description\": \"...\"}"
+    fields = {f["name"]: f for f in form.get("fields") or []}
+    patch: dict[str, Any] = {}
+    labels: dict[str, str] = {}
+    errs: list[str] = []
+    for name, v in values.items():
+        field = fields.get(name)
+        if field is None:
+            errs.append(f"{name!r} is not a field on this form (fields: {', '.join(fields)})")
+            continue
+        if field.get("readOnly"):
+            errs.append(f"{field['label']} is read only")
+            continue
+        out, err = _check_value(field, v)
+        if err:
+            errs.append(err)
+            continue
+        patch[name] = out
+        labels[name] = field["label"]
+    if errs:
+        return {}, {}, [], "Nothing was changed: " + "; ".join(errs[:12])
+    skipped: list[str] = []
+    for name in list(patch):
+        dep = fields[name].get("dependsOn")
+        if dep and dep in patch and patch[dep] != fields[dep].get("value"):
+            skipped.append(f"{fields[name]['label']} (its options reload after {fields[dep]['label']} changes; "
+                           "set it on your next turn or ask the user)")
+            del patch[name]
+            del labels[name]
+    if not patch:
+        return {}, {}, skipped, "Nothing to change" if not skipped else None
+    return patch, labels, skipped, None
+
+
+def apply_described_patch(form: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    """The form as it will be after the patch (the next tool call in this turn sees it)."""
+    return {**form, "fields": [{**f, "value": patch[f["name"]]} if f["name"] in patch else f
+                               for f in form.get("fields") or []]}
+
+
+def missing_required(form: dict[str, Any]) -> list[str]:
+    """Labels of required fields that are still empty."""
+    return [f["label"] for f in form.get("fields") or []
+            if f.get("required") and f.get("value") in (None, "", [])]
 
 
 # ─── Observation patch ──────────────────────────────────────────────────

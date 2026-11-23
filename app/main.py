@@ -57,6 +57,15 @@ from app.routers import (
     factory_ext,
     fire_safety,
     flow_analytics,
+    csm,
+    csm_ops,
+    csm_portal,
+    ims,
+    integrations,
+    knowledge_bank,
+    pha,
+    psi,
+    pssr,
     scorecard,
     form_engine,
     plants,
@@ -79,6 +88,7 @@ from app.routers import (
     notifications,
     observation_deroster,
     observation_severity,
+    observation_reporting,
     observation_sla,
     observation_taxonomy,
     observations,
@@ -86,6 +96,7 @@ from app.routers import (
     ppe,
     ptw,
     ptw_active,
+    ptw_cc,
     ptw_annexures,
     ptw_lifecycle,
     ptw_reports,
@@ -115,6 +126,9 @@ _ROUTERS = {
     # order, and observations.py owns `GET /api/observations/{observation_id}`,
     # which would otherwise swallow `/api/observations/sla-config` and resolve
     # it as an observation id.
+    # Snap & Report + Live dashboard. MUST precede "observations": that router
+    # owns GET /api/observations/{observation_id}, which would swallow /live.
+    "observation_reporting": observation_reporting,
     "observation_sla": observation_sla,
     # Same ordering constraint: owns `/api/observations/severity-suggestion`,
     # which `observations` would otherwise match as `/{observation_id}`.
@@ -140,6 +154,10 @@ _ROUTERS = {
     # {token}) — see the docstring there for why, and for the three properties
     # that make it safe.
     "loto": loto,
+    # PTW control center / insights / scan. MUST precede "ptw": ptw.py owns
+    # GET /api/ptw/{permit_id}, which would otherwise swallow /control-center
+    # and /insights as permit ids.
+    "ptw_cc": ptw_cc,
     "ptw": ptw, "ptw_active": ptw_active, "ptw_lifecycle": ptw_lifecycle,
     "ptw_reports": ptw_reports,
     # Hazard annexures + precaution checklists. Same PTW licence module as the
@@ -230,6 +248,27 @@ _ROUTERS = {
     # module IS registered in the licensing model (registry/editions) — add
     # "fire_safety": "FIRE" to ROUTER_MODULE once a FIRE-inclusive licence is issued.
     "fire_safety": fire_safety,
+    # IMS / MIS governance registers + dashboard (JSL Hisar #8): toolbox talks,
+    # show cause notices, safety meetings + MOM tracker. Mounted ungated for the
+    # fire_safety reason (a new licence module code would 403 under the dev
+    # licence); per-endpoint IMS.* RBAC is the gate.
+    "ims": ims,
+    # PHA / HAZOP studies (JSL Hisar #3). Ungated like ims; PHA.* RBAC per endpoint.
+    "pha": pha,
+    # PSSR (standalone + MOC-linked) and PSI / Chem advisor (JSL Hisar #6, #9).
+    # Ungated like ims; PSSR.* / PSI.* RBAC per endpoint.
+    "pssr": pssr, "psi": psi,
+    # Contractor Safety Management for plant contractors (JSL Hisar #4).
+    # csm / csm_ops: CSM.* RBAC per endpoint. csm_portal is UNAUTHENTICATED by
+    # design (supplier_portal precedent): a contractor holds no seat, so access
+    # is a hashed, expiring, revocable single-prequalification token.
+    "csm": csm, "csm_ops": csm_ops, "csm_portal": csm_portal,
+    # Knowledge bank (JSL Hisar #10): company-wide document library + Q&A.
+    # Ungated like ims; KB.* RBAC per endpoint (KB.READ granted to every role).
+    "knowledge_bank": knowledge_bank,
+    # Integration connectors (JSL SAS observations). INTEGRATION.* RBAC per
+    # endpoint; the inbound route authenticates by API key (env INTEGRATION_*).
+    "integrations": integrations,
     # Guided Field Capture (CAPTURE module) — same dev-licence situation as
     # fire_safety: registered in the licensing model, mounted ungated until a
     # CAPTURE-inclusive licence is issued ("capture": "CAPTURE" in ROUTER_MODULE).

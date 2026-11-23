@@ -303,6 +303,21 @@ async def _job_signal_engine(db) -> dict:
     return await run_signal_engine(db)
 
 
+async def _job_integration_sync(db) -> dict:
+    """Integrations (JSL SAS): observation change capture + outbound push.
+
+    Skips until prisma/apply-integrations-ddl.ts has created its tables, so a
+    backend deployed ahead of the DDL does not write a failed JobRun every minute.
+    """
+    from sqlalchemy import text
+
+    from app.services.integrations import run_integration_sync
+
+    if (await db.execute(text("SELECT to_regclass('\"IntegrationEndpoint\"')"))).scalar() is None:
+        return {"skipped": "IntegrationEndpoint table not created yet"}
+    return await run_integration_sync(db)
+
+
 async def _job_scorecard_rollup(db) -> dict:
     """EHS Scorecard — nightly monthly rollup across the six source modules.
 
@@ -352,6 +367,7 @@ JOBS: dict[str, Job] = {j.id: j for j in [
     Job("loto_review_scan", "LOTO — scheduled procedure evaluation scan", 1 * DAY, _job_loto_review_scan),
     Job("signal_engine_scan", "Signal Engine — cross-module correlation pass", 1 * DAY, _job_signal_engine),
     Job("scorecard_rollup", "EHS Scorecard — monthly indicator rollup", 1 * DAY, _job_scorecard_rollup),
+    Job("integration_sync", "Integrations — observation change capture + outbound push (JSL SAS)", 60, _job_integration_sync),
 ]}
 
 

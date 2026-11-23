@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fire_safety import AssemblyPoint, FireDrill, FireDrillFinding, FireEmergencyPlan, FireEquipment
 
 DUE_SOON_DAYS = 30
+STICKY_STATUSES = ("OUT_OF_SERVICE", "DECOMMISSIONED", "DEFECTIVE")
 
 
 def _now() -> datetime:
@@ -32,9 +33,20 @@ def _aware(d: datetime | None) -> datetime | None:
     return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d
 
 
+def due_soon_days(frequency_days: int | None) -> int:
+    """How long before its due date an asset shows as DUE_INSPECTION: a quarter
+    of its interval, capped at DUE_SOON_DAYS. A fixed 30-day window would flag a
+    monthly extinguisher as due the moment it had been inspected."""
+    if not frequency_days:
+        return DUE_SOON_DAYS
+    return max(1, min(DUE_SOON_DAYS, int(frequency_days) // 4))
+
+
 def compute_status(equipment: FireEquipment, now: datetime | None = None) -> str:
-    """Derived equipment status. Manual OUT_OF_SERVICE / DECOMMISSIONED are sticky."""
-    if equipment.status in ("OUT_OF_SERVICE", "DECOMMISSIONED"):
+    """Derived equipment status. Manual OUT_OF_SERVICE / DECOMMISSIONED and the
+    inspection-set DEFECTIVE are sticky: only a passing inspection or an explicit
+    return-to-service clears them (app/services/fire_inspection.py)."""
+    if equipment.status in STICKY_STATUSES:
         return equipment.status
     now = now or _now()
     due = _aware(equipment.nextInspectionDueDate)
@@ -42,7 +54,7 @@ def compute_status(equipment: FireEquipment, now: datetime | None = None) -> str
         return "DUE_INSPECTION"  # never inspected → needs one
     if due < now:
         return "OVERDUE"
-    if due <= now + timedelta(days=DUE_SOON_DAYS):
+    if due <= now + timedelta(days=due_soon_days(getattr(equipment, "inspectionFrequencyDays", None))):
         return "DUE_INSPECTION"
     return "ACTIVE"
 

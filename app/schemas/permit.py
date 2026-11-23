@@ -506,6 +506,9 @@ PERMIT_ATTACHMENT_CATEGORIES = {
     "VERIFICATION_PHOTO",
     "CLOSURE_DOC",
     "ACTION_EVIDENCE_PHOTO",
+    # The photographed / PDF paper permit a digital permit was raised from
+    # (POST /api/ptw/scan → wizard → attached after create). TEXT column, no DDL.
+    "SOURCE_SCAN",
 }
 
 

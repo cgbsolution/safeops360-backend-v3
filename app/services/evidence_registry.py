@@ -23,6 +23,7 @@ from app.models.business_excellence import BeKaizen, BeOpl, BePokaYoke
 from app.models.cams import CamsFinding
 from app.models.form_engine import FormRecord
 from app.models.programme import ProgrammeCycle
+from app.models.pssr import PssrItem
 
 
 @dataclass(frozen=True)
@@ -171,6 +172,20 @@ REGISTRY: dict[str, EntitySpec] = {
         categories=frozenset(
             {"DEVICE_PHOTO", "BEFORE_PHOTO", "AFTER_PHOTO", "VERIFICATION_EVIDENCE",
              "DRAWING", "OTHER"}
+        ),
+    ),
+    # ── Process safety: PSSR checklist evidence ──────────────────────────────
+    # The test certificate, the photo of the closed blind list, the signed
+    # loop-check sheet behind a YES. `plantId` is denormalised onto PssrItem
+    # for exactly this lookup.
+    "pssr_item": EntitySpec(
+        label="PSSR checklist item",
+        model=PssrItem,
+        plant_attr="plantId",
+        read_perm="PSSR.READ",
+        write_perm="PSSR.MANAGE",
+        categories=frozenset(
+            {"CHECK_EVIDENCE", "TEST_CERTIFICATE", "PHOTO", "DRAWING", "PUNCH_CLOSURE", "OTHER"}
         ),
     ),
     # ── Follow-ups (spec §5.3 #2-4) — each is a single line once wired: ──────

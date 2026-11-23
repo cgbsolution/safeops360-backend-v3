@@ -192,9 +192,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     ),
     _tool(
         "suggest_navigation",
-        "Show the user a button that opens a SafeOps360 page (it does not navigate by itself). "
+        "Show the user a button that opens a SafeOps360 page (it does not navigate by itself); the button appears "
+        "below your reply, so refer to it as below. When it opens a form, the app asks you to fill it once it is open. "
         "Use '/ptw/new' for the New Permit form, '/observations/new' for the New Observation form, "
-        "or a record href from find_records or the HIRA tools.",
+        "'/near-miss/new' to report a near miss, '/incidents/new' to report an incident, "
+        "'/capa/new/manual' to raise a CAPA, or a record href from find_records or the HIRA tools.",
         {
             "path": {"type": "string", "pattern": "^/[A-Za-z0-9/_\\-?=&.%]*$", "maxLength": 200},
             "label": {"type": "string", "maxLength": 60},
@@ -348,6 +350,20 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "description": {"type": "string", "maxLength": 4000},
             "immediateAction": {"type": "string", "maxLength": 2000},
         },
+    ),
+    _tool(
+        "update_form_draft",
+        "Fill or change fields on the form the user has open when the page context has `openForm` (near miss, "
+        "incident, CAPA and other forms). The form updates live; the user reviews it and presses Submit. "
+        "`values` maps field names from openForm.fields to values: text as written; select and multiselect only "
+        "with values from that field's own options (an option's value or its exact label); numbers within min/max; "
+        "datetime as local 'YYYY-MM-DDTHH:MM'; date as 'YYYY-MM-DD'; booleans true/false; null or \"\" clears a field. "
+        "Read-only fields can't be set. If any value is wrong nothing is changed and the error says why: fix it and "
+        "send again. Returns the required fields still empty. You cannot submit the form.",
+        {
+            "values": {"type": "object", "description": "Field name -> value, only for fields you are setting or changing."},
+        },
+        ["values"],
     ),
     _tool(
         "search_hira_library",
@@ -615,6 +631,7 @@ TOOL_LABELS = {
     "find_past_permits": "Reviewing past permits",
     "suggest_observation_fields": "Checking similar observations",
     "update_observation_draft": "Updating observation form",
+    "update_form_draft": "Filling the form",
     "search_hira_library": "Searching HIRA library",
     "assess_hira_controls": "Calculating risk change",
     "review_hira_entry": "Reviewing this activity",
@@ -1318,6 +1335,39 @@ async def _update_observation_draft(db: AsyncSession, args: dict[str, Any], ctx:
         "applied": sorted(patch),
         "severityMatrix": {"suggested": suggested, "rationale": _clip((matrix or {}).get("rationale"), 200)} if matrix else None,
         "formNow": {k: merged.get(k) for k in ("type", "areaId", "categoryCode", "subCategoryCode", "severity")},
+        "note": "The user reviews the form and presses Submit; nothing has been saved.",
+    }
+
+
+# ─── Any other form (described by the form itself) ──────────────────────
+
+
+async def _update_form_draft(db: AsyncSession, args: dict[str, Any], ctx: TurnContext) -> dict[str, Any]:
+    if ctx.form_kind == "OBSERVATION":
+        raise ToolError("This is the observation form: use update_observation_draft.")
+    if ctx.form_kind == "HIRA_ENTRY":
+        raise ToolError("This is the HIRA entry editor: use update_hira_entry_draft or update_hira_entry.")
+    if ctx.form_kind is None or ctx.form_draft is None:
+        hint = " The New Permit form is open: use update_ptw_draft." if ctx.draft is not None else ""
+        raise ToolError(
+            "No fillable form is open." + hint + " Offer the user a link to the form with suggest_navigation "
+            "(e.g. /near-miss/new, /incidents/new, /capa/new/manual) and fill it once it is open; "
+            "you can still give the values in the chat."
+        )
+    if ctx.form_patches >= 8:
+        raise ToolError("Too many form updates in one turn — summarise and let the user review.")
+    patch, labels, skipped, err = form_drafts.parse_described_patch(ctx.form_draft, args.get("values"))
+    if err:
+        raise ToolError(err)
+    if not patch:
+        return {"applied": [], "skipped": skipped, "note": "Nothing was changed."}
+    ctx.form_draft = form_drafts.apply_described_patch(ctx.form_draft, patch)
+    ctx.form_patches += 1
+    await ctx.emit("form_patch", {"kind": ctx.form_kind, "patch": patch, "labels": labels})
+    return {
+        "applied": [labels[k] for k in patch],
+        "skipped": skipped or None,
+        "stillRequired": form_drafts.missing_required(ctx.form_draft),
         "note": "The user reviews the form and presses Submit; nothing has been saved.",
     }
 
@@ -2187,6 +2237,7 @@ _HANDLERS: dict[str, Callable[[AsyncSession, dict[str, Any], TurnContext], Await
     "find_past_permits": _find_past_permits,
     "suggest_observation_fields": _suggest_observation_fields,
     "update_observation_draft": _update_observation_draft,
+    "update_form_draft": _update_form_draft,
     "search_hira_library": _search_hira_library,
     "assess_hira_controls": _assess_hira_controls,
     "review_hira_entry": _review_hira_entry,

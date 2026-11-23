@@ -330,12 +330,17 @@ async def _run_eight_checks(
 
     checks["safety_roster"] = roster_gate.for_person(worker).as_check()
 
-    # h. contractor_company_status
+    # h. contractor_company_status — prequalified AND not blacklisted/suspended
+    # (the sanction state lives on `status`, separate from prequalification).
+    from app.services.csm import company_block_reason
+
     approved_statuses = {"approved", "conditionally_approved"}
+    block = company_block_reason(company.status)
     checks["contractor_company_status"] = {
-        "result": "pass" if company.prequalificationStatus in approved_statuses else "fail",
-        "detail": f"Company prequalification status: {company.prequalificationStatus}",
+        "result": "pass" if company.prequalificationStatus in approved_statuses and not block else "fail",
+        "detail": block or f"Company prequalification status: {company.prequalificationStatus}",
         "prequalificationStatus": company.prequalificationStatus,
+        "companyStatus": company.status,
     }
 
     return checks
@@ -594,6 +599,14 @@ async def override_check(
     company = await db.get(ContractorCompany, worker.contractorCompanyId)
     if company is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contractor company not found")
+
+    # A blacklisted / suspended contractor is a governance decision, not a
+    # gate-level gap: no gate override can let its workers in.
+    from app.services.csm import company_block_reason
+
+    block = company_block_reason(company.status)
+    if block:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{block}; a gate override cannot admit its workers")
 
     now = datetime.now(timezone.utc)
     check.overrideApplied = True
