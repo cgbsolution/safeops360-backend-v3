@@ -257,6 +257,10 @@ class Permit(Base, IdMixin, SoftDeleteMixin):
     workflowDefinitionCode: Mapped[str | None] = mapped_column(String)
 
     departmentId: Mapped[str | None] = mapped_column(ForeignKey("Department.id"))
+    # Shift the work is planned in — FK by value to MasterItem(type=SHIFT), the
+    # same list incidents / near misses use. Defaults from validFrom's local
+    # time at create. Column added by prisma/apply-permit-shift-ddl.ts.
+    shiftId: Mapped[str | None] = mapped_column(String)
     specificLocation: Mapped[str | None] = mapped_column(String)
     # Creation-time GPS captured by the originator's device. Action-level GPS
     # (approve / accept / complete / …) lives on PermitActionEvidence rows —

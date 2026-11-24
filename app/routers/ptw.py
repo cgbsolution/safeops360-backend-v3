@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -315,6 +315,7 @@ async def create_permit(
         # ─── Wizard Step 1/2 additions ───
         validityHours=validity_hours,
         departmentId=payload.departmentId,
+        shiftId=await resolve_permit_shift(db, payload.shiftId, payload.validFrom),
         specificLocation=payload.specificLocation,
         gpsLatitude=payload.gpsLatitude,
         gpsLongitude=payload.gpsLongitude,
@@ -588,6 +589,41 @@ async def list_permit_departments(
     return [{"id": d.id, "name": d.name} for d in rows]
 
 
+@router.get("/masters/shifts")
+async def shift_masters(
+    at: datetime | None = Query(None, description="Return the shift containing this time as `suggestedId`"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Active SHIFT masters for the permit form's Shift dropdown — the same list
+    incidents / near misses use and the Control Center filters by."""
+    from app.services.ptw_cc import load_shifts
+    from app.services.ptw_ops.shifts import shift_at
+
+    shifts = [s for s in await load_shifts(db) if s.get("id")]
+    suggested = shift_at(at, shifts) if at else None
+    return {
+        "items": [{"id": s["id"], "code": s["code"], "label": s["label"],
+                   "startHour": s["startHour"], "endHour": s["endHour"]} for s in shifts],
+        "suggestedId": suggested["id"] if suggested else None,
+    }
+
+
+async def resolve_permit_shift(db: AsyncSession, shift_id: str | None, valid_from: datetime) -> str | None:
+    """A chosen shift must be an active SHIFT master; with none chosen, default
+    to the shift containing validFrom (None when it falls in a gap)."""
+    from app.services.ptw_cc import load_shifts
+    from app.services.ptw_ops.shifts import shift_at
+
+    shifts = [s for s in await load_shifts(db) if s.get("id")]
+    if shift_id:
+        if not any(s["id"] == shift_id for s in shifts):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown or inactive shift.")
+        return shift_id
+    found = shift_at(valid_from, shifts) if shifts else None
+    return found["id"] if found else None
+
+
 @router.get("/{permit_id}", response_model=PermitOut)
 async def get_permit(
     permit_id: str,
@@ -752,6 +788,8 @@ async def update_permit_details(
     ):
         if field in data:
             setattr(permit, field, data[field])
+    if "shiftId" in data:
+        permit.shiftId = await resolve_permit_shift(db, data["shiftId"], permit.validFrom)
 
     # LOTO cross-reference. Set through the same validation as create, so an
     # edit cannot install a link that a create would have rejected.

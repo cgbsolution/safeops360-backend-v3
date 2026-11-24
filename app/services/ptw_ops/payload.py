@@ -451,7 +451,7 @@ def build(snap: Snapshot, ex: Extras) -> dict[str, Any]:
         "plant": {"id": snap.plantId, "name": ex.plantName, "location": ex.plantLocation},
         "filters": {"area": area, "shift": ex.shiftCode, "range": ex.rangeKey,
                     "windowStart": iso(w0), "windowEnd": iso(w1)},
-        "shifts": [{"code": s["code"], "label": s.get("label"), "startHour": s["startHour"], "endHour": s["endHour"]}
+        "shifts": [{"id": s.get("id"), "code": s["code"], "label": s.get("label"), "startHour": s["startHour"], "endHour": s["endHour"]}
                    for s in snap.shifts],
         "areas": [{"id": z.id, "name": z.name} for z in sorted(
             snap.zones, key=lambda z: (z.sortOrder if z.sortOrder is not None else 9999, z.name))],

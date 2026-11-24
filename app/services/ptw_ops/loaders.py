@@ -348,6 +348,10 @@ async def load(
     now = now or datetime.now(timezone.utc)
     s = await schema(db)
     shifts = await load_shifts(db)
+    if rng == "shift" and not shift:
+        from app.services.ptw_ops.shifts import current_shift
+
+        shift = current_shift(now, shifts)[0]
     wstart, wend = range_window(now, rng, shift, shifts)
     permits = await load_permits(db, s, plant_id, now, wstart, wend)
 

@@ -1,4 +1,16 @@
-"""Shift windows in plant-local time (SHIFT masters, A/B/C fallback)."""
+"""Shift windows in plant-local time, from the SHIFT masters (A/B/C fallback).
+
+The same master list feeds the permit form's Shift dropdown, the permit's
+stored shiftId, and the Control Center's shift filter, so they always agree.
+
+Real master lists are not a tidy 3 × 8 h rotation: a shift can be inactive
+(leaving a gap, e.g. 06:00–09:00 when only B 14–22, C 22–06 and G 09–17 are
+active) and shifts can overlap (G 09–17 overlaps B 14–22). Rules:
+  • overlap → the shift that started most recently wins (at 15:00, B over G)
+  • gap     → no shift contains the time; `current_shift` returns the most
+              recent shift that has started (the one just ended) and
+              `shift_at` returns None, so nothing is mis-assigned.
+"""
 
 from __future__ import annotations
 
@@ -17,23 +29,44 @@ def _window_for(day_local: datetime, shift: dict[str, Any]) -> tuple[datetime, d
     return start, end
 
 
-def current_shift(now: datetime, shifts: list[dict[str, Any]] | None = None) -> tuple[str, datetime, datetime]:
-    """(code, start_utc, end_utc) of the shift containing `now`."""
-    shifts = shifts or DEFAULT_SHIFTS
-    local = now.astimezone(LOCAL_TZ)
+def _candidates(at: datetime, shifts: list[dict[str, Any]]):
+    """Every (shift, start, end) window that has started at or before `at`
+    (today's and yesterday's occurrences), newest start first."""
+    local = at.astimezone(LOCAL_TZ)
+    out = []
     for day in (local, local - timedelta(days=1)):
         for s in shifts:
             start, end = _window_for(day, s)
-            if start <= local < end:
-                return s["code"], start.astimezone(timezone.utc), end.astimezone(timezone.utc)
-    s = shifts[0]
-    start, end = _window_for(local, s)
+            if start <= local:
+                out.append((s, start, end))
+    out.sort(key=lambda x: x[1], reverse=True)
+    return out, local
+
+
+def shift_at(at: datetime, shifts: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """The shift containing `at` (most recently started wins on overlap), or
+    None when `at` falls in a gap between shifts."""
+    shifts = shifts or DEFAULT_SHIFTS
+    cands, local = _candidates(at, shifts)
+    for s, start, end in cands:
+        if start <= local < end:
+            return s
+    return None
+
+
+def current_shift(now: datetime, shifts: list[dict[str, Any]] | None = None) -> tuple[str, datetime, datetime]:
+    """(code, start_utc, end_utc) of the shift containing `now`; in a gap, the
+    most recent shift that has started (never a future window)."""
+    shifts = shifts or DEFAULT_SHIFTS
+    cands, local = _candidates(now, shifts)
+    containing = [c for c in cands if c[1] <= local < c[2]]
+    s, start, end = (containing or cands)[0]
     return s["code"], start.astimezone(timezone.utc), end.astimezone(timezone.utc)
 
 
 def shift_window(now: datetime, code: str, shifts: list[dict[str, Any]] | None = None) -> tuple[datetime, datetime]:
-    """Most recent window of shift `code` that has started (today's, or yesterday's
-    when today's has not begun yet)."""
+    """Most recent window of shift `code` that has started (today's, or
+    yesterday's when today's has not begun yet)."""
     shifts = shifts or DEFAULT_SHIFTS
     s = next((x for x in shifts if x["code"] == code), None)
     if s is None:

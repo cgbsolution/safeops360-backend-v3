@@ -811,17 +811,17 @@ async def load_shifts(db: AsyncSession) -> list[dict[str, Any]]:
     from app.models.masters import MasterItem  # noqa: PLC0415
 
     res = await db.execute(
-        select(MasterItem.code, MasterItem.label, MasterItem.metadata_)
+        select(MasterItem.id, MasterItem.code, MasterItem.label, MasterItem.metadata_)
         .where(MasterItem.type == "SHIFT").where(MasterItem.active.is_(True))
         .order_by(MasterItem.sortOrder)
     )
     out = []
-    for code, label, meta in res.all():
+    for mid, code, label, meta in res.all():
         meta = meta or {}
         try:
             sh, eh = int(meta.get("startHour")), int(meta.get("endHour"))
         except (TypeError, ValueError):
             continue
         if 0 <= sh <= 23 and 0 <= eh <= 24:
-            out.append({"code": code, "label": label or code, "startHour": sh, "endHour": eh % 24})
+            out.append({"id": mid, "code": code, "label": label or code, "startHour": sh, "endHour": eh % 24})
     return out or DEFAULT_SHIFTS

@@ -467,3 +467,38 @@ def test_brief_inputs_are_counts_only(demo_payload):
     assert "u-receiver" not in blob and "PTW-" not in blob and "u-issuer" not in blob
     text = template_text(inputs)
     assert text.count(".") <= 4 and "[[" in text and "12 permits active with 87 workers" in text
+
+
+# ── shifts: the live master set (A inactive → 06–09 gap; G overlaps B) ──────
+LIVE_SHIFTS = [
+    {"id": "sB", "code": "B", "label": "B — Afternoon", "startHour": 14, "endHour": 22},
+    {"id": "sC", "code": "C", "label": "C — Night", "startHour": 22, "endHour": 6},
+    {"id": "sG", "code": "G", "label": "G — General", "startHour": 9, "endHour": 17},
+]
+
+
+def ist(h, m=0, day=24):
+    """A UTC instant for h:m IST on 2026-11-<day>."""
+    return datetime(2026, 11, day, h, m, tzinfo=timezone.utc) - timedelta(hours=5, minutes=30)
+
+
+def test_shift_at_overlap_prefers_the_most_recent_start():
+    from app.services.ptw_ops.shifts import shift_at
+
+    assert shift_at(ist(10), LIVE_SHIFTS)["code"] == "G"
+    assert shift_at(ist(15), LIVE_SHIFTS)["code"] == "B"   # G 09–17 and B 14–22 overlap
+    assert shift_at(ist(23), LIVE_SHIFTS)["code"] == "C"
+    assert shift_at(ist(3), LIVE_SHIFTS)["code"] == "C"    # crosses midnight
+
+
+def test_shift_at_gap_assigns_nothing():
+    from app.services.ptw_ops.shifts import shift_at
+
+    assert shift_at(ist(7), LIVE_SHIFTS) is None           # A is inactive: 06–09 is uncovered
+
+
+def test_current_shift_in_a_gap_is_the_one_just_ended_not_a_future_window():
+    code, start, end = current_shift(ist(7), LIVE_SHIFTS)
+    assert code == "C" and end <= ist(7) and start < end   # last night's C, never today's B (future)
+    code, start, end = current_shift(ist(15), LIVE_SHIFTS)
+    assert code == "B" and start <= ist(15) < end

@@ -224,6 +224,7 @@ class PermitCreate(BaseModel):
 
     # ─── Step 1/2 additions ───
     departmentId: str | None = None
+    shiftId: str | None = None
     areaId: str | None = None
     specificLocation: str | None = None
     gpsLatitude: float | None = None
@@ -296,6 +297,7 @@ class PermitUpdate(BaseModel):
     validFrom: datetime | None = None
     validTo: datetime | None = None
     departmentId: str | None = None
+    shiftId: str | None = None
     areaId: str | None = None
     specificLocation: str | None = None
     workOrderNumber: str | None = None
@@ -342,6 +344,7 @@ class PermitOut(BaseModel):
     # Phase-1+ additions (read-back)
     validityHours: int | None = None
     departmentId: str | None = None
+    shiftId: str | None = None
     specificLocation: str | None = None
     gpsLatitude: float | None = None
     gpsLongitude: float | None = None
