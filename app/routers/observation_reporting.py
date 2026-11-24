@@ -2,7 +2,8 @@
 concern reporting with real-time dashboard & analytics; picture gives
 everything").
 
-  POST /api/observations/snap-analyze   photo → prefilled, vocabulary-clamped card
+  POST /api/observations/snap-analyze   photo (+ note) → prefilled card + Copilot-style reading
+  POST /api/observations/snap-refine    follow-up instruction applied to the current draft
   GET  /api/observations/snap-context   plants, areas, nearest area for a GPS fix
   GET  /api/observations/live           plant-scoped real-time aggregate
 
@@ -115,7 +116,7 @@ async def snap_context(
     }
 
 
-# ── snap analyze ─────────────────────────────────────────────────────────────
+# ── snap analyze / refine ────────────────────────────────────────────────────
 class SnapIn(BaseModel):
     imageB64: str = Field(min_length=16)
     mimeType: str | None = None
@@ -124,64 +125,124 @@ class SnapIn(BaseModel):
     lat: float | None = Field(None, ge=-90, le=90)
     lng: float | None = Field(None, ge=-180, le=180)
     lang: str = Field("en", max_length=8)
+    # Optional context from the reporter ("CRD AP2, grinding near the HV panel").
+    note: str | None = Field(None, max_length=snap.MAX_NOTE)
 
 
-@router.post("/api/observations/snap-analyze")
-async def snap_analyze(body: SnapIn, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
-    """Photo → a prefilled observation card. Never 5xx on AI trouble: returns
-    {ok: false, reason} and the page falls back to the manual quick form."""
+class HistoryTurn(BaseModel):
+    role: str = Field(max_length=16)
+    text: str = Field(max_length=1000)
+
+
+class SnapRefineIn(SnapIn):
+    instruction: str = Field(min_length=2, max_length=snap.MAX_NOTE)
+    # The observation as it stands on screen, including the reporter's own edits.
+    current: dict[str, Any] = Field(default_factory=dict)
+    history: list[HistoryTurn] = Field(default_factory=list, max_length=12)
+
+
+_CURRENT_KEYS = (
+    "observationType", "categoryCode", "subCategoryCode", "hazardCategory", "severity", "severityReason",
+    "title", "description", "consequence", "immediateAction", "photoFindings", "fatalPotential",
+    "fatalPotentialQuestion", "correctiveActions", "responsibleFunction", "questions",
+)
+
+
+def _decode_image(b64: str) -> bytes | None:
+    try:
+        image = base64.b64decode(b64.split(",", 1)[-1], validate=True)
+    except Exception:  # noqa: BLE001
+        return None
+    return image if image and len(image) <= MAX_IMAGE_BYTES else None
+
+
+async def _snap_result(
+    db: AsyncSession, user: User, body: SnapIn, *, refine: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Shared by analyze and refine. Never 5xx on AI trouble: returns
+    {ok: false, reason} and the page keeps (or falls back to) the manual form."""
     await _require(db, user, CREATE, body.plantId)
     nearest = await _nearest(db, body.plantId, body.lat, body.lng)
     if not ai_enabled():
         return {"ok": False, "reason": "ai_disabled", "nearest": nearest}
-    try:
-        image = base64.b64decode(body.imageB64.split(",", 1)[-1], validate=True)
-    except Exception:  # noqa: BLE001
-        return {"ok": False, "reason": "bad_image", "nearest": nearest}
-    if not image or len(image) > MAX_IMAGE_BYTES:
+    image = _decode_image(body.imageB64)
+    if image is None:
         return {"ok": False, "reason": "bad_image", "nearest": nearest}
 
     stop_rows = await snap.load_stop_rows(db)
-    raw = await snap.analyze_photo(image, stop_rows, lang=body.lang)
+    raw = await snap.analyze_photo(image, stop_rows, lang=body.lang, note=body.note, refine=refine)
     if raw is None:
         return {"ok": False, "reason": "no_suggestion", "nearest": nearest}
     s = snap.clamp_ai_output(raw, stop_rows)
     if s["clamped"]:
-        snap.log.info("snap-analyze clamped fields=%s user=%s", s["clamped"], user.id)
+        snap.log.info("snap-%s clamped fields=%s user=%s", "refine" if refine else "analyze", s["clamped"], user.id)
 
-    # Severity policy: the matrix value wins the default, the model's reading
-    # is a hint. Same resolver the create endpoint re-runs.
+    # The matrix is the same resolver the create endpoint re-runs.
     from app.services import observation_severity as sev_svc
 
-    area_for_sev = body.areaId or (nearest or {}).get("areaId")
+    area_id = body.areaId or (nearest or {}).get("areaId")
     suggestion = await sev_svc.resolve(
         db, observation_type=s["observationType"], category=s["categoryCode"], sub_category=s["subCategoryCode"],
-        plant_id=body.plantId, area_id=area_for_sev,
+        plant_id=body.plantId, area_id=area_id,
     ) if s["categoryCode"] else {"suggested": None, "rationale": sev_svc.NO_RULE_MESSAGE}
     matrix = suggestion.get("suggested")
 
-    labels = {}
+    labels: dict[str, str] = {}
     for r in stop_rows:
         if r["categoryCode"] == s["categoryCode"] and r["subCategoryCode"] == s["subCategoryCode"]:
             labels = {"categoryLabel": r["categoryLabel"], "subCategoryLabel": r["subCategoryLabel"]}
             break
+    kb = snap.reference_grounding(s["description"] or s["photoFindings"], s["observationType"])
+    built = snap.build_analysis(
+        s, kb=kb, matrix=matrix, matrix_rationale=suggestion.get("rationale") if matrix else None,
+        labels=labels, area_known=bool(area_id), directed=refine is not None,
+    )
     return {
         "ok": True,
         "suggestion": {
             "observationType": s["observationType"],
             "categoryCode": s["categoryCode"], "subCategoryCode": s["subCategoryCode"],
             "category": s["category"], **labels,
-            "severity": matrix or s["severity"],
+            "severity": built["severity"],
             "aiSeverity": s["severity"],
             "matrixSeverity": matrix,
             "matrixRationale": suggestion.get("rationale") if matrix else None,
+            "severityReason": built["overrideReason"] or None,
             "title": s["title"], "description": s["description"], "likelyHazard": s["likelyHazard"],
+            "consequence": s["consequence"],
             "immediateAction": s["immediateAction"],
             "composedDescription": snap.compose_description(s["title"], s["description"], s["likelyHazard"]),
             "lowConfidence": s["confidence"] < 0.5,
         },
+        "analysis": built["analysis"],
+        # Echoed back so the page can send it as `current` on the next refine.
+        "draft": {k: s.get(k) for k in _CURRENT_KEYS if k in s} | {"hazardCategory": s.get("category")},
         "nearest": nearest,
     }
+
+
+@router.post("/api/observations/snap-analyze")
+async def snap_analyze(body: SnapIn, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Photo (+ optional reporter note) → a prefilled observation and the
+    Copilot-style reading: what the photo shows, classification with similar
+    cases, severity with reasons, fatal-potential check, corrective actions,
+    responsible function, closure target and open questions."""
+    return await _snap_result(db, user, body)
+
+
+@router.post("/api/observations/snap-refine")
+async def snap_refine(body: SnapRefineIn, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Apply the reporter's follow-up instruction ("the cable insulation is
+    damaged", "write it in Hindi", "make it High") to the current draft. The
+    photo is read again so "look again at the PPE" works. Returns the full
+    updated draft plus a short `reply` saying what changed."""
+    current = {k: v for k, v in (body.current or {}).items() if k in _CURRENT_KEYS}
+    refine = {
+        "instruction": body.instruction,
+        "current": current,
+        "history": [h.model_dump() for h in body.history],
+    }
+    return await _snap_result(db, user, body, refine=refine)
 
 
 # ── live dashboard ───────────────────────────────────────────────────────────

@@ -97,6 +97,8 @@ from app.routers import (
     ptw,
     ptw_active,
     ptw_cc,
+    ptw_ops,
+    ptw_impairments,
     ptw_annexures,
     ptw_lifecycle,
     ptw_reports,
@@ -157,6 +159,9 @@ _ROUTERS = {
     # PTW control center / insights / scan. MUST precede "ptw": ptw.py owns
     # GET /api/ptw/{permit_id}, which would otherwise swallow /control-center
     # and /insights as permit ids.
+    # PTW Control Center v2 (impairments, zones, kiosk) — same "before ptw" rule.
+    "ptw_ops": ptw_ops,
+    "ptw_impairments": ptw_impairments,
     "ptw_cc": ptw_cc,
     "ptw": ptw, "ptw_active": ptw_active, "ptw_lifecycle": ptw_lifecycle,
     "ptw_reports": ptw_reports,

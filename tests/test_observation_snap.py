@@ -132,3 +132,87 @@ def test_day_bounds_use_plant_local_time():
 def test_pct():
     assert snap.pct(1, 3) == 33.3
     assert snap.pct(0, 0) is None
+
+
+# ── Copilot-style reading: clamp, severity policy, analysis card, refine ─────
+_RICH = {
+    "photoFindings": "A worker crouches at floor level cutting steel with an angle grinder. Sparks fly towards loose cables.",
+    "observationType": "UNSAFE_CONDITION", "categoryCode": "TOOLS_EQUIPMENT", "subCategoryCode": "TE_UNSAFE_CONDITION",
+    "severity": "MEDIUM", "severityReason": "Cables lie in the spark path next to an HV box.",
+    "fatalPotential": "possible", "fatalPotentialQuestion": "Are any of the trailing cables damaged?",
+    "title": "Grinding sparks on loose cables", "description": "Angle grinding at floor level with sparks landing on loose power cables.",
+    "consequence": "Cable insulation could burn through and cause a shock or fire.",
+    "correctiveActions": [
+        {"action": "Wear a face shield", "controlLevel": "PPE"},
+        {"action": "Fit a spark screen", "controlLevel": "engineering"},
+        {"action": "", "controlLevel": "PPE"},
+        "Route cables through protectors",
+    ],
+    "responsibleFunction": "Mechanical", "questions": ["Is the disc guard fitted?", {"x": 1}], "confidence": 0.8,
+}
+
+
+def test_rich_fields_are_clamped_and_actions_sorted_by_hierarchy():
+    s = snap.clamp_ai_output(_RICH, ROWS)
+    assert s["fatalPotential"] == "POSSIBLE"
+    assert [a["controlLevel"] for a in s["correctiveActions"]] == ["ENGINEERING", "ADMINISTRATIVE", "PPE"]
+    assert s["questions"] == ["Is the disc guard fitted?"]
+    assert s["consequence"].startswith("Cable insulation")
+    assert snap.clamp_ai_output({"fatalPotential": "maybe"}, ROWS)["fatalPotential"] == "NO"
+
+
+def test_severity_policy_matches_copilot():
+    # higher of matrix and plant practice; never below the matrix on our own
+    assert snap.choose_severity(matrix="MEDIUM", plant_practice="LOW", ai="LOW", fatal="NO") == "MEDIUM"
+    assert snap.choose_severity(matrix="LOW", plant_practice="HIGH", ai="LOW", fatal="NO") == "HIGH"
+    assert snap.choose_severity(matrix=None, plant_practice=None, ai="HIGH", fatal="NO") == "HIGH"
+    assert snap.choose_severity(matrix="LOW", plant_practice="LOW", ai="LOW", fatal="YES") == "CRITICAL"
+    # refine: the reporter's instruction wins (the form then asks for a reason)
+    assert snap.choose_severity(matrix="HIGH", plant_practice=None, ai="LOW", fatal="NO", directed=True) == "LOW"
+
+
+_KB = {
+    "available": True, "matches": 25,
+    "category": {"code": "C3", "label": "Electrical Hazard", "share": 0.45},
+    "alternatives": [{"label": "Defective Equipment", "share": 0.22}],
+    "risk": {"safeopsSeverity": "HIGH", "mix": {"Low": 0.5, "Medium": 0.45, "FatalPotential": 0.05}},
+    "fatalPotentialSignals": ["hv"], "responsibleFunction": "Operation",
+    "correctiveActions": [{"action": "Fit a spark screen", "controlLevel": "ENGINEERING", "from": "UC-1"},
+                          {"action": "Dress the cables", "controlLevel": "ADMINISTRATIVE", "from": "UC-2"}],
+}
+
+
+def test_analysis_card_grounded_in_reference_register():
+    s = snap.clamp_ai_output(_RICH, ROWS)
+    out = snap.build_analysis(s, kb=_KB, matrix="MEDIUM", matrix_rationale="rule", labels={"categoryLabel": "Tools"},
+                              area_known=False)
+    a = out["analysis"]
+    assert out["severity"] == "HIGH" and out["needsReason"] and out["overrideReason"]
+    assert "25 similar observations" in a["classification"]["why"] and "Electrical Hazard (45%)" in a["classification"]["why"]
+    assert any("Plant practice" in r for r in a["severity"]["reasons"])
+    # photo actions first; reference actions de-duplicated and labelled
+    assert [x["source"] for x in a["correctiveActions"]] == ["PHOTO", "PHOTO", "PHOTO", "REFERENCE"]
+    assert a["correctiveActions"][-1]["ref"] == "UC-2"
+    assert a["questions"][0].startswith("Where exactly")
+    assert a["fatalPotential"] == {"level": "POSSIBLE", "question": "Are any of the trailing cables damaged?"}
+    assert a["responsibleFunction"] == "Mechanical" and a["closureTarget"] == "about 7 days"
+
+
+def test_analysis_without_grounding_or_matrix():
+    s = snap.clamp_ai_output({**_RICH, "fatalPotential": "YES", "severity": "HIGH"}, ROWS)
+    out = snap.build_analysis(s, kb=None, matrix=None, matrix_rationale=None, labels={}, area_known=True)
+    assert out["severity"] == "CRITICAL" and not out["needsReason"]
+    assert out["analysis"]["closureTarget"] == "same day"
+    assert out["analysis"]["classification"]["why"] is None
+    assert not any(q.startswith("Where exactly") for q in out["analysis"]["questions"])
+
+
+def test_user_text_carries_note_and_refine_context():
+    t = snap.build_user_text(ROWS, note="  CRD AP2,   near HV panel ")
+    assert "Reporter's note: CRD AP2, near HV panel" in t and "REFINE MODE" not in t
+    r = snap.build_user_text(ROWS, lang="hi", refine={
+        "instruction": "cable insulation is damaged", "current": {"severity": "MEDIUM"},
+        "history": [{"role": "user", "text": "make it shorter"}, "junk"],
+    })
+    assert "REFINE MODE" in r and "instruction: cable insulation is damaged" in r
+    assert '"severity": "MEDIUM"' in r and "make it shorter" in r and "language code: hi" in r

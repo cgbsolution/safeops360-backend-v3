@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from app.routers.moc import (
     _band_from_score,
     _emergency_pending_retro,
-    _pssr_gate_ok,
+    _pssr_ok,
     _residual_risk_string,
 )
 
@@ -42,32 +42,48 @@ def test_residual_risk_string_from_band_and_score():
 
 def test_pssr_gate_not_required_passes():
     cr = SimpleNamespace(pssrRequired=False, pssrChecklist=None)
-    ok, _ = _pssr_gate_ok(cr)
+    ok, _ = _pssr_ok(cr)
     assert ok is True
 
 
 def test_pssr_gate_required_but_incomplete_blocks():
     cr = SimpleNamespace(pssrRequired=True, pssrChecklist=None)
-    ok, msg = _pssr_gate_ok(cr)
+    ok, msg = _pssr_ok(cr)
     assert ok is False and "pre-startup safety review" in msg.lower()
 
     cr2 = SimpleNamespace(pssrRequired=True, pssrChecklist={"outcome": "go", "completedAt": None})
-    assert _pssr_gate_ok(cr2)[0] is False
+    assert _pssr_ok(cr2)[0] is False
 
 
 def test_pssr_gate_required_and_go_passes():
     cr = SimpleNamespace(
         pssrRequired=True, pssrChecklist={"outcome": "go", "completedAt": "2026-07-01T00:00:00Z"}
     )
-    assert _pssr_gate_ok(cr)[0] is True
+    assert _pssr_ok(cr)[0] is True
 
 
 def test_pssr_gate_no_go_blocks_even_when_completed():
     cr = SimpleNamespace(
         pssrRequired=True, pssrChecklist={"outcome": "no_go", "completedAt": "2026-07-01T00:00:00Z"}
     )
-    ok, msg = _pssr_gate_ok(cr)
+    ok, msg = _pssr_ok(cr)
     assert ok is False and "no-go" in msg.lower()
+
+
+def test_pssr_gate_accepts_a_completed_formal_pssr():
+    """Completing the formal PSSR (Process Safety) must satisfy closure."""
+    cr = SimpleNamespace(pssrRequired=True, pssrChecklist=None)
+    go = SimpleNamespace(status="APPROVED_GO", pssrNo="PSSR-1")
+    assert _pssr_ok(cr, go)[0] is True
+    assert _pssr_ok(cr, SimpleNamespace(status="CLOSED", pssrNo="PSSR-1"))[0] is True
+
+
+def test_pssr_gate_formal_no_go_or_in_progress_blocks():
+    cr = SimpleNamespace(pssrRequired=True, pssrChecklist=None)
+    ok, msg = _pssr_ok(cr, SimpleNamespace(status="NO_GO", pssrNo="PSSR-2"))
+    assert ok is False and "no-go" in msg.lower()
+    ok, msg = _pssr_ok(cr, SimpleNamespace(status="IN_REVIEW", pssrNo="PSSR-3"))
+    assert ok is False and "PSSR-3" in msg
 
 
 # ─── Emergency pending-retro flag ───────────────────────────────────────────

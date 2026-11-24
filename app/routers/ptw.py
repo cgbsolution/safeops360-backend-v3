@@ -212,6 +212,24 @@ async def create_permit(
             f"{HAZARD_LABELS.get(capped_by, capped_by.value)} annexure.",
         )
 
+    # Impairment conflict check (PTW Control Center): a safety system impaired
+    # in this zone may block new permits of this type outright ("Sprinkler
+    # SZ-03 impaired until 02:00 — new hot work blocked"). require_controls is
+    # NOT a create-time block — the permit is raised, and the approval gate in
+    # workflow_engine.approve holds it at Issuer Review until the controls are
+    # recorded.
+    if payload.areaId:
+        from types import SimpleNamespace
+
+        from app.routers.ptw_ops import permit_decision
+
+        _imp = await permit_decision(db, SimpleNamespace(
+            id=None, areaId=payload.areaId, plantId=payload.plantId, type=payload.type,
+            status="SUBMITTED", fireWatchPersonId=getattr(payload, "fireWatchPersonId", None),
+        ), running=False)
+        if _imp.blocked:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "; ".join(_imp.blockingMessages))
+
     # HIRA provenance — validate the link before persisting it, so a bad id
     # fails loudly at create time instead of leaving a dangling reference that
     # ON DELETE SET NULL would later hide.

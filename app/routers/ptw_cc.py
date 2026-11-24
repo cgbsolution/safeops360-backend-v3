@@ -1,7 +1,8 @@
 """PTW control center, insights and paper-permit scan (JSL Hisar PTW requirement:
 "scan to read the doc & give us the realtime dashboard, analytics feature").
 
-  GET  /api/ptw/control-center?plantId=        live permits by area + exceptions (PTW.READ)
+  GET  /api/ptw/control-center/board?plantId=  v1 live board by area (PTW.READ). The brief's
+                                               /api/ptw/control-center payload is routers/ptw_ops.py
   GET  /api/ptw/insights?plantId=&from=&to=    analytics over permits raised in a window (PTW.READ)
   POST /api/ptw/scan                           photos / PDF of a paper permit → wizard draft (PTW.CREATE)
 
@@ -75,8 +76,8 @@ async def _user_names(db: AsyncSession, ids) -> dict[str, str]:
 
 
 # ── control center ───────────────────────────────────────────────────────────
-@router.get("/control-center")
-async def control_center(
+@router.get("/control-center/board")
+async def control_center_board(
     plantId: str | None = Query(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

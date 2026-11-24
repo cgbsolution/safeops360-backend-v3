@@ -442,6 +442,23 @@ def _calc_due_at(step: WorkflowStep) -> datetime | None:
 # ───────────────────────────────────────────────────────────────────────────
 
 
+ESCALATION_PREFIX = "[Escalation] "
+
+
+def is_escalation_task(task: WorkflowTask) -> bool:
+    return (task.stepName or "").startswith(ESCALATION_PREFIX)
+
+
+def escalation_task_roles(task: WorkflowTask, step: WorkflowStep) -> list[str]:
+    """Roles that may act on `task` at `step`. Empty list = no role restriction
+    (approverField / named-user steps). An escalation task also accepts the
+    step's escalationRole — that is who it was escalated TO."""
+    roles = [step.approverRole] if step.approverRole else []
+    if is_escalation_task(task) and getattr(step, "escalationRole", None):
+        roles.append(step.escalationRole)
+    return roles
+
+
 async def _rbac_gate(
     db: AsyncSession,
     *,
@@ -456,11 +473,19 @@ async def _rbac_gate(
     if task.assignedToId != user_id:
         raise WorkflowError("Not your task")
 
-    # 2. Role — the step's required role must be one the user holds
-    if step.approverRole:
+    # 2. Role — the step's required role must be one the user holds.
+    #    An SLA-escalation task ('[Escalation] …', raised by the overdue sweep)
+    #    shares the original step but is assigned to the step's ESCALATION role
+    #    holder (e.g. HSE Manager for a Supervisor step). Requiring the original
+    #    approverRole there made every escalation task un-actionable by the very
+    #    person it was escalated to — the escalation role is accepted instead.
+    allowed_roles = escalation_task_roles(task, step)
+    if allowed_roles:
         user_roles = await get_user_role_codes(db, user_id)
-        if step.approverRole not in user_roles:
-            raise WorkflowError(f"This step requires the '{step.approverRole}' role.")
+        if not (set(allowed_roles) & set(user_roles)):
+            if len(allowed_roles) == 1:
+                raise WorkflowError(f"This step requires the '{allowed_roles[0]}' role.")
+            raise WorkflowError(f"This step requires one of the roles: {', '.join(allowed_roles)}.")
 
     # 3. Permission — verify the user holds the module action grant at ALL
     # (any scope). We deliberately skip the scope check here: the assignee
@@ -1324,6 +1349,32 @@ async def approve(
             raise WorkflowError("Permit not found")
 
         step_key = _ptw_approval_step_key(current_step)
+
+        # ─── Impairment conflict gate (PTW Control Center) ───
+        # Re-checked at EVERY approval step, not only at request: an impairment
+        # raised after the permit was requested must still stop it. block_new
+        # refuses the approval outright; require_controls refuses it until each
+        # required control is recorded on the permit (PermitControl), so the
+        # permit cannot move past Issuer Review without them. Only pre-issue
+        # permits are gated — a running permit is handled by the exception
+        # engine (its controls), never blocked retroactively.
+        if current_step.stepType != StepType.CLOSURE.value and str(
+            getattr(permit_row.status, "value", permit_row.status)
+        ) == "SUBMITTED":
+            from app.routers.ptw_ops import permit_decision
+
+            _imp = await permit_decision(db, permit_row, running=False)
+            if _imp.blocked:
+                raise WorkflowError("; ".join(_imp.blockingMessages))
+            if _imp.missingControls:
+                from app.services.ptw_ops.impairment_check import control_label
+
+                raise WorkflowError(
+                    f"Impairment {', '.join(_imp.impairment_codes)} in this zone requires these controls on the "
+                    "permit before it can be approved: "
+                    + ", ".join(control_label(c) for c in _imp.missingControls)
+                    + ". Record them in the permit's Impairment controls panel."
+                )
 
         if current_step.stepType == StepType.CLOSURE.value:
             if permit_row.workCompletedAt is None and permit_row.returnedAt is None:

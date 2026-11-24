@@ -44,6 +44,13 @@ DEFAULT_TYPE = "UNSAFE_CONDITION"
 DEFAULT_SEVERITY = "MEDIUM"
 NEAREST_AREA_MAX_METRES = 400.0
 MIN_AT_RISK_DESCRIPTION = 50  # mirrors services/bbs_quality.MIN_AT_RISK_DESCRIPTION
+# Hierarchy of controls, highest first: corrective actions are shown in this order.
+CONTROL_LEVELS = ("ELIMINATION", "SUBSTITUTION", "ENGINEERING", "ADMINISTRATIVE", "PPE")
+FATAL_LEVELS = ("YES", "POSSIBLE", "NO")
+SEVERITY_RANK = {s: i for i, s in enumerate(SEVERITIES)}
+# Plant practice closure targets (same rule the Copilot states).
+CLOSURE_DAYS = {"CRITICAL": 0, "HIGH": 7, "MEDIUM": 14, "LOW": 30}
+MAX_NOTE = 500
 
 
 # ── vocabularies ─────────────────────────────────────────────────────────────
@@ -163,11 +170,35 @@ def clamp_ai_output(raw: dict[str, Any] | None, stop_rows: list[dict[str, Any]])
         confidence = max(0.0, min(1.0, float(raw.get("confidence") or 0)))
     except (TypeError, ValueError):
         confidence = 0.0
+    fatal = _code(raw.get("fatalPotential")).upper()
+    if fatal not in FATAL_LEVELS:
+        fatal = "NO"
+    raw_actions = raw.get("correctiveActions")
+    raw_questions = raw.get("questions")
+    actions: list[dict[str, str]] = []
+    for a in raw_actions if isinstance(raw_actions, list) else []:
+        text = _text(a.get("action") if isinstance(a, dict) else a, 300)
+        if not text:
+            continue
+        level = _code(a.get("controlLevel") if isinstance(a, dict) else "").upper()
+        actions.append({"action": text, "controlLevel": level if level in CONTROL_LEVELS else "ADMINISTRATIVE"})
+    # Highest in the hierarchy first (eliminate/engineer out before instructions and PPE).
+    actions.sort(key=lambda a: CONTROL_LEVELS.index(a["controlLevel"]))
+    questions = [q for q in (_text(x, 200) for x in (raw_questions if isinstance(raw_questions, list) else [])) if q]
     out.update(
         title=_text(raw.get("title"), 120),
         description=_text(raw.get("description"), 1500),
         likelyHazard=_text(raw.get("likelyHazard"), 200),
         immediateAction=_text(raw.get("immediateAction"), 500),
+        photoFindings=_text(raw.get("photoFindings"), 1500),
+        consequence=_text(raw.get("consequence"), 500),
+        severityReason=_text(raw.get("severityReason"), 300),
+        fatalPotential=fatal,
+        fatalPotentialQuestion=_text(raw.get("fatalPotentialQuestion"), 300),
+        correctiveActions=actions[:3],
+        responsibleFunction=_text(raw.get("responsibleFunction"), 80),
+        questions=questions[:3],
+        reply=_text(raw.get("reply"), 500),
         confidence=confidence,
         clamped=clamped,
     )
@@ -189,23 +220,55 @@ def compose_description(title: str, description: str, likely_hazard: str) -> str
 
 
 # ── AI call ──────────────────────────────────────────────────────────────────
-_SNAP_SYSTEM = """You are a plant-safety observation assistant at a stainless steel plant in India \
-(melt shop, hot and cold rolling mills, cranes, furnaces, acid pickling, material yards).
-A worker has taken ONE photo to report a safety observation. Classify it using ONLY the codes in the \
-vocabulary you are given, and write a short factual report.
+# The same depth of reading the SafeOps Copilot gives a photo: what is visible
+# (with "(to confirm)" where unsure), the likely classification, severity with a
+# reason, a fatal-potential check, 2-3 corrective actions highest in the
+# hierarchy first, the responsible function, and what the reporter still needs
+# to tell us. Grounding from the reference register (similar cases, plant
+# practice severity, closure target) is added afterwards by build_analysis.
+_SNAP_SYSTEM = """You are the SafeOps safety-observation assistant at a stainless steel plant in India \
+(melt shop, hot and cold rolling mills, cranes, furnaces, acid pickling, grinding, material yards).
+A worker has taken a photo to report a safety observation. Read the photo the way an experienced \
+safety officer would, classify it using ONLY the codes in the vocabulary you are given, and write the report.
 Rules:
-- Describe only what is visible in the photo. Never guess names, identities, plant areas, causes or injuries.
-- observationType: UNSAFE_ACT (a person doing something unsafe), UNSAFE_CONDITION (an unsafe physical state),
-  SAFE_ACT / SAFE_CONDITION (good practice worth recognising).
-- For UNSAFE_* pick categoryCode + subCategoryCode from stop[ACT] or stop[CONDITION] (matching the type's axis).
-- For SAFE_* pick hazardCategory from hazardCategories.
-- severity from severities: how bad the realistic outcome could be if nothing changes.
-- description: 2-3 sentences, at least 60 characters, naming the act or condition and where in the scene it is.
-- immediateAction: one short imperative sentence a supervisor could do right now.
+- Describe only what is visible: the equipment, the act or condition, people's PPE and position. Never guess \
+names, roles, the plant area, what happened before or after, causes or injuries. Mark anything you are unsure \
+of with "(to confirm)". Never take the location from the photo.
+- The reporter's note (if any) is extra context from the person who was there: trust it over your reading of \
+the photo, and use their words for where it was.
+- observationType: UNSAFE_ACT (a person doing something unsafe), UNSAFE_CONDITION (an unsafe physical state), \
+SAFE_ACT / SAFE_CONDITION (good practice worth recognising).
+- For UNSAFE_* pick categoryCode + subCategoryCode from stop[ACT] or stop[CONDITION] (matching the type's axis). \
+For SAFE_* pick hazardCategory from hazardCategories.
+- severity: the realistic worst credible outcome if nothing changes. fatalPotential: YES when a fatality is a \
+credible outcome from what is visible, POSSIBLE when one fact you cannot see decides it (then ask that one \
+question in fatalPotentialQuestion), else NO.
+- photoFindings: 3-6 plain sentences, "What the photo shows", specific and factual.
+- description: the observation text for the register, 2-3 factual sentences, at least 60 characters.
+- consequence: one sentence on what could happen.
+- correctiveActions: 2-3 actions specific to THIS hazard, highest in the hierarchy first (eliminate or engineer \
+out before procedures and PPE); controlLevel one of ELIMINATION, SUBSTITUTION, ENGINEERING, ADMINISTRATIVE, PPE.
+- immediateAction: the one thing a supervisor should do right now, imperative.
+- responsibleFunction: the function that should own the fix (e.g. Mechanical, Electrical, Operation, Safety, \
+the contractor's supervisor).
+- questions: up to 3 short questions for the reporter whose answers would change the classification or severity.
 Respond ONLY with JSON:
-{"observationType": "...", "categoryCode": "...", "subCategoryCode": "...", "hazardCategory": "...",
- "severity": "...", "title": "<max 80 chars>", "description": "...", "likelyHazard": "<short phrase>",
- "immediateAction": "...", "confidence": <0..1>}"""
+{"photoFindings": "...", "observationType": "...", "categoryCode": "...", "subCategoryCode": "...",
+ "hazardCategory": "...", "severity": "...", "severityReason": "<one sentence>",
+ "fatalPotential": "YES|POSSIBLE|NO", "fatalPotentialQuestion": "...",
+ "title": "<max 80 chars>", "description": "...", "likelyHazard": "<short phrase>", "consequence": "...",
+ "correctiveActions": [{"action": "...", "controlLevel": "..."}], "immediateAction": "...",
+ "responsibleFunction": "...", "questions": ["..."], "confidence": <0..1>}"""
+
+_REFINE_RULES = """
+REFINE MODE: the reporter has already reviewed your reading. `currentDraft` is the observation as it stands \
+now (it may include their own edits) and `instruction` is what they want changed. Apply the instruction and \
+change ONLY what it asks for or what it logically implies; keep every other field exactly as in currentDraft. \
+If they give a fact (e.g. "the cable insulation is damaged", "this is at CRD AP2"), update the reading, the \
+classification and severity if that fact changes them, and drop questions it answers. If they ask for a \
+different language, write the text fields in that language. If they ask for a severity below the photo's \
+worst credible outcome, apply it but give the reason in severityReason. Add "reply": 1-2 sentences telling the \
+reporter what you changed and why. Return the FULL JSON object, not just the changed fields."""
 
 
 def vocabulary_for_prompt(stop_rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -224,8 +287,35 @@ def vocabulary_for_prompt(stop_rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-async def analyze_photo(image: bytes, stop_rows: list[dict[str, Any]], *, lang: str = "en") -> dict[str, Any] | None:
-    """Photo → raw model JSON, or None on any failure / when AI isn't configured."""
+def build_user_text(stop_rows: list[dict[str, Any]], *, lang: str = "en", note: str | None = None,
+                    refine: dict[str, Any] | None = None) -> str:
+    """The text block sent alongside the photo (pure; tested)."""
+    parts = ["Vocabulary:\n" + json.dumps(vocabulary_for_prompt(stop_rows), ensure_ascii=False)]
+    note = _text(note, MAX_NOTE)
+    if note:
+        parts.append("Reporter's note: " + note)
+    if refine:
+        history = [
+            {"role": h.get("role"), "text": _text(h.get("text"), 500)}
+            for h in (refine.get("history") or [])[-8:] if isinstance(h, dict) and h.get("text")
+        ]
+        parts.append(_REFINE_RULES)
+        parts.append("currentDraft: " + json.dumps(refine.get("current") or {}, ensure_ascii=False)[:6000])
+        if history:
+            parts.append("Earlier changes in this report: " + json.dumps(history, ensure_ascii=False))
+        parts.append("instruction: " + _text(refine.get("instruction"), MAX_NOTE))
+    parts.append(f"Write all text fields in language code: {lang} unless the instruction asks otherwise.")
+    return "\n".join(parts)
+
+
+async def analyze_photo(
+    image: bytes, stop_rows: list[dict[str, Any]], *, lang: str = "en", note: str | None = None,
+    refine: dict[str, Any] | None = None, timeout: float = 20.0,
+) -> dict[str, Any] | None:
+    """Photo (+ optional reporter note, or a refine instruction over the current
+    draft) → raw model JSON, or None on any failure / when AI isn't configured.
+
+    Capped at `timeout` seconds: the Next.js proxy gives up at ~26 s."""
     from app.core.config import get_settings
     from app.services.ai.anthropic_client import _get_client
     from app.services.ai.capture_providers import _VISION_MAX_RAW_BYTES, _VISION_MEDIA_TYPES, _shrink_image, _sniff_image_type
@@ -244,22 +334,22 @@ async def analyze_photo(image: bytes, stop_rows: list[dict[str, Any]], *, lang: 
     model = get_settings().anthropic_model
     content = [
         {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": base64.b64encode(image).decode()}},
-        {"type": "text", "text": "Vocabulary:\n" + json.dumps(vocabulary_for_prompt(stop_rows), ensure_ascii=False)
-            + f"\nWrite title/description/immediateAction in language code: {lang}."},
+        {"type": "text", "text": build_user_text(stop_rows, lang=lang, note=note, refine=refine)},
     ]
     t0 = time.monotonic()
     try:
+        create = client.with_options(timeout=timeout, max_retries=0).messages.create
         msg = await asyncio.to_thread(
-            client.messages.create, model=model, max_tokens=700, system=_SNAP_SYSTEM,
+            create, model=model, max_tokens=1600, system=_SNAP_SYSTEM,
             messages=[{"role": "user", "content": content}],
         )
     except Exception as e:  # noqa: BLE001
-        log.warning("snap-analyze call failed (model=%s): %s", model, e)
+        log.warning("snap-analyze call failed (model=%s refine=%s): %s", model, bool(refine), e)
         return None
     usage = getattr(msg, "usage", None)
     log.info(
-        "snap-analyze model=%s latency_ms=%d input_tokens=%s output_tokens=%s",
-        model, int((time.monotonic() - t0) * 1000),
+        "snap-analyze model=%s refine=%s latency_ms=%d input_tokens=%s output_tokens=%s",
+        model, bool(refine), int((time.monotonic() - t0) * 1000),
         getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None),
     )
     raw = "".join(getattr(b, "text", "") or "" for b in (msg.content or [])).strip()
@@ -270,6 +360,138 @@ async def analyze_photo(image: bytes, stop_rows: list[dict[str, Any]], *, lang: 
         log.warning("snap-analyze returned unparseable output")
         return None
     return data if isinstance(data, dict) else None
+
+
+# ── grounding + the analysis card ────────────────────────────────────────────
+def reference_grounding(description: str, observation_type: str | None) -> dict[str, Any] | None:
+    """Similar observations in the reviewed reference register (the same
+    knowledge the Copilot's suggest_observation_fields reads). Offline JSON,
+    no DB. None when unavailable; the card simply omits those lines."""
+    text = (description or "").strip()
+    if len(text) < 8:
+        return None
+    try:
+        from app.services.copilot.knowledge import observations as obs_kb
+
+        kb = obs_kb.suggest(text, observation_type=observation_type)
+    except Exception as e:  # noqa: BLE001
+        log.info("snap grounding unavailable: %s", e)
+        return None
+    return kb if isinstance(kb, dict) and kb.get("available") else None
+
+
+def _max_sev(*values: str | None) -> str | None:
+    vals = [v for v in values if v in SEVERITY_RANK]
+    return max(vals, key=lambda v: SEVERITY_RANK[v]) if vals else None
+
+
+def choose_severity(*, matrix: str | None, plant_practice: str | None, ai: str, fatal: str,
+                    directed: bool = False) -> str:
+    """Severity policy (same as the Copilot): the higher of the SafeOps matrix and
+    the plant-practice severity for similar cases; never below the matrix on our
+    own. A clear fatal potential is CRITICAL. In refine mode the reporter's
+    instruction is honoured (the form then asks them for the override reason)."""
+    if directed:
+        return ai
+    if fatal == "YES":
+        return "CRITICAL"
+    return _max_sev(matrix, plant_practice) or ai
+
+
+def _closure_label(days: int) -> str:
+    if days == 0:
+        return "same day"
+    if days == 14:
+        return "about 2 weeks"
+    return f"about {days} days"
+
+
+def build_analysis(
+    s: dict[str, Any], *, kb: dict[str, Any] | None, matrix: str | None, matrix_rationale: str | None,
+    labels: dict[str, str], area_known: bool, directed: bool = False,
+) -> dict[str, Any]:
+    """Clamped model output + reference grounding → the Copilot-style card and
+    the final severity. Pure (tested)."""
+    risk = (kb or {}).get("risk") or {}
+    plant_practice = risk.get("safeopsSeverity") if risk.get("safeopsSeverity") in SEVERITY_RANK else None
+    final = choose_severity(matrix=matrix, plant_practice=plant_practice, ai=s["severity"],
+                            fatal=s["fatalPotential"], directed=directed)
+
+    reasons: list[str] = []
+    if matrix:
+        reasons.append(f"SafeOps matrix rating: {matrix.title()}.")
+    if plant_practice:
+        mix = risk.get("mix") or {}
+        mix_txt = ", ".join(f"{k} {round(v * 100)}%" for k, v in mix.items() if isinstance(v, (int, float)))
+        reasons.append(f"Plant practice for similar cases: {plant_practice.title()}" + (f" ({mix_txt})." if mix_txt else "."))
+    if s["fatalPotential"] == "YES":
+        reasons.append("Fatal potential is visible in the photo, so it is rated Critical and should close the same day.")
+    if s.get("severityReason"):
+        reasons.append(s["severityReason"])
+
+    needs_reason = bool(matrix) and final != matrix
+    override_reason = ""
+    if needs_reason:
+        if s.get("severityReason"):
+            override_reason = s["severityReason"]
+        elif s["fatalPotential"] == "YES":
+            override_reason = "Fatal potential visible in the photo."
+        elif plant_practice and final == plant_practice:
+            override_reason = f"Plant practice rates similar cases {plant_practice.title()}."
+
+    why = None
+    if kb:
+        cat = kb.get("category") or {}
+        alts = kb.get("alternatives") or []
+        bits = [f"{kb.get('matches')} similar observations in the reference register"]
+        if cat.get("label"):
+            bits.append(f"mostly {cat['label']} ({round((cat.get('share') or 0) * 100)}%)")
+        if alts:
+            bits.append("then " + ", ".join(f"{a.get('label')} ({round((a.get('share') or 0) * 100)}%)" for a in alts[:2]))
+        why = "; ".join(bits) + "."
+
+    actions = [{**a, "source": "PHOTO"} for a in s["correctiveActions"]]
+    seen = {a["action"].lower() for a in actions}
+    for a in (kb or {}).get("correctiveActions") or []:
+        text = _text(a.get("action") if isinstance(a, dict) else None, 300)
+        if text and text.lower() not in seen and len(actions) < 5:
+            level = _code(a.get("controlLevel")).upper()
+            actions.append({"action": text, "controlLevel": level if level in CONTROL_LEVELS else "ADMINISTRATIVE",
+                            "source": "REFERENCE", "ref": a.get("from")})
+            seen.add(text.lower())
+    actions.sort(key=lambda a: (a["source"] != "PHOTO", CONTROL_LEVELS.index(a["controlLevel"])))
+
+    fatal_q = s.get("fatalPotentialQuestion") or ""
+    if not fatal_q and (kb or {}).get("fatalPotentialSignals") and s["fatalPotential"] != "YES":
+        fatal_q = "Could this realistically kill someone (energy, height, molten metal or a confined space within reach)?"
+    questions = list(s["questions"])
+    if not area_known:
+        questions.insert(0, "Where exactly was this (area, bay or equipment)? Pick the area below or tell me.")
+
+    days = 0 if (s["fatalPotential"] == "YES" or final == "CRITICAL") else CLOSURE_DAYS.get(final, 14)
+    return {
+        "severity": final,
+        "needsReason": needs_reason,
+        "overrideReason": override_reason,
+        "analysis": {
+            "photoFindings": s.get("photoFindings") or s.get("description"),
+            "classification": {
+                "observationType": s["observationType"], "categoryLabel": labels.get("categoryLabel"),
+                "subCategoryLabel": labels.get("subCategoryLabel"), "category": s.get("category"), "why": why,
+            },
+            "severity": {"final": final, "matrix": matrix, "matrixRationale": matrix_rationale,
+                         "plantPractice": plant_practice, "photo": s["severity"], "reasons": reasons},
+            "fatalPotential": {"level": s["fatalPotential"], "question": fatal_q or None},
+            "consequence": s.get("consequence") or None,
+            "correctiveActions": actions,
+            "responsibleFunction": s.get("responsibleFunction") or (kb or {}).get("responsibleFunction"),
+            "closureTargetDays": days,
+            "closureTarget": _closure_label(days),
+            "questions": questions[:4],
+            "similarCases": (kb or {}).get("matches"),
+            "reply": s.get("reply") or None,
+        },
+    }
 
 
 # ── location ─────────────────────────────────────────────────────────────────

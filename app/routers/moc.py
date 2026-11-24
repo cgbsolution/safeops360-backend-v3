@@ -320,17 +320,41 @@ async def _training_gate_ok(db: AsyncSession, cr: ChangeRequest) -> tuple[bool, 
     return True, None
 
 
-def _pssr_gate_ok(cr: ChangeRequest) -> tuple[bool, str | None]:
-    """Spec Step 5 — a change requiring PSSR cannot close until the checklist is
-    completed with a passing outcome."""
+def _pssr_ok(cr: ChangeRequest, latest_review: Any = None) -> tuple[bool, str | None]:
+    """Spec Step 5 — a change requiring PSSR cannot close until a pre-startup
+    safety review is complete with a passing outcome. Either path counts: the
+    inline checklist on the change request, or a formal PSSR (Process Safety →
+    PSSR, linked by mocId) whose latest review reached APPROVED_GO / CLOSED —
+    the same test GET /api/pssr/by-moc reports as `pssrComplete`. Before this,
+    completing the formal PSSR still left the change un-closable. Pure."""
     if not cr.pssrRequired:
         return True, None
+    if latest_review is not None:
+        if latest_review.status in ("APPROVED_GO", "CLOSED"):
+            return True, None
+        if latest_review.status == "NO_GO":
+            return False, f"PSSR {latest_review.pssrNo} is No-Go — resolve the findings before closing."
     chk = cr.pssrChecklist or {}
-    if not chk.get("completedAt"):
-        return False, "A pre-startup safety review (PSSR) must be completed before closure."
-    if chk.get("outcome") == "no_go":
-        return False, "PSSR outcome is No-Go — resolve the findings before closing."
-    return True, None
+    if chk.get("completedAt"):
+        if chk.get("outcome") == "no_go":
+            return False, "PSSR outcome is No-Go — resolve the findings before closing."
+        return True, None
+    if latest_review is not None:
+        return False, (f"PSSR {latest_review.pssrNo} is {latest_review.status.replace('_', ' ').lower()} — "
+                       "it must be approved (Go) before closure.")
+    return False, "A pre-startup safety review (PSSR) must be completed before closure."
+
+
+async def _pssr_gate_ok(db: AsyncSession, cr: ChangeRequest) -> tuple[bool, str | None]:
+    if not cr.pssrRequired:
+        return True, None
+    from app.models.pssr import PssrReview
+
+    latest = (await db.execute(
+        select(PssrReview).where(PssrReview.mocId == cr.id).where(PssrReview.isDeleted.is_(False))
+        .order_by(PssrReview.createdAt.desc()).limit(1)
+    )).scalar_one_or_none()
+    return _pssr_ok(cr, latest)
 
 
 async def _emergency_retro_ok(db: AsyncSession, cr: ChangeRequest) -> tuple[bool, str | None]:
@@ -655,6 +679,13 @@ async def create_change_request(
 
     # A temporary change MUST carry an expiry date (spec Step 1 / verification
     # checklist) — enforced at submission; drafts may still be saved without it.
+    # A submitted change with no reviewers can never be approved — approve()
+    # finds no pending step and 409s forever. Drafts may still be saved empty.
+    if payload.submit and not payload.reviewers:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Add at least one reviewer (approval step) before submitting the change request.",
+        )
     if payload.submit and payload.isTemporary and payload.temporaryExpiryDate is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -777,6 +808,16 @@ async def transition(
     if cr.status in CLOSED_STATES:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Change request is closed ({cr.status})")
 
+    if payload.toStatus in ("submitted", "under_approval"):
+        n_steps = await db.scalar(
+            select(func.count(MocApprovalStep.id)).where(MocApprovalStep.changeRequestId == cr_id)
+        )
+        if not n_steps:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This change request has no reviewers. Add the approval chain (Approval chain → Edit) first.",
+            )
+
     # Closure gate — the heart of MOC: a change cannot close successfully until
     # every dependent register it affects has been updated (or explicitly
     # confirmed N/A). This is what keeps HIRA/EAI/Training/Skill-Matrix honest.
@@ -800,7 +841,7 @@ async def transition(
             )
         # PSSR gate — a completed pre-startup safety review is required to close
         # major/critical changes (spec Step 5).
-        pssr_ok, pssr_msg = _pssr_gate_ok(cr)
+        pssr_ok, pssr_msg = await _pssr_gate_ok(db, cr)
         if not pssr_ok:
             raise HTTPException(status.HTTP_409_CONFLICT, pssr_msg)
         # Emergency changes must have their retroactive approval on record.
@@ -893,7 +934,11 @@ async def approve(
     ).scalars().all()
     pending = next((s for s in steps if s.decision == "pending"), None)
     if pending is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "No pending approval step")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "No pending approval step — every step is decided, or no reviewers were ever added. "
+            "Add reviewers under Approval chain → Edit.",
+        )
 
     pending.decision = payload.decision
     pending.decidedAt = datetime.now(timezone.utc)
@@ -1357,3 +1402,115 @@ async def delete_moc_attachment(
     att.deletedAt = datetime.now(timezone.utc)
     await db.commit()
     return {"ok": True}
+
+
+
+# ── Fix-ups for change requests created without what the gates need ─────────
+class ReviewersPayload(BaseModel):
+    reviewers: list[ReviewerInput]
+
+
+@router.put("/change-requests/{cr_id}/reviewers")
+async def set_reviewers(
+    cr_id: str,
+    payload: ReviewersPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Replace the UNDECIDED part of the approval chain. Decided steps (approved
+    / rejected) stay as the audit record; new steps are appended after them.
+    This is how a change request submitted with no reviewers is un-stuck."""
+    cr = await db.get(ChangeRequest, cr_id)
+    if cr is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Change request not found")
+    await require_permission_with_context("MOC.UPDATE", user, db, plant_id=cr.plantId)
+    if cr.status in CLOSED_STATES:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Change request is closed ({cr.status})")
+    if not payload.reviewers:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Add at least one reviewer.")
+    known = set((await db.execute(select(Role.code))).scalars().all())
+    for rv in payload.reviewers:
+        if rv.role not in known:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown role '{rv.role}'.")
+        if rv.specificUserId and await db.get(User, rv.specificUserId) is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Reviewer user not found.")
+    steps = (await db.execute(
+        select(MocApprovalStep).where(MocApprovalStep.changeRequestId == cr_id).order_by(MocApprovalStep.sequence)
+    )).scalars().all()
+    decided = [st for st in steps if st.decision != "pending"]
+    for st in steps:
+        if st.decision == "pending":
+            await db.delete(st)
+    seq = max((st.sequence for st in decided), default=0)
+    for rv in payload.reviewers:
+        seq += 1
+        db.add(MocApprovalStep(changeRequestId=cr_id, sequence=seq, role=rv.role, specificUserId=rv.specificUserId,
+                               isRequired=rv.isRequired, decision="pending"))
+    db.add(MocStateHistory(changeRequestId=cr_id, fromState=cr.status, toState=cr.status,
+                           transitionedByUserId=user.id,
+                           rationale=f"Approval chain updated ({len(payload.reviewers)} pending reviewer(s))"))
+    await db.commit()
+    return {"id": cr_id, "pendingSteps": len(payload.reviewers), "decidedSteps": len(decided)}
+
+
+class TrainingLinkPayload(BaseModel):
+    trainingCertificateId: str | None = None
+    trainingRequired: bool | None = None
+
+
+@router.patch("/change-requests/{cr_id}/training")
+async def link_training(
+    cr_id: str,
+    payload: TrainingLinkPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Link (or clear) the training certificate the approval gate needs. There
+    was no way to link one after creation, so a change flagged 'training
+    required' could never be approved."""
+    cr = await db.get(ChangeRequest, cr_id)
+    if cr is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Change request not found")
+    await require_permission_with_context("MOC.UPDATE", user, db, plant_id=cr.plantId)
+    if cr.status in CLOSED_STATES:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Change request is closed ({cr.status})")
+    if payload.trainingCertificateId:
+        cert = await db.get(TrainingCertificate, payload.trainingCertificateId)
+        if cert is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Training certificate not found.")
+        if cert.status != "ACTIVE":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"That certificate is {cert.status}, not ACTIVE.")
+    cr.trainingCertificateId = payload.trainingCertificateId
+    if payload.trainingRequired is not None:
+        cr.trainingRequired = payload.trainingRequired
+    await db.commit()
+    ok, msg = await _training_gate_ok(db, cr)
+    return {"id": cr_id, "trainingRequired": cr.trainingRequired, "trainingCertificateId": cr.trainingCertificateId,
+            "gateOk": ok, "gateMessage": msg}
+
+
+@router.get("/training-certificates")
+async def search_training_certificates(
+    plantId: str = Query(...),
+    q: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """ACTIVE certificates held by people at the plant, for the MOC training
+    picker (replaces typing a raw certificate id)."""
+    await require_permission_with_context("MOC.READ", user, db, plant_id=plantId)
+    from app.models.training import TrainingProgram
+
+    stmt = (
+        select(TrainingCertificate.id, TrainingCertificate.validTo, User.name, TrainingProgram.name)
+        .join(User, User.id == TrainingCertificate.userId)
+        .join(TrainingProgram, TrainingProgram.id == TrainingCertificate.programId)
+        .where(TrainingCertificate.status == "ACTIVE")
+        .where(User.plantId == plantId)
+    )
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(User.name.ilike(like), TrainingProgram.name.ilike(like)))
+    rows = (await db.execute(stmt.order_by(User.name).limit(50))).all()
+    return {"items": [{"id": r[0], "validTo": r[1].isoformat() if r[1] else None, "holder": r[2], "program": r[3]}
+                      for r in rows]}

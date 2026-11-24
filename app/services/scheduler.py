@@ -332,6 +332,25 @@ async def _job_scorecard_rollup(db) -> dict:
     return await run_rollup(db)
 
 
+async def _job_ptw_exceptions_evaluate(db) -> dict:
+    """PTW Control Center exception engine (replaces the brief's Inngest
+    ptw/exceptions.evaluate cron). Also triggered per plant after writes."""
+    from app.services.ptw_ops.jobs import exceptions_evaluate
+    return await exceptions_evaluate(db)
+
+
+async def _job_ptw_impairment_escalate(db) -> dict:
+    """Activate due impairments; escalate overdue ones (owner + approver, then plant head)."""
+    from app.services.ptw_ops.jobs import impairment_escalate
+    return await impairment_escalate(db)
+
+
+async def _job_ptw_shift_brief(db) -> dict:
+    """Shift brief per plant: at shift start and hourly, cached by inputs hash."""
+    from app.services.ptw_ops.jobs import shift_brief
+    return await shift_brief(db)
+
+
 JOBS: dict[str, Job] = {j.id: j for j in [
     Job("kri_module_feeds", "KRI module feeds", 1 * HOUR, _job_kri_feeds),
     Job("treatment_pre_due_reminders", "Risk treatment pre-due reminders", 1 * DAY, _job_treatment_reminders),
@@ -350,6 +369,9 @@ JOBS: dict[str, Job] = {j.id: j for j in [
     Job("capture_voice_pipeline", "Field-capture voice transcription + translation", HOUR // 4, _job_capture_voice),
     Job("alerts_impact_resolver", "Daily Brief — impact-rule event resolver", 60, _job_alerts_resolver),
     Job("ptw_expiry_scan", "PTW T-24h expiring events + expiry flip", 1 * HOUR, _job_ptw_expiry_scan),
+    Job("ptw_exceptions_evaluate", "PTW Control Center — exception engine", 5 * 60, _job_ptw_exceptions_evaluate),
+    Job("ptw_impairment_escalate", "PTW impairments — activate due, escalate overdue", 30 * 60, _job_ptw_impairment_escalate),
+    Job("ptw_shift_brief", "PTW Control Center — shift brief", 15 * 60, _job_ptw_shift_brief),
     Job("capa_overdue_scan", "CAPA overdue events (daily scan)", 1 * DAY, _job_capa_overdue_scan),
     Job("alert_digest", "Daily Brief 06:00 site-local email digest", 15 * 60, _job_alert_digest),
     Job("sentinel_scan", "Executive Sentinel — insight→Alert materialise + critical push", 5 * 60, _job_sentinel_scan),

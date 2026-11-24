@@ -318,8 +318,12 @@ async def reassign(
     task = await db.get(WorkflowTask, payload.taskId)
     if task is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
-    if task.status != TaskStatus.PENDING.value:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Task is not pending")
+    # OVERDUE / ESCALATED are still open SLA states — they are exactly the tasks
+    # most in need of a hand-over, so they must be reassignable too.
+    from app.services.workflow_engine import OPEN_TASK_STATUSES, escalation_task_roles
+
+    if task.status not in OPEN_TASK_STATUSES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Task is not open (status {task.status})")
     role_codes = await get_user_role_codes(db, user.id)
     is_privileged = any(r in {"HSE_MANAGER", "ADMIN", "SYSTEM_ADMIN"} for r in role_codes)
     if task.assignedToId != user.id and not is_privileged:
@@ -331,6 +335,22 @@ async def reassign(
     new_user = await db.get(User, payload.toUserId)
     if new_user is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Target user not found")
+    # Refuse a hand-over the new holder could never complete: the engine's
+    # action gate requires the step role (or, on an escalation task, the
+    # escalation role). Reassigning to anyone else just moves the dead end.
+    from app.models.workflow import WorkflowStep
+
+    step = await db.get(WorkflowStep, task.stepId)
+    if step is not None:
+        allowed = escalation_task_roles(task, step)
+        if allowed:
+            target_roles = set(await get_user_role_codes(db, new_user.id))
+            if not (set(allowed) & target_roles):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"{new_user.name} cannot act on '{task.stepName}' — it needs the role "
+                    + " or ".join(allowed) + ". Pick someone who holds it.",
+                )
 
     reason = (payload.reason or "").strip() or "(no reason provided)"
     audit_msg = (
@@ -351,8 +371,18 @@ async def reassign(
         )
     )
 
+    now = datetime.now(timezone.utc)
     task.assignedToId = payload.toUserId
-    task.assignedAt = datetime.now(timezone.utc)
+    task.assignedAt = now
+    # A hand-over restarts the clock for the new holder: back to PENDING with a
+    # fresh 24 h due date, otherwise the overdue sweep re-escalates it at once.
+    if task.status != TaskStatus.PENDING.value:
+        task.status = TaskStatus.PENDING.value
+    due = task.dueAt if task.dueAt is None or task.dueAt.tzinfo else task.dueAt.replace(tzinfo=timezone.utc)
+    if due is None or due < now:
+        from datetime import timedelta
+
+        task.dueAt = now + timedelta(hours=24)
     await db.flush()
     return {
         "ok": True,
