@@ -28,6 +28,11 @@ class InspectionStatus(str, enum.Enum):
     OVERDUE = "OVERDUE"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
+    # CANCELLED / DEFERRED exist in the DB enum (prisma InspectionStatus); without
+    # them an inspection in either state could not be loaded. SKIPPED is NOT a DB
+    # value — kept only so old imports don't break; never write or filter on it.
+    CANCELLED = "CANCELLED"
+    DEFERRED = "DEFERRED"
     SKIPPED = "SKIPPED"
 
 

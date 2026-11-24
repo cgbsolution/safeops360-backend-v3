@@ -622,12 +622,16 @@ async def top_categories(plantId: str = Depends(resolve_plant_id), db: AsyncSess
 @router.get("/incident-linkage", response_model=list[IncidentLinkageRow])
 async def incident_linkage(plantId: str = Depends(resolve_plant_id), db: AsyncSession = Depends(get_db)):
     cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    # Incident has no `incidentDateTime` (that AttributeError 500'd this panel):
+    # occurredAt is the precise time, `date` the legacy incident date.
+    when = func.coalesce(Incident.occurredAt, Incident.date)
     rows = (
         await db.execute(
             select(Incident)
             .where(Incident.plantId == plantId)
-            .where(Incident.incidentDateTime >= cutoff)
-            .order_by(Incident.incidentDateTime.desc())
+            .where(Incident.isDeleted.is_(False))
+            .where(when >= cutoff)
+            .order_by(when.desc())
             .limit(50)
         )
     ).scalars().all()
@@ -653,7 +657,7 @@ async def incident_linkage(plantId: str = Depends(resolve_plant_id), db: AsyncSe
             IncidentLinkageRow(
                 incidentId=inc.id,
                 incidentNumber=getattr(inc, "number", None),
-                occurredAt=getattr(inc, "incidentDateTime", None),
+                occurredAt=inc.occurredAt or inc.date,
                 severity=getattr(inc, "severity", None),
                 linkedHiraEntryIds=hira_ids,
                 linkedEaiEntryIds=[],

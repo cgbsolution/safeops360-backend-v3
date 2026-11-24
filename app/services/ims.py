@@ -263,7 +263,10 @@ async def dashboard(db: AsyncSession, *, plant_ids: list[str] | None, start: dat
     )
     insp_overdue = await _count(
         db, select(func.count()).select_from(Inspection).where(plant(Inspection.plantId))
-        .where(Inspection.status.notin_(("COMPLETED", "SKIPPED"))).where(Inspection.scheduledDate < now),
+        # Not overdue once done, cancelled or deferred. ("SKIPPED" is not a value of
+        # the InspectionStatus DB enum — comparing against it made Postgres reject
+        # the whole query and the IMS dashboard 500.)
+        .where(Inspection.status.notin_(("COMPLETED", "CANCELLED", "DEFERRED"))).where(Inspection.scheduledDate < now),
     )
 
     # Audits = CAMS engagements (schedule & closure); 'inspection' engagements counted separately
